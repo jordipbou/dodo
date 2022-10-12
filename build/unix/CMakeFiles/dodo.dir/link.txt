@@ -1,0 +1,1 @@
+/usr/bin/cc -O3   CMakeFiles/dodo.dir/src/dodo.c.o CMakeFiles/dodo.dir/deps/stcp/src/stcp.c.o CMakeFiles/dodo.dir/deps/stcp/src/socket.c.o  -o dodo 

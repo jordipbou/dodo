@@ -1,0 +1,4 @@
+C:/Users/Jordi/labs/dodo/build/win/CMakeFiles/rebuild_cache.dir
+C:/Users/Jordi/labs/dodo/build/win/CMakeFiles/dodo.dir
+C:/Users/Jordi/labs/dodo/build/win/CMakeFiles/tests.dir
+C:/Users/Jordi/labs/dodo/build/win/CMakeFiles/edit_cache.dir

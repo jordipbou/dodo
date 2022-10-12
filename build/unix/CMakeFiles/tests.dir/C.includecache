@@ -1,0 +1,44 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+../../deps/minunit/minunit.h
+Windows.h
+-
+unistd.h
+-
+time.h
+-
+sys/time.h
+-
+sys/resource.h
+-
+sys/times.h
+-
+string.h
+-
+mach/mach.h
+-
+mach/mach_time.h
+-
+stdio.h
+-
+math.h
+-
+
+../../src/vm.h
+stdint.h
+-
+
+/home/jordi/labs2/dodo/tests/tests.c
+stdbool.h
+-
+vm.h
+/home/jordi/labs2/dodo/tests/vm.h
+minunit.h
+/home/jordi/labs2/dodo/tests/minunit.h
+

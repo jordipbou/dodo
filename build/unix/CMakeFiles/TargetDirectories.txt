@@ -1,0 +1,3 @@
+/home/jordi/labs2/dodo/build/unix/CMakeFiles/rebuild_cache.dir
+/home/jordi/labs2/dodo/build/unix/CMakeFiles/edit_cache.dir
+/home/jordi/labs2/dodo/build/unix/CMakeFiles/dodo.dir

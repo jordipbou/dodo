@@ -1,0 +1,24 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/jordi/labs2/dodo/src/dodo.c
+vm.h
+/home/jordi/labs2/dodo/src/vm.h
+stdio.h
+-
+stdlib.h
+-
+
+/home/jordi/labs2/dodo/src/vm.h
+stdio.h
+-
+stdint.h
+-
+stddef.h
+-
+
