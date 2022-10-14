@@ -1,1 +1,0 @@
-/usr/bin/cc -O3   CMakeFiles/tests.dir/tests/tests.c.o CMakeFiles/tests.dir/deps/stcp/src/stcp.c.o CMakeFiles/tests.dir/deps/stcp/src/socket.c.o  -o tests 
