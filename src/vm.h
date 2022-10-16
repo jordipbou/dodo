@@ -1,108 +1,99 @@
-#include<stdio.h>
 #include<stdint.h>
 #include<stddef.h>
 
+// Scalars
+
 typedef int64_t cell_t;
-typedef int8_t byte_t;
 
-typedef struct pair_s {
-	cell_t car;
-	cell_t cdr;
-} pair_t;
+// Lists
 
-#define HEADER_SIZE						2
-#define BLOCK_CELLS_SIZE(b)		b[0]
-#define BLOCK_PAIRS_SIZE(b)		BLOCK_CELLS_SIZE(b) / 2
-#define FIRST_FREE_PAIR(b)		b[1]
-#define LAST_FREE_PAIR(b)			b[2]
-#define HERE(b)								b[3]
+#define CAR(addr)		*(addr + 1)
+#define CDR(addr)		*addr
 
-int shrink_up(cell_t *cells, cell_t amount) {
-	// Ensure last_free_pair is on HERE, if not, it means
-	// that its not possible to take more cells.
-	if (HERE(cells) != LAST_FREE_PAIR(cells)) return -1;
+cell_t length(cell_t *l) {
+	for (cell_t a = 0;; a++) { if (!l) { return a; } else { l = (cell_t *)CDR(l); } }
+}
 
-	// Allocates from HERE removing as much pairs from
-	// free list as needed.
-	cell_t required_pairs = amount / 2 + amount % 2;
+// Memory
 
-	// Check if there are enough free cells contiguous to
-	// remove.
-	pair_t *p = (pair_t *)LAST_FREE_PAIR(cells);
-	for (cell_t i = 0; i < required_pairs; i++) {
-		if ((pair_t *)p->car != p + 1) {
-			// There are not enough contiguous free cells starting at HERE
-			return -2;
-		} else {
-			p = (pair_t *)p->car;
-		}
+#define HEADER_SIZE			4
+
+#define SIZE(b)					*b
+#define FREE_HEAD(b)		*(b + 1)
+#define FREE_TAIL(b)		*(b + 2)
+
+cell_t *init_block(cell_t *b, cell_t s) {
+	if ((SIZE(b) = s) % 2 != 0) return NULL;
+
+	for (
+		cell_t *p = (cell_t *)(FREE_TAIL(b) = (cell_t)(b + HEADER_SIZE));
+		p <= (cell_t *)(FREE_HEAD(b) = (cell_t)(b + s - 2));
+		p += 2
+	) {
+			CDR(p) = (cell_t)(p - 2);
+			CAR(p) = (cell_t)(p + 2);
 	}
 
-	// Remove the required cells
-	p->cdr = (cell_t)NULL;
-	HERE(cells) += required_pairs * sizeof(pair_t);
-	LAST_FREE_PAIR(cells) = (cell_t)p;
-
-	return 0;
+	CDR((cell_t *)FREE_TAIL(b)) = (cell_t)NULL;
+	CAR((cell_t *)FREE_HEAD(b)) = (cell_t)NULL;
+	
+	return b;
 }
 
-cell_t *init(cell_t *cells, cell_t size) {
-	if (size % 2 != 0) return NULL;
+cell_t *take(cell_t *b) {
+	if ((cell_t *)FREE_HEAD(b) == NULL) return NULL;
 
-	// Treat block as made of pairs
-	pair_t *pairs = (pair_t *)cells;
+	cell_t *h = (cell_t *)FREE_HEAD(b);
+	FREE_HEAD(b) = (cell_t)CDR(h);
+	CAR((cell_t *)FREE_HEAD(b)) = (cell_t)NULL;
 
-	// Initialize header
-	BLOCK_CELLS_SIZE(cells) = size;								
-	FIRST_FREE_PAIR(cells) = (cell_t)(&pairs[size / 2 - 1]);
-	LAST_FREE_PAIR(cells) = (cell_t)(&pairs[2]);
-	HERE(cells) = (cell_t)(&pairs[2]);
+	CAR(h) = 0;
+	CDR(h) = (cell_t)NULL;
 
-	// Initialize free pairs doubly linked list
-	for (cell_t i = HEADER_SIZE; i < BLOCK_PAIRS_SIZE(cells); i++) {
-		pairs[i].car = (cell_t)(&pairs[i] + 1);				// PREV
-		pairs[i].cdr = (cell_t)(&pairs[i] - 1);				// NEXT
-	}
-
-	// Adjust first prev and last next to NULL
-	pairs[HEADER_SIZE].cdr = (cell_t)NULL;
-	pairs[BLOCK_PAIRS_SIZE(cells) - 1].car = (cell_t)NULL;
-
-	return cells;
-}	
-
-// Takes one pair from the beginning of list of free pairs
-pair_t *take(cell_t *cells) {
-	if ((pair_t *)FIRST_FREE_PAIR(cells) == NULL) return NULL;
-
-	pair_t *pair = (pair_t *)FIRST_FREE_PAIR(cells);
-	FIRST_FREE_PAIR(cells) = pair->cdr;
-	((pair_t *)FIRST_FREE_PAIR(cells))->car = (cell_t)NULL;
-
-	pair->car = 0;
-	pair->cdr = 0;
-
-	return pair;
+	return h;
 }
 
-void put(cell_t *cells, pair_t *pair) {
-	pair_t *first = (pair_t *)FIRST_FREE_PAIR(cells);
-	FIRST_FREE_PAIR(cells) = (cell_t)pair;
-	first->car = (cell_t)pair;
-	pair->car = (cell_t)NULL;
-	pair->cdr = (cell_t)first;
+void put(cell_t *b, cell_t *i) {
+	cell_t *h = (cell_t *)FREE_HEAD(b);
+	FREE_HEAD(b) = (cell_t)i;
+	CAR(h) = (cell_t)i;
+	CAR(i) = (cell_t)NULL;
+	CDR(i) = (cell_t)h;
 }
 
-// TMP: Debug
-void debug_block(cell_t *cells) {
-	pair_t *pairs = (pair_t *)cells;
+// Scopes
 
-	printf("HEADER ----------------------------------------------- (%p)\n", cells);
-	printf("[Size: %ld] [First free: %p] [Last free: %p] [ ]\n", BLOCK_CELLS_SIZE(cells), (pair_t *)FIRST_FREE_PAIR(cells), (pair_t *)LAST_FREE_PAIR(cells));
-	printf("CONTIGUOUS REGION ------------------------------------ (%p)\n", &pairs[HEADER_SIZE]);
-	printf("MANAGED REGION - HERE: (%p) - LAST FREE CELL: %p\n", (pair_t *)HERE(cells), (pair_t *)LAST_FREE_PAIR(cells));
-	for (pair_t *p = (pair_t *)HERE(cells); p < (pair_t *)(cells + BLOCK_CELLS_SIZE(cells)); p++) {
-		printf("[%p] FREE PAIR: PREV %p NEXT %p\n", p, (pair_t *)p->car, (pair_t *)p->cdr);
-	}
-	printf("END OF MEMORY----------------------------------------- (%p)\n", cells + BLOCK_CELLS_SIZE(cells));
+typedef struct scp_s {
+	cell_t *block;
+	cell_t *dstack, *rstack;
+} scp_t;
+
+void push(scp_t *s, cell_t v) {
+	cell_t *i = take(s->block);
+	CAR(i) = v;
+	CDR(i) = (cell_t)s->dstack;
+	s->dstack = i;
 }
+
+cell_t pop(scp_t *s) {
+	cell_t *i = s->dstack;
+	cell_t v = CAR(i);
+	s->dstack = (cell_t *)CDR(i);
+	put(s->block, i);
+	return v;
+}
+
+// Runtime context
+
+typedef struct ctx_s {
+	cell_t T, S;
+	scp_t *scope;
+} ctx_t;
+
+#define DUP(c)		push(c->scope, c->S); c->S = c->T
+#define LIT1(c)		push(c->scope, c->S); c->S = c->T; c->T = 1
+#define GT(c)			c->T = c->S > c->T; c->S = pop(c->scope)
+#define DEC(c)		c->T = c->T - 1
+#define SUB(c)		c->T = c->S - c->T; c->S = pop(c->scope)
+#define SWAP(c)		cell_t x = c->T; c->T = c->S; c->S = x
+#define ADD(c)		c->T = c->S + c->T; c->S = pop(c->scope)

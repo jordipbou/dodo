@@ -1,7 +1,27 @@
  --													
 ({o ~~/)
 
-# The DODO virtual machine and programming language
+# The DODO programming language
+
+DODO is a programming language that trusts the programmer.
+That's its best virtue and its greatest flaw.
+
+Inspired mainly by Forth/Joy/Factor, APL/K and Lisp/Scheme.
+
+## Memory structures
+
+### Cell
+
+	* 64 or 32 bits, depending on platform
+
+### Array
+
+	* 2n * sizeof(cell)
+
+### List
+
+	* link	-> cell size pointer to next item in list
+	* value -> (2n + 1) * sizeof(cell)
 
 ## Memory layout
 
@@ -13,6 +33,9 @@
 |  2   |  1   | Last free item         |
 |  3   |      |                        |
 | ....
+
+## API
+
 
 
 
