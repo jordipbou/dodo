@@ -6,51 +6,32 @@
 DODO is a programming language that trusts the programmer.
 That's its best virtue and its greatest flaw.
 
-Inspired mainly by Forth/Joy/Factor, APL/K and Lisp/Scheme.
+Inspired mainly by Forth/Joy/Factor, APL/K and Lisp/Scheme (not in that order).
 
-## Memory structures
+## Memory
 
-### Cell
+                +-------------------------------------+ <-- SIZE
+                |            Managed region           | <-- FREE HEAD (somewhere here)
+                +-------------------------------------+ <-- LOWEST ASSIGNED PAIR
+                |            Unused region            |
+                +-------------------------------------+ <-- FREE TAIL
+            +-> |           Reserved region           |
+Data space  +   +-------------------------------------+ <-- HERE
+            +-> |          Contiguous region          |
+                +-------------------------------------+ <-- BLOCK ADDRESS + HEADER SIZE
+                |            Block header             |
+                +-------------------------------------+ <-- BLOCK ADDRESS
 
-	* 64 or 32 bits, depending on platform
+## Forth primitives
 
-### Array
+LIT<v>
+ALLOT
 
-	* 2n * sizeof(cell)
+## Lisp primitives
 
-### List
+CONS
 
-	* link	-> cell size pointer to next item in list
-	* value -> (2n + 1) * sizeof(cell)
-
-## Memory layout
-
-+------+------+------------------------+
-| Cell | Item | Content                |
-+------+------+------------------------+
-|  0   |  0   | Block size             |
-|  1   |      | First free / Last free |
-|  2   |  1   | Last free item         |
-|  3   |      |                        |
-| ....
-
-## API
-
-
-
-
-## Where it comes from?
-
-## Ideas
-
-- Simpler first
-- The programmer knows what he/she wants
-- The programmer must be able to protect him/herself
-
-
-
-
-# Ideas from other programming languages
+## Concepts I like from other programming languages
 
 - Forth interactivity
 - Forth double stacks

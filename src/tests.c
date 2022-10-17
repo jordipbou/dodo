@@ -19,21 +19,28 @@ void test_list_length(void) {
 void test_block_initialization(void) {
 	cell_t b[32];
 	init_block(b, 32);
-	TEST_ASSERT_EQUAL_INT(14, length((cell_t *)FREE_HEAD(b)));
+	cell_t l = (32 - HEADER_SIZE / 2) / 2 - (32 - HEADER_SIZE / 2) % 2;
+	TEST_ASSERT_EQUAL_INT(l, length((cell_t *)FREE_HEAD(b)));
+	TEST_ASSERT(b + SIZE(b) > (cell_t *)FREE_HEAD(b));
+	TEST_ASSERT(FREE_HEAD(b) >= LOWEST_ASSIGNED(b));
+	TEST_ASSERT(LOWEST_ASSIGNED(b) > FREE_TAIL(b));
+	TEST_ASSERT(FREE_TAIL(b) >= HERE(b));
+	TEST_ASSERT((cell_t *)HERE(b) >= b + HEADER_SIZE);
 }
 
-void test_take_and_put(void) {
+void test_lend_and_reclaim(void) {
 	cell_t b[32];
 	init_block(b, 32);
-	TEST_ASSERT_EQUAL_INT(14, length((cell_t *)FREE_HEAD(b)));
-	cell_t *i1 = take(b);
-	TEST_ASSERT_EQUAL_INT(13, length((cell_t *)FREE_HEAD(b)));
-	cell_t *i2 = take(b);
-	TEST_ASSERT_EQUAL_INT(12, length((cell_t *)FREE_HEAD(b)));
-	put(b, i1);
-	TEST_ASSERT_EQUAL_INT(13, length((cell_t *)FREE_HEAD(b)));
-	put(b, i2);
-	TEST_ASSERT_EQUAL_INT(14, length((cell_t *)FREE_HEAD(b)));
+	cell_t l = (32 - HEADER_SIZE / 2) / 2 - (32 - HEADER_SIZE / 2) % 2;
+	TEST_ASSERT_EQUAL_INT(l, length((cell_t *)FREE_HEAD(b)));
+	cell_t *i1 = lend(b);
+	TEST_ASSERT_EQUAL_INT(l - 1, length((cell_t *)FREE_HEAD(b)));
+	cell_t *i2 = lend(b);
+	TEST_ASSERT_EQUAL_INT(l - 2, length((cell_t *)FREE_HEAD(b)));
+	reclaim(b, i1);
+	TEST_ASSERT_EQUAL_INT(l - 1, length((cell_t *)FREE_HEAD(b)));
+	reclaim(b, i2);
+	TEST_ASSERT_EQUAL_INT(l, length((cell_t *)FREE_HEAD(b)));
 
 	TEST_ASSERT_EQUAL(i1, (cell_t *)CDR(i2));
 	TEST_ASSERT_EQUAL(i2, (cell_t *)FREE_HEAD(b));
@@ -84,12 +91,40 @@ void test_fib(void) {
 	TEST_ASSERT_EQUAL_INT(75025, c->T);
 }
 
+void test_reserve(void) {
+	cell_t b[32];
+	init_block(b, 32);
+	cell_t l = (32 - HEADER_SIZE / 2) / 2 - (32 - HEADER_SIZE / 2) % 2;
+	TEST_ASSERT_EQUAL_INT(l, length((cell_t *)FREE_HEAD(b)));
+	cell_t res = reserve(b, 2);
+	TEST_ASSERT_EQUAL_INT(0, res);
+	TEST_ASSERT_EQUAL_INT(l - 2, length((cell_t *)FREE_HEAD(b)));
+}
+
+void test_allot(void) {
+	cell_t b[32];
+	init_block(b, 32);
+	cell_t l = (32 - HEADER_SIZE / 2) / 2 - (32 - HEADER_SIZE / 2) % 2;
+	TEST_ASSERT_EQUAL_INT(l, length((cell_t *)FREE_HEAD(b)));
+	cell_t h = HERE(b);
+	cell_t res = allot(b, 10);
+	TEST_ASSERT_EQUAL_INT(0, res);
+	TEST_ASSERT_EQUAL_INT(l - 1, length((cell_t *)FREE_HEAD(b)));
+	TEST_ASSERT_EQUAL_INT(h + 10, HERE(b));
+	res = allot(b, 2*sizeof(cell_t) + 2);
+	TEST_ASSERT_EQUAL_INT(0, res);
+	TEST_ASSERT_EQUAL_INT(l - 2, length((cell_t *)FREE_HEAD(b)));
+	TEST_ASSERT_EQUAL_INT(h + 10 + 2*sizeof(cell_t) + 2, HERE(b));
+}
+
 int main(void) {
 	UNITY_BEGIN();
 	RUN_TEST(test_list_length);
 	RUN_TEST(test_block_initialization);
-	RUN_TEST(test_take_and_put);
+	RUN_TEST(test_lend_and_reclaim);
 	RUN_TEST(test_stack);
 	RUN_TEST(test_fib);
+	RUN_TEST(test_reserve);
+	RUN_TEST(test_allot);
 	return UNITY_END();
 }
