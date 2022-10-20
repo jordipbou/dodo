@@ -92,6 +92,7 @@ cell_t allot(cell_t *b, cell_t nbytes) {
 
 typedef struct scp_s {
 	cell_t *block;
+	cell_t ddepth, rdepth;
 	cell_t *dstack, *rstack;
 } scp_t;
 
@@ -100,6 +101,7 @@ void push(scp_t *s, cell_t v) {
 	CAR(i) = v;
 	CDR(i) = (cell_t)s->dstack;
 	s->dstack = i;
+	s->ddepth++;
 }
 
 cell_t pop(scp_t *s) {
@@ -107,20 +109,85 @@ cell_t pop(scp_t *s) {
 	cell_t v = CAR(i);
 	s->dstack = (cell_t *)CDR(i);
 	reclaim(s->block, i);
+	s->ddepth--;
+	return v;
+}
+
+void rpush(scp_t *s, cell_t v) {
+	cell_t *i = lend(s->block);
+	CAR(i) = v;
+	CDR(i) = (cell_t)s->rstack;
+	s->rstack = i;
+	s->rdepth++;
+}
+
+cell_t rpop(scp_t *s) {
+	cell_t *i = s->rstack;
+	cell_t v = CAR(i);
+	s->rstack = (cell_t *)CDR(i);
+	reclaim(s->block, i);
+	s->rdepth--;
 	return v;
 }
 
 // Runtime context
 
 typedef struct ctx_s {
-	cell_t T, S;
+	char *PC;
+	cell_t T, S, R;
 	scp_t *scope;
 } ctx_t;
 
-#define DUP(c)		push(c->scope, c->S); c->S = c->T
-#define LIT1(c)		push(c->scope, c->S); c->S = c->T; c->T = 1
-#define GT(c)			c->T = c->S > c->T; c->S = pop(c->scope)
-#define DEC(c)		c->T = c->T - 1
-#define SUB(c)		c->T = c->S - c->T; c->S = pop(c->scope)
-#define SWAP(c)		cell_t x = c->T; c->T = c->S; c->S = x
-#define ADD(c)		c->T = c->S + c->T; c->S = pop(c->scope)
+#define DUP(c)			push(c->scope, c->S); c->S = c->T
+#define LIT(c, v)		push(c->scope, c->S); c->S = c->T; c->T = v
+#define GT(c)				c->T = c->S > c->T; c->S = pop(c->scope)
+#define DEC(c)			c->T = c->T - 1
+#define SUB(c)			c->T = c->S - c->T; c->S = pop(c->scope)
+#define SWAP(c)			{ cell_t x = c->T; c->T = c->S; c->S = x; }
+#define ADD(c)			c->T = c->S + c->T; c->S = pop(c->scope)
+
+void dump_stack(ctx_t *c) {
+	printf("<%ld> ", c->scope->ddepth);
+	if (c->scope->ddepth >= 1) { printf("T:%ld ", c->T); }
+	if (c->scope->ddepth >= 2) { printf("S:%ld ", c->S); }
+	cell_t *i = c->scope->dstack;
+	while (i != NULL) {
+		printf("[%p] %ld ", i, CAR(i));
+		i = (cell_t *)CDR(i);
+	}
+	printf("\n");
+}
+
+void eval(ctx_t *c) {
+	while(1) {
+		switch(*c->PC) {
+			case 'd': DUP(c); c->PC++; break;
+			case '1': LIT(c, 1); c->PC++; break;
+			case '>': GT(c); c->PC++; break;
+			case '?': 
+				if (c->T == 0) {
+						c->T = c->S; c->S = pop(c->scope);
+						while (*c->PC != '(') { c->PC++; }
+				} else {
+						c->T = c->S; c->S = pop(c->scope);
+						c->PC++;
+				}
+				break;
+			case '_': DEC(c); c->PC++; break;
+			case '`': 
+				rpush(c->scope, (cell_t)(c->PC + 1));
+				while (*c->PC != ':') { c->PC--; }
+				break;
+			case 's': SWAP(c); c->PC++; break;
+			case '+': ADD(c); c->PC++; break;
+			case ';': 
+				if (c->scope->rdepth > 0) {
+					c->PC = ((char *)rpop(c->scope));
+				} else {
+					return;
+				}
+				break;
+			default: c->PC++; break;
+		}
+	}
+}

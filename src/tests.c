@@ -53,15 +53,25 @@ void test_stack(void) {
 	scp_t *s = malloc(sizeof(scp_t));
 	s->block = b;
 	s->dstack = s->rstack = NULL;
+	TEST_ASSERT_EQUAL_INT(0, s->ddepth);
+	TEST_ASSERT_EQUAL_INT(0, s->rdepth);
 	push(s, 7);
+	TEST_ASSERT_EQUAL_INT(1, s->ddepth);
+	TEST_ASSERT_EQUAL_INT(0, s->rdepth);
 	push(s, 11);
+	TEST_ASSERT_EQUAL_INT(2, s->ddepth);
+	TEST_ASSERT_EQUAL_INT(0, s->rdepth);
 	TEST_ASSERT_EQUAL_INT(11, pop(s));
+	TEST_ASSERT_EQUAL_INT(1, s->ddepth);
+	TEST_ASSERT_EQUAL_INT(0, s->rdepth);
 	TEST_ASSERT_EQUAL_INT(7, pop(s));
+	TEST_ASSERT_EQUAL_INT(0, s->ddepth);
+	TEST_ASSERT_EQUAL_INT(0, s->rdepth);
 }
 
 void fib(ctx_t *c) {
 	DUP(c);
-	LIT1(c);	
+	LIT(c, 1);	
 	GT(c);
 	if (c->T != 0) {
 		c->T = c->S; c->S = pop(c->scope);
