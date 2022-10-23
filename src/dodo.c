@@ -3,12 +3,12 @@
 
 #include "vm.h"
 
-void fib(ctx_t *c) {
+void fib(X *c) {
 	DUP(c);
 	LIT(c, 1);	
 	GT(c);
 	if (c->T != 0) {
-		c->T = c->S; c->S = pop(c->scope);
+		c->T = c->S; c->S = pop(c->sc);
 		DEC(c);
 		DUP(c);
 		DEC(c);
@@ -17,17 +17,17 @@ void fib(ctx_t *c) {
 		fib(c);
 		ADD(c);
 	} else {
-		c->T = c->S; c->S = pop(c->scope);
+		c->T = c->S; c->S = pop(c->sc);
 	}
 }
 
 void main() {
-	cell_t b[262000];
-	ctx_t *c = malloc(sizeof(ctx_t));
-	scp_t *s = malloc(sizeof(scp_t));
-	s->block = init_block(b, 262000);
-	c->scope = s;
-	c->scope->dstack = c->scope->rstack = NULL;
+	C b[262000];
+	X *c = malloc(sizeof(X));
+	S *s = malloc(sizeof(S));
+	s->bl = init_bl(b, 262000);
+	c->sc = s;
+	c->sc->ds = c->sc->rs = NULL;
 	c->T = c->S = 0;
 
 	// :fib d1>?_d_`s`+();
@@ -65,8 +65,5 @@ void main() {
 	printf("%ld  ok\n", c->T);
 
 	//free(c);
-	//cell_t b[32];
-	//init_block(b, 32);
-	//printf("Free list length: %ld\n", length(FREE_LIST_HEAD(b)));
 	//dump_block(b);
 }
