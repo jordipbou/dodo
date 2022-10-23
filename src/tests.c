@@ -28,14 +28,14 @@ void test_block_initialization(void) {
 	TEST_ASSERT((cell_t *)HERE(b) >= b + HEADER_SIZE);
 }
 
-void test_lend_and_reclaim(void) {
+void test_cons_and_reclaim(void) {
 	cell_t b[32];
 	init_block(b, 32);
 	cell_t l = (32 - HEADER_SIZE / 2) / 2 - (32 - HEADER_SIZE / 2) % 2;
 	TEST_ASSERT_EQUAL_INT(l, length((cell_t *)FREE_HEAD(b)));
-	cell_t *i1 = lend(b);
+	cell_t *i1 = cons(b, 0, 0);
 	TEST_ASSERT_EQUAL_INT(l - 1, length((cell_t *)FREE_HEAD(b)));
-	cell_t *i2 = lend(b);
+	cell_t *i2 = cons(b, 0, 0);
 	TEST_ASSERT_EQUAL_INT(l - 2, length((cell_t *)FREE_HEAD(b)));
 	reclaim(b, i1);
 	TEST_ASSERT_EQUAL_INT(l - 1, length((cell_t *)FREE_HEAD(b)));
@@ -131,7 +131,7 @@ int main(void) {
 	UNITY_BEGIN();
 	RUN_TEST(test_list_length);
 	RUN_TEST(test_block_initialization);
-	RUN_TEST(test_lend_and_reclaim);
+	RUN_TEST(test_cons_and_reclaim);
 	RUN_TEST(test_stack);
 	RUN_TEST(test_fib);
 	RUN_TEST(test_reserve);

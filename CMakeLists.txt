@@ -13,14 +13,14 @@ set (CMAKE_EXE_LIMKER_FLAGS "")
 
 add_executable (
 	dodo 
-	src/dodo.c)
+	src/dodo.c src/vm.c)
 #	deps/stcp/src/stcp.c deps/stcp/src/socket.c)
 target_include_directories (dodo PRIVATE src) # deps/stcp/include)
 set_property (TARGET dodo PROPERTY C_STANDARD 99)
 
 add_executable (
 	tests
-	src/tests.c
+	src/tests.c src/vm.c
 	deps/Unity/src/unity.c)
 target_include_directories (tests PRIVATE src deps/Unity/src)
 set_property (TARGET tests PROPERTY C_STANDARD 99)
