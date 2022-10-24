@@ -47,34 +47,32 @@ void test_cons_and_reclaim(void) {
 }
 
 void test_stack(void) {
-	C b[32];
-	init_bl(b, 32);
+	C bl[32];
+	init_bl(bl, 32);
 
 	S *s = malloc(sizeof(S));
-	s->bl = b;
 	s->ds = s->rs = NULL;
-	TEST_ASSERT_EQUAL_INT(0, s->dd);
-	TEST_ASSERT_EQUAL_INT(0, s->rd);
-	push(s, 7);
-	TEST_ASSERT_EQUAL_INT(1, s->dd);
-	TEST_ASSERT_EQUAL_INT(0, s->rd);
-	push(s, 11);
-	TEST_ASSERT_EQUAL_INT(2, s->dd);
-	TEST_ASSERT_EQUAL_INT(0, s->rd);
-	TEST_ASSERT_EQUAL_INT(11, pop(s));
-	TEST_ASSERT_EQUAL_INT(1, s->dd);
-	TEST_ASSERT_EQUAL_INT(0, s->rd);
-	TEST_ASSERT_EQUAL_INT(7, pop(s));
-	TEST_ASSERT_EQUAL_INT(0, s->dd);
-	TEST_ASSERT_EQUAL_INT(0, s->rd);
+	TEST_ASSERT_EQUAL_INT(0, length(s->ds));
+	TEST_ASSERT_EQUAL_INT(0, length(s->rs));
+	push(bl, s, 7);
+	TEST_ASSERT_EQUAL_INT(1, length(s->ds));
+	TEST_ASSERT_EQUAL_INT(0, length(s->rs));
+	push(bl, s, 11);
+	TEST_ASSERT_EQUAL_INT(2, length(s->ds));
+	TEST_ASSERT_EQUAL_INT(0, length(s->rs));
+	TEST_ASSERT_EQUAL_INT(11, pop(bl, s));
+	TEST_ASSERT_EQUAL_INT(1, length(s->ds));
+	TEST_ASSERT_EQUAL_INT(0, length(s->rs));
+	TEST_ASSERT_EQUAL_INT(7, pop(bl, s));
+	TEST_ASSERT_EQUAL_INT(0, length(s->ds));
+	TEST_ASSERT_EQUAL_INT(0, length(s->rs));
 }
 
 void fib(X *c) {
 	DUP(c);
 	LIT(c, 1);	
 	GT(c);
-	if (c->T != 0) {
-		c->T = c->S; c->S = pop(c->sc);
+	if (pop(c->bl, c->sc) != 0) {
 		DEC(c);
 		DUP(c);
 		DEC(c);
@@ -82,8 +80,6 @@ void fib(X *c) {
 		SWAP(c);
 		fib(c);
 		ADD(c);
-	} else {
-		c->T = c->S; c->S = pop(c->sc);
 	}
 }
 
@@ -91,14 +87,13 @@ void test_fib(void) {
 	C b[262000];
 	X *c = malloc(sizeof(X));
 	S *s = malloc(sizeof(S));
-	s->bl = init_bl(b, 262000);
+	c->bl = init_bl(b, 262000);
 	c->sc = s;
-	c->T = c->S = 0;
 
-	c->T = 25;
+	push(c->bl, c->sc, 25);
 	fib(c);
 
-	TEST_ASSERT_EQUAL_INT(75025, c->T);
+	TEST_ASSERT_EQUAL_INT(75025, pop(c->bl, c->sc));
 }
 
 void test_reserve(void) {

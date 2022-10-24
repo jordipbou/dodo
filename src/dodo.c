@@ -7,8 +7,7 @@ void fib(X *c) {
 	DUP(c);
 	LIT(c, 1);	
 	GT(c);
-	if (c->T != 0) {
-		c->T = c->S; c->S = pop(c->sc);
+	if (pop(c->bl, c->sc) != 0) {
 		DEC(c);
 		DUP(c);
 		DEC(c);
@@ -16,8 +15,6 @@ void fib(X *c) {
 		SWAP(c);
 		fib(c);
 		ADD(c);
-	} else {
-		c->T = c->S; c->S = pop(c->sc);
 	}
 }
 
@@ -25,10 +22,9 @@ void main() {
 	C b[262000];
 	X *c = malloc(sizeof(X));
 	S *s = malloc(sizeof(S));
-	s->bl = init_bl(b, 262000);
+	c->bl = init_bl(b, 262000);
 	c->sc = s;
 	c->sc->ds = c->sc->rs = NULL;
-	c->T = c->S = 0;
 
 	// :fib d1>?_d_`s`+();
 	allot(b, 15);
@@ -62,7 +58,7 @@ void main() {
 	//c->T = 2;
 	//eval(c);
 
-	printf("%ld  ok\n", c->T);
+	printf("%ld  ok\n", pop(c->bl, c->sc));
 
 	//free(c);
 	//dump_block(b);
