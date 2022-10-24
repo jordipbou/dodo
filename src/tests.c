@@ -51,51 +51,45 @@ void test_cons_and_reclaim(void) {
 void test_stack(void) {
 	C bl[32];
 	init_bl(bl, 32);
-
-	S *s = malloc(sizeof(S));
-	s->ds = s->rs = NULL;
-	TEST_ASSERT_EQUAL_INT(0, length(s->ds));
-	TEST_ASSERT_EQUAL_INT(0, length(s->rs));
-	push(bl, s, 7);
-	TEST_ASSERT_EQUAL_INT(1, length(s->ds));
-	TEST_ASSERT_EQUAL_INT(0, length(s->rs));
-	push(bl, s, 11);
-	TEST_ASSERT_EQUAL_INT(2, length(s->ds));
-	TEST_ASSERT_EQUAL_INT(0, length(s->rs));
-	TEST_ASSERT_EQUAL_INT(11, pop(bl, s));
-	TEST_ASSERT_EQUAL_INT(1, length(s->ds));
-	TEST_ASSERT_EQUAL_INT(0, length(s->rs));
-	TEST_ASSERT_EQUAL_INT(7, pop(bl, s));
-	TEST_ASSERT_EQUAL_INT(0, length(s->ds));
-	TEST_ASSERT_EQUAL_INT(0, length(s->rs));
+	TEST_ASSERT_EQUAL_INT(0, length((C*)(DS((C*)SCOPE(bl)))));
+	TEST_ASSERT_EQUAL_INT(0, length((C*)(RS((C*)SCOPE(bl)))));
+	push(bl, 7);
+	TEST_ASSERT_EQUAL_INT(1, length((C*)(DS((C*)SCOPE(bl)))));
+	TEST_ASSERT_EQUAL_INT(0, length((C*)(RS((C*)SCOPE(bl)))));
+	push(bl, 11);
+	TEST_ASSERT_EQUAL_INT(2, length((C*)(DS((C*)SCOPE(bl)))));
+	TEST_ASSERT_EQUAL_INT(0, length((C*)(RS((C*)SCOPE(bl)))));
+	TEST_ASSERT_EQUAL_INT(11, pop(bl));
+	TEST_ASSERT_EQUAL_INT(1, length((C*)(DS((C*)SCOPE(bl)))));
+	TEST_ASSERT_EQUAL_INT(0, length((C*)(RS((C*)SCOPE(bl)))));
+	TEST_ASSERT_EQUAL_INT(7, pop(bl));
+	TEST_ASSERT_EQUAL_INT(0, length((C*)(DS((C*)SCOPE(bl)))));
+	TEST_ASSERT_EQUAL_INT(0, length((C*)(RS((C*)SCOPE(bl)))));
 }
 
-void fib(X *c) {
-	DUP(c);
-	LIT(c, 1);	
-	GT(c);
-	if (pop(c->bl, c->sc) != 0) {
-		DEC(c);
-		DUP(c);
-		DEC(c);
-		fib(c);
-		SWAP(c);
-		fib(c);
-		ADD(c);
+void fib(C* bl) {
+	DUP(bl);
+	LIT(bl, 1);	
+	GT(bl);
+	if (pop(bl) != 0) {
+		DEC(bl);
+		DUP(bl);
+		DEC(bl);
+		fib(bl);
+		SWAP(bl);
+		fib(bl);
+		ADD(bl);
 	}
 }
 
 void test_fib(void) {
-	C b[262000];
-	X *c = malloc(sizeof(X));
-	S *s = malloc(sizeof(S));
-	c->bl = init_bl(b, 262000);
-	c->sc = s;
+	C bl[262000];
+	init_bl(bl, 262000);
 
-	push(c->bl, c->sc, 25);
-	fib(c);
+	push(bl, 25);
+	fib(bl);
 
-	TEST_ASSERT_EQUAL_INT(75025, pop(c->bl, c->sc));
+	TEST_ASSERT_EQUAL_INT(75025, pop(bl));
 }
 
 void test_reserve(void) {

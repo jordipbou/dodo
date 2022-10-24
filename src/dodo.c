@@ -3,50 +3,46 @@
 
 #include "vm.h"
 
-void fib(X *c) {
-	DUP(c);
-	LIT(c, 1);	
-	GT(c);
-	if (pop(c->bl, c->sc) != 0) {
-		DEC(c);
-		DUP(c);
-		DEC(c);
-		fib(c);
-		SWAP(c);
-		fib(c);
-		ADD(c);
+void fib(C* bl) {
+	DUP(bl);
+	LIT(bl, 1);	
+	GT(bl);
+	if (pop(bl) != 0) {
+		DEC(bl);
+		DUP(bl);
+		DEC(bl);
+		fib(bl);
+		SWAP(bl);
+		fib(bl);
+		ADD(bl);
 	}
 }
 
 void main() {
-	C b[262000];
-	X *c = malloc(sizeof(X));
-	S *s = malloc(sizeof(S));
-	c->bl = init_bl(b, 262000);
-	c->sc = s;
-	c->sc->ds = c->sc->rs = NULL;
+	C bl[262000];
+	init_bl(bl, 262000);
 
 	// :fib d1>?_d_`s`+();
-	allot(b, 15);
-	c->PC = (char *)(b + HEADER_SIZE);
-	*(c->PC + 0) = ':';
-	*(c->PC + 1) = 'd';
-	*(c->PC + 2) = '1';
-	*(c->PC + 3) = '>';
-	*(c->PC + 4) = '?';
-	*(c->PC + 5) = '_';
-	*(c->PC + 6) = 'd';
-	*(c->PC + 7) = '_';
-	*(c->PC + 8) = '`';
-	*(c->PC + 9) = 's';
-	*(c->PC + 10) = '`';
-	*(c->PC + 11) = '+';
-	*(c->PC + 12) = '(';
-	*(c->PC + 13) = ')';
-	*(c->PC + 14) = ';';
+	allot(bl, 15);
+	PC(bl) = (C)(bl + HEADER_SIZE);
+	*((C*)(PC(bl) + 0)) = ':';
+	*((C*)(PC(bl) + 1)) = 'd';
+	*((C*)(PC(bl) + 2)) = '1';
+	*((C*)(PC(bl) + 3)) = '>';
+	*((C*)(PC(bl) + 4)) = '?';
+	*((C*)(PC(bl) + 5)) = '_';
+	*((C*)(PC(bl) + 6)) = 'd';
+	*((C*)(PC(bl) + 7)) = '_';
+	*((C*)(PC(bl) + 8)) = '`';
+	*((C*)(PC(bl) + 9)) = 's';
+	*((C*)(PC(bl) + 10)) = '`';
+	*((C*)(PC(bl) + 11)) = '+';
+	*((C*)(PC(bl) + 12)) = '(';
+	*((C*)(PC(bl) + 13)) = ')';
+	*((C*)(PC(bl) + 14)) = ';';
 
-	LIT(c, 36);
-	eval(c);
+	LIT(bl, 36);
+	eval(bl);
 	//fib(c);
 
 	//allot(b, 3);
@@ -58,7 +54,7 @@ void main() {
 	//c->T = 2;
 	//eval(c);
 
-	printf("%ld  ok\n", pop(c->bl, c->sc));
+	printf("%ld  ok\n", pop(bl));
 
 	//free(c);
 	//dump_block(b);
