@@ -17,9 +17,10 @@ void test_list_length(void) {
 }
 
 void test_block_initialization(void) {
-	C b[32];
-	init_bl(b, 32);
-	C l = (32 - HEADER_SIZE / 2) / 2 - (32 - HEADER_SIZE / 2) % 2;
+	int size = 32;
+	C b[size];
+	init_bl(b, size);
+	C l = (size - HEADER_SIZE - SCOPE_SIZE) / 2 - (size - HEADER_SIZE - SCOPE_SIZE) % 2;
 	TEST_ASSERT_EQUAL_INT(l, length((C *)FREE_HEAD(b)));
 	TEST_ASSERT(b + SIZE(b) > (C *)FREE_HEAD(b));
 	TEST_ASSERT(FREE_HEAD(b) >= LOWEST_ASSIGNED(b));
@@ -29,9 +30,10 @@ void test_block_initialization(void) {
 }
 
 void test_cons_and_reclaim(void) {
-	C b[32];
-	init_bl(b, 32);
-	C l = (32 - HEADER_SIZE / 2) / 2 - (32 - HEADER_SIZE / 2) % 2;
+	int size = 32;
+	C b[size];
+	init_bl(b, size);
+	C l = (size - HEADER_SIZE - SCOPE_SIZE) / 2 - (size - HEADER_SIZE - SCOPE_SIZE) % 2;
 	TEST_ASSERT_EQUAL_INT(l, length((C *)FREE_HEAD(b)));
 	C *i1 = cons(b, 0, 0);
 	TEST_ASSERT_EQUAL_INT(l - 1, length((C *)FREE_HEAD(b)));
@@ -97,9 +99,10 @@ void test_fib(void) {
 }
 
 void test_reserve(void) {
-	C b[32];
-	init_bl(b, 32);
-	C l = (32 - HEADER_SIZE / 2) / 2 - (32 - HEADER_SIZE / 2) % 2;
+	int size = 32;
+	C b[size];
+	init_bl(b, size);
+	C l = (size - HEADER_SIZE - SCOPE_SIZE) / 2 - (size - HEADER_SIZE - SCOPE_SIZE) % 2;
 	TEST_ASSERT_EQUAL_INT(l, length((C *)FREE_HEAD(b)));
 	C res = reserve(b, 2);
 	TEST_ASSERT_EQUAL_INT(0, res);
@@ -107,9 +110,10 @@ void test_reserve(void) {
 }
 
 void test_allot(void) {
-	C b[32];
-	init_bl(b, 32);
-	C l = (32 - HEADER_SIZE / 2) / 2 - (32 - HEADER_SIZE / 2) % 2;
+	int size = 32;
+	C b[size];
+	init_bl(b, size);
+	C l = (size - HEADER_SIZE - SCOPE_SIZE) / 2 - (size - HEADER_SIZE - SCOPE_SIZE) % 2;
 	TEST_ASSERT_EQUAL_INT(l, length((C *)FREE_HEAD(b)));
 	C h = HERE(b);
 	C res = allot(b, 10);

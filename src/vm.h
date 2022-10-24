@@ -8,27 +8,6 @@
 typedef int64_t C;					// cell
 typedef unsigned char B;		// byte
 
-// Lexical scope. There can be multiple lexical scopes and they can extend
-// other scopes.
-// The use of linked lists for the stacks and the dictionary allows the 
-// creation of closures by extending a stack with closure's own stack and a
-// dictionary with closure's own dictionary of words.
-
-// TODO: Where are scopes stored? There should be another entry in the
-// header for the list of scopes owned by that block.
-
-typedef struct {
-	C* ds, * rs;							// data stack, return stack
-	// TODO: Here a pointer to scope's dictionary is needed
-} S;												// scope
-
-typedef struct {
-	C* bl;										// memory block
-	C err;
-	B* PC;										// Program Counter
-	S* sc;										// current scope
-} X;												// context
-
 // As oposed to LISP implementations, CDR is the first cell and CAR is the
 // second cell. This way, list items can have a value with a size longer
 // than one cell (as arrays).
@@ -37,7 +16,36 @@ typedef struct {
 #define CAR(addr)		*(addr + 1)
 #define CDR(addr)		*addr
 
+// Lexical scope. There can be multiple lexical scopes and they can extend
+// other scopes.
+// The use of linked lists for the stacks and the dictionary allows the 
+// creation of closures by extending a stack with closure's own stack and a
+// dictionary with closure's own dictionary of words.
+
+// An scope definition occupies 4 cells, the first one is the CDR that links
+// to next available scope.
+
+#define DS(saddr)		*(saddr + 1)		// data stack
+#define RS(saddr)		*(saddr + 2)		// return stack
+#define DT(saddr)		*(saddr + 3)		// dictionary
+#define SCOPE_SIZE	4
+
+// TODO: Remove this structure
+
+typedef struct {
+	C* ds, * rs, * dc;				// data stack, return stack, dictionary
+} S;												// scope
+
+typedef struct {
+	C* bl;										// memory block
+	C err;										// vm status and error code
+	B* PC;										// program counter
+	S* sc;										// current scope
+} X;												// context
+
 // The block header stores all the info needed to manage memory on that block.
+// A block includes in itself all the info that represents a computation at
+// any moment in time.
 
 #define SIZE(b)							*b
 #define FREE_HEAD(b)				*(b + 1)
@@ -47,8 +55,9 @@ typedef struct {
 #define SCOPES(b)						*(b + 5)
 #define HEADER_SIZE					6
 
-// Block initialization. The doubly linked list that holds all free cells
-// is initialized here.
+// Block initialization. 
+// Initializes the doubly linked list of free pairs of cells and the list of
+// scopes.
 // For each free pair, CAR represents previous item and CDR next item.
 
 C* init_bl(C* bl, C sz) {
@@ -56,7 +65,7 @@ C* init_bl(C* bl, C sz) {
 
 	for (
 		C* p = (C*)(HERE(bl) = FREE_TAIL(bl) = (C)(bl + HEADER_SIZE));
-		p <= (C*)(LOWEST_ASSIGNED(bl) = FREE_HEAD(bl) = (C)(bl + sz - 2));
+		p <= (C*)(LOWEST_ASSIGNED(bl) = FREE_HEAD(bl) = (C)(bl + sz - SCOPE_SIZE - 2));
 		p += 2
 	) {
 			CDR(p) = (C)(p - 2);
@@ -65,6 +74,13 @@ C* init_bl(C* bl, C sz) {
 
 	CDR((C*)FREE_TAIL(bl)) = (C)NULL;
 	CAR((C*)FREE_HEAD(bl)) = (C)NULL;
+
+	SCOPES(bl) = (C)(bl + sz - SCOPE_SIZE);
+	CDR((C*)SCOPES(bl)) = (C)NULL;
+	DS((C*)SCOPES(bl)) = (C)NULL;
+	RS((C*)SCOPES(bl)) = (C)NULL;
+	DT((C*)SCOPES(bl)) = (C)NULL;
+
 
 	return bl;
 }
