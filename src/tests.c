@@ -8,11 +8,16 @@ void setUp(void) {}
 void tearDown(void) {}
 
 void test_list_length(void) {
-	C list[8];
-	list[0] = (C)&list[2];
-	list[2] = (C)&list[4];
-	list[4] = (C)&list[6];
-	list[6] = (C)NULL;
+	//C list[8];
+	//list[0] = (C)&list[2];
+	//list[2] = (C)&list[4];
+	//list[4] = (C)&list[6];
+	//list[6] = (C)NULL;
+	P list[4];
+	list[0].cdr = &list[1];
+	list[1].cdr = &list[2];
+	list[2].cdr = &list[3];
+	list[3].cdr = NULL;
 	TEST_ASSERT_EQUAL_INT(4, length(list));
 }
 
@@ -21,7 +26,8 @@ void test_block_initialization(void) {
 	C b[size];
 	init_bl(b, size);
 	C l = (size - Hsz) / 2 - (size - Hsz) % 2;
-	TEST_ASSERT_EQUAL_INT(l, length((C *)FH(b)));
+	//TEST_ASSERT_EQUAL_INT(l, length((C *)FH(b)));
+	TEST_ASSERT_EQUAL_INT(l, length((P*)FH(b)));
 	TEST_ASSERT(b + SZ(b) > (C *)FH(b));
 	TEST_ASSERT(FH(b) >= LA(b));
 	TEST_ASSERT(LA(b) > FT(b));
@@ -34,15 +40,20 @@ void test_cons_and_reclaim(void) {
 	C b[size];
 	init_bl(b, size);
 	C l = (size - Hsz) / 2 - (size - Hsz) % 2;
-	TEST_ASSERT_EQUAL_INT(l, length((C *)FH(b)));
+	//TEST_ASSERT_EQUAL_INT(l, length((C *)FH(b)));
+	TEST_ASSERT_EQUAL_INT(l, length((P*)FH(b)));
 	C *i1 = cons(b, 0, 0);
-	TEST_ASSERT_EQUAL_INT(l - 1, length((C *)FH(b)));
+	//TEST_ASSERT_EQUAL_INT(l - 1, length((C *)FH(b)));
+	TEST_ASSERT_EQUAL_INT(l - 1, length((P*)FH(b)));
 	C *i2 = cons(b, 0, 0);
-	TEST_ASSERT_EQUAL_INT(l - 2, length((C *)FH(b)));
+	//TEST_ASSERT_EQUAL_INT(l - 2, length((C *)FH(b)));
+	TEST_ASSERT_EQUAL_INT(l - 2, length((P*)FH(b)));
 	reclaim(b, i1);
-	TEST_ASSERT_EQUAL_INT(l - 1, length((C *)FH(b)));
+	//TEST_ASSERT_EQUAL_INT(l - 1, length((C *)FH(b)));
+	TEST_ASSERT_EQUAL_INT(l - 1, length((P*)FH(b)));
 	reclaim(b, i2);
-	TEST_ASSERT_EQUAL_INT(l, length((C *)FH(b)));
+	//TEST_ASSERT_EQUAL_INT(l, length((C *)FH(b)));
+	TEST_ASSERT_EQUAL_INT(l, length((P*)FH(b)));
 
 	TEST_ASSERT_EQUAL(i1, (C *)CDR(i2));
 	TEST_ASSERT_EQUAL(i2, (C *)FH(b));
@@ -51,20 +62,30 @@ void test_cons_and_reclaim(void) {
 void test_stack(void) {
 	C bl[32];
 	init_bl(bl, 32);
-	TEST_ASSERT_EQUAL_INT(0, length((C*)(DS(bl))));
-	TEST_ASSERT_EQUAL_INT(0, length((C*)(RS(bl))));
+	//TEST_ASSERT_EQUAL_INT(0, length((C*)(DS(bl))));
+	//TEST_ASSERT_EQUAL_INT(0, length((C*)(RS(bl))));
+	TEST_ASSERT_EQUAL_INT(0, length((P*)(DS(bl))));
+	TEST_ASSERT_EQUAL_INT(0, length((P*)(RS(bl))));
 	push(bl, 7);
-	TEST_ASSERT_EQUAL_INT(1, length((C*)(DS(bl))));
-	TEST_ASSERT_EQUAL_INT(0, length((C*)(RS(bl))));
+	//TEST_ASSERT_EQUAL_INT(1, length((C*)(DS(bl))));
+	//TEST_ASSERT_EQUAL_INT(0, length((C*)(RS(bl))));
+	TEST_ASSERT_EQUAL_INT(1, length((P*)(DS(bl))));
+	TEST_ASSERT_EQUAL_INT(0, length((P*)(RS(bl))));
 	push(bl, 11);
-	TEST_ASSERT_EQUAL_INT(2, length((C*)(DS(bl))));
-	TEST_ASSERT_EQUAL_INT(0, length((C*)(RS(bl))));
+	//TEST_ASSERT_EQUAL_INT(2, length((C*)(DS(bl))));
+	//TEST_ASSERT_EQUAL_INT(0, length((C*)(RS(bl))));
+	TEST_ASSERT_EQUAL_INT(2, length((P*)(DS(bl))));
+	TEST_ASSERT_EQUAL_INT(0, length((P*)(RS(bl))));
 	TEST_ASSERT_EQUAL_INT(11, pop(bl));
-	TEST_ASSERT_EQUAL_INT(1, length((C*)(DS(bl))));
-	TEST_ASSERT_EQUAL_INT(0, length((C*)(RS(bl))));
+	//TEST_ASSERT_EQUAL_INT(1, length((C*)(DS(bl))));
+	//TEST_ASSERT_EQUAL_INT(0, length((C*)(RS(bl))));
+	TEST_ASSERT_EQUAL_INT(1, length((P*)(DS(bl))));
+	TEST_ASSERT_EQUAL_INT(0, length((P*)(RS(bl))));
 	TEST_ASSERT_EQUAL_INT(7, pop(bl));
-	TEST_ASSERT_EQUAL_INT(0, length((C*)(DS(bl))));
-	TEST_ASSERT_EQUAL_INT(0, length((C*)(RS(bl))));
+	//TEST_ASSERT_EQUAL_INT(0, length((C*)(DS(bl))));
+	//TEST_ASSERT_EQUAL_INT(0, length((C*)(RS(bl))));
+	TEST_ASSERT_EQUAL_INT(0, length((P*)(DS(bl))));
+	TEST_ASSERT_EQUAL_INT(0, length((P*)(RS(bl))));
 }
 
 void fib(C* bl) {
@@ -97,10 +118,12 @@ void test_reserve(void) {
 	C b[size];
 	init_bl(b, size);
 	C l = (size - Hsz) / 2 - (size - Hsz) % 2;
-	TEST_ASSERT_EQUAL_INT(l, length((C *)FH(b)));
+	//TEST_ASSERT_EQUAL_INT(l, length((C *)FH(b)));
+	TEST_ASSERT_EQUAL_INT(l, length((P*)FH(b)));
 	C res = reserve(b, 2);
 	TEST_ASSERT_EQUAL_INT(0, res);
-	TEST_ASSERT_EQUAL_INT(l - 2, length((C *)FH(b)));
+	//TEST_ASSERT_EQUAL_INT(l - 2, length((C *)FH(b)));
+	TEST_ASSERT_EQUAL_INT(l - 2, length((P*)FH(b)));
 }
 
 void test_allot(void) {
@@ -108,15 +131,18 @@ void test_allot(void) {
 	C b[size];
 	init_bl(b, size);
 	C l = (size - Hsz) / 2 - (size - Hsz) % 2;
-	TEST_ASSERT_EQUAL_INT(l, length((C *)FH(b)));
+	//TEST_ASSERT_EQUAL_INT(l, length((C *)FH(b)));
+	TEST_ASSERT_EQUAL_INT(l, length((P*)FH(b)));
 	C h = HERE(b);
 	C res = allot(b, 10);
 	TEST_ASSERT_EQUAL_INT(0, res);
-	TEST_ASSERT_EQUAL_INT(l - 1, length((C *)FH(b)));
+	//TEST_ASSERT_EQUAL_INT(l - 1, length((C *)FH(b)));
+	TEST_ASSERT_EQUAL_INT(l - 1, length((P*)FH(b)));
 	TEST_ASSERT_EQUAL_INT(h + 10, HERE(b));
 	res = allot(b, 2*sizeof(C) + 2);
 	TEST_ASSERT_EQUAL_INT(0, res);
-	TEST_ASSERT_EQUAL_INT(l - 2, length((C *)FH(b)));
+	//TEST_ASSERT_EQUAL_INT(l - 2, length((C *)FH(b)));
+	TEST_ASSERT_EQUAL_INT(l - 2, length((P*)FH(b)));
 	TEST_ASSERT_EQUAL_INT(h + 10 + 2*sizeof(C) + 2, HERE(b));
 }
 

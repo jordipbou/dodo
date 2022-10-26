@@ -19,6 +19,11 @@ void fib(C* bl) {
 }
 
 void main() {
+	printf("Sizeof byte: %ld\n", sizeof(B));
+	printf("Sizeof cell: %ld\n", sizeof(C));
+	printf("Sizeof pair: %ld\n", sizeof(P));
+	printf("Sizeof header: %ld\n", sizeof(H));
+
 	C bl[262000];
 	init_bl(bl, 262000);
 

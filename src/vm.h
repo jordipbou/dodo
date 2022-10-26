@@ -5,20 +5,31 @@
 // dependent. This implementation has been thought to be used in 64 and 32
 // bit platforms.
 
-typedef int64_t C;					// cell
 typedef unsigned char B;		// byte
+typedef int64_t C;					// cell
 
 // As oposed to LISP implementations, CDR is the first cell and CAR is the
 // second cell. This way, list items can have a value with a size longer
 // than one cell (as arrays).
 // This has been done to reuse linked list code in dictionary code.
 
+typedef struct _P {
+	struct _P* cdr;
+	C car;
+} P;												// pair
+
+// The block header stores all the info needed to manage memory 
+// and to represent a computation at any moment in time.
+
+typedef struct {
+	C size, err, ip;
+	C* sp, * rp, * dp;
+	P* fhead, * lowest, * ftail;
+	B* here;
+} H;												// block header
+
 #define CAR(addr)		*(((C*)addr) + 1)
 #define CDR(addr)		*((C*)addr)
-
-// The block header stores all the info needed to manage memory on that block.
-// A block includes in itself all the info that represents a computation at
-// any moment in time.
 
 #define DS(b)				*(b + 0)			// data stack
 #define DICT(b)			*(b + 1)			// dictionary
@@ -112,8 +123,11 @@ void reclaim(C* bl, C* p /* pair that its returned */) {
 	CDR(p) = (C)h;
 }
 
-C length(C *l /* list */) {
-	for (C a = 0;; a++) { if (!l) { return a; } else { l = (C*)CDR(l); } }
+//C length(C *l /* list */) {
+//	for (C a = 0;; a++) { if (!l) { return a; } else { l = (C*)CDR(l); } }
+//}
+C length(P *l) {
+	for (C a = 0;; a++) { if (!l) { return a; } else { l = l->cdr; } }
 }
 
 // Stack operations
@@ -145,7 +159,8 @@ C rpop(C* bl) {
 }
 
 void dump_stack(C* bl) {
-	printf("<%ld> ", length((C*)DS(bl)));
+	//printf("<%ld> ", length((C*)DS(bl)));
+	printf("<%ld> ", length((P*)DS(bl)));
 	C* i = (C*)DS(bl);
 	while (i != NULL) {
 		printf("[%p] %ld ", i, CAR(i));
