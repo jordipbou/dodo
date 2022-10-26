@@ -24,7 +24,7 @@ void main() {
 
 	// :fib d1>?_d_`s`+();
 	allot(bl, 15);
-	PC(bl) = (C)(bl + HEADER_SIZE);
+	PC(bl) = (C)(bl + Hsz);
 	*((C*)(PC(bl) + 0)) = ':';
 	*((C*)(PC(bl) + 1)) = 'd';
 	*((C*)(PC(bl) + 2)) = '1';
@@ -46,7 +46,7 @@ void main() {
 	//fib(c);
 
 	//allot(b, 3);
-	//c->PC = (char *)(b + HEADER_SIZE);
+	//c->PC = (char *)(b + Hsz);
 	//*(c->PC + 0) = '1';
 	//*(c->PC + 1) = '+';
 	//*(c->PC + 2) = ';';
