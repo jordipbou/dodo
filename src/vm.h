@@ -8,72 +8,53 @@
 typedef unsigned char B;		// byte
 typedef int64_t C;					// cell
 
-// As oposed to LISP implementations, CDR is the first cell and CAR is the
-// second cell. This way, list items can have a value with a size longer
-// than one cell (as arrays).
-// This has been done to reuse linked list code in dictionary code.
+// To reuse linked list code in dictionary, and as oposed to LISP 
+// implementations, CDR is the first cell and CAR is the second cell, allowing
+// extending CAR to sizes other than cell in memory.
 
 typedef struct _P {
-	struct _P* cdr;
+	struct _P* cdr;							
 	C car;
-} P;												// pair
-
-// The block header stores all the info needed to manage memory 
-// and to represent a computation at any moment in time.
+} P;														// pair
 
 typedef struct {
-	C size, err, ip;
-	C* sp, * rp, * dp;
-	P* fhead, * lowest, * ftail;
-	B* here;
-} H;												// block header
+	C size, err;									// size of block, status and error code
+	B* ip, * here;								// instruction ptr, here ptr
+	P* sp, * rp, * dp;						// stack ptr, return stack ptr, dictionary ptr
+	P* ftail, * lowest, * fhead;	// head of free list, lowest assigned, tail
+} H;														// block header
 
-#define CAR(addr)		*(((C*)addr) + 1)
-#define CDR(addr)		*((C*)addr)
+#define szPAIR			sizeof(P) / sizeof(C)	
+#define szHEADER		sizeof(H) / sizeof(C)
 
-#define DS(b)				*(b + 0)			// data stack
-#define DICT(b)			*(b + 1)			// dictionary
-#define RS(b)				*(b + 2)			// retur stack (only one, scopes don't have)
-#define SZ(b)				*(b	+ 3)			// size of block
-#define FH(b)				*(b + 4)			// head of free doubly linked list
-#define LA(b)				*(b + 5)			// lowest (in memory) assigned pair
-#define FT(b)				*(b + 6)			// tail of free doubly linked list
-#define HERE(b)			*(b + 7)			// end of allocated contiguous memory
-#define ERR(b)			*(b + 8)			// context status or error code
-#define PC(b)				*(b + 9)			// program counter / instruction pointer
-#define Hsz					10	
+// Initializes the doubly linked list of free pairs of cells.
 
-// Block initialization. 
-// Initializes the doubly linked list of free pairs of cells and the list of
-// scopes.
-// For each free pair, CAR represents previous item and CDR next item.
+H* init_bl(C* bl, C sz /* Size in cells of this block */) {
+	if (sz % 2 != 0) return NULL;
 
-C* init_bl(C* bl, C sz) {
-	if ((SZ(bl) = sz) % 2 != 0) return NULL;
+	H* h = (H*)bl;
+	h->size = sz;
+	h->err = 0;
+	P* p = h->ftail = (P*)(h->ip = h->here = (B*)(bl + szHEADER));
+	h->sp = h->rp = h->dp = NULL;
 
-	for (
-		C* p = (C*)(HERE(bl) = FT(bl) = (C)(bl + Hsz));
-		p <= (C*)(LA(bl) = FH(bl) = (C)(bl + sz - 2));
-		p += 2
-	) {
-			CDR(p) = (C)(p - 2);
-			CAR(p) = (C)(p + 2);
-	}
+	while (p < (P*)(bl + sz)) {	p->cdr = p - 1;	p->car = (C)(p + 1); p++;	}
+	h->lowest = h->fhead = p - 1;
 
-	CDR(FT(bl)) = CAR(FH(bl)) = (C)NULL;
-	DS(bl) = DICT(bl) = RS(bl) = (C)NULL;
+	h->ftail->cdr = NULL;
+	h->fhead->car = (C)NULL;
 
-	return bl;
+	return h;
 }
 
 // To allow use of arrays and contiguous memory, memory has to be reserved
 // in the block (removing free pairs from the doubly linked list).
 
-C reserve(C* bl, C np /* number of pairs of cells to reserve */) {
-	if (((C*)LA(bl)) - ((C*)FT(bl)) <= 2*np) return -1;
+C reserve(H* bl, C np /* number of pairs of cells to reserve */) {
+	if ((C*)bl->lowest - (C*)bl->ftail <= 2*np) return -1;
 
-	FT(bl) = (C)((C*)FT(bl) + 2*np);
-	CDR(FT(bl)) = (C)NULL;
+	bl->ftail = bl->ftail + np;
+	bl->ftail->cdr = NULL;
 
 	return 0;
 }
@@ -81,91 +62,79 @@ C reserve(C* bl, C np /* number of pairs of cells to reserve */) {
 // Allocates bytes in groups of pairs of cells, as memory allocated is taken
 // from the doubly linked list.
 
-C allot(C* bl, C nb /* number of bytes to allocate */) {
-	if (FT(bl) - HERE(bl) <= nb) {
-		C ps = 2*sizeof(C); // Size in bytes of a pair of cells
-		C req = nb - (FT(bl) - HERE(bl));
-		C npairs = (req / ps) * ps < req ? req / ps + 1 : req / ps;
+C allot(H* bl, C nb /* number of bytes to allocate */) {
+	if ((B*)bl->ftail - bl->here <= nb) {
+		C req = nb - (C)((B*)bl->ftail - bl->here);
+		C npairs = (req / szPAIR) * szPAIR < req ? req / szPAIR + 1 : req / szPAIR;
 		if (reserve(bl, npairs) == -1) {
 			return -1;
 		}
 	}
 
-	HERE(bl) += nb;
+	bl->here += nb;
 
 	return 0;
 }
 
 // Construct a pair by taking one free pair from the doubly linked list.
 
-C* cons(C* bl, C car, C cdr) {
-	if ((C*)FH(bl) == NULL) return NULL;
+P* cons(H* bl, C car, P* cdr) {
+	if (bl->fhead == NULL) return NULL;
 
-	C* h = (C*)FH(bl);
-	FH(bl) = (C)CDR(h);
-	CAR(FH(bl)) = (C)NULL;
+	P* p = bl->fhead;
+	bl->fhead = p->cdr;
+	bl->fhead->car = (C)NULL;
 
-	CAR(h) = car;
-	CDR(h) = cdr;
+	p->car = car;
+	p->cdr = cdr;
 
-	if (h < (C*)LA(bl)) LA(bl) = (C)h;
+	if (p < bl->lowest) bl->lowest = p;
 
-	return h;
+	return p;
 }
 
 // Return a pair to the free doubly linked list when its not in use anymore.
 
-void reclaim(C* bl, C* p /* pair that its returned */) {
-	C* h = (C*)FH(bl);
-	FH(bl) = (C)p;
-	CAR(h) = (C)p;
-	CAR(p) = (C)NULL;
-	CDR(p) = (C)h;
+void reclaim(H* bl, P* p /* pair that its returned */) {
+	p->car = (C)NULL;
+	p->cdr = bl->fhead;
+	bl->fhead->car = (C)p;
+	bl->fhead = p;
 }
 
-//C length(C *l /* list */) {
-//	for (C a = 0;; a++) { if (!l) { return a; } else { l = (C*)CDR(l); } }
-//}
 C length(P *l) {
 	for (C a = 0;; a++) { if (!l) { return a; } else { l = l->cdr; } }
 }
 
 // Stack operations
 
-void push(C* bl, C v) {
-	C* i = cons(bl, v, (C)DS(bl));
-	DS(bl) = (C)i;
+void push(H* bl, C v) {
+	bl->sp = cons(bl, v, bl->sp);
 }
 
-C pop(C* bl) {
-	C* i = (C*)DS(bl);
-	C v = CAR(i);
-	DS(bl) = CDR(i);
-	reclaim(bl, i);
+C pop(H* bl) {
+	P* p = bl->sp;
+	C v = p->car;
+	bl->sp = p->cdr;
+	reclaim(bl, p);
 	return v;
 }
 
-void rpush(C* bl, C v) {
-	C* i = cons(bl, v, (C)RS(bl));
-	RS(bl) = (C)i;
+void rpush(H* bl, C v) {
+	bl->rp = cons(bl, v, bl->rp);
 }
 
-C rpop(C* bl) {
-	C* i = (C*)RS(bl);
-	C v = CAR(i);
-	RS(bl) = CDR(i);
-	reclaim(bl, i);
+C rpop(H* bl) {
+	P* p = bl->rp;
+	C v = p->car;
+	bl->rp = p->cdr;
+	reclaim(bl, p);
 	return v;
 }
 
-void dump_stack(C* bl) {
-	//printf("<%ld> ", length((C*)DS(bl)));
-	printf("<%ld> ", length((P*)DS(bl)));
-	C* i = (C*)DS(bl);
-	while (i != NULL) {
-		printf("[%p] %ld ", i, CAR(i));
-		i = (C*)CDR(i);
-	}
+void dump_stack(H* bl) {
+	printf("<%ld> ", length(bl->sp));
+	for (P* p = bl->sp; p != NULL; p = p->cdr) { printf("%ld ", p->car); }
 	printf("\n");
 }
 
@@ -184,32 +153,32 @@ void dump_stack(C* bl) {
 // graphical characters are used, and if possible, the character represents
 // the primitive.
 
-#define NEXT(bl)		PC(bl) = PC(bl) + 1
-#define PREV(bl)		PC(bl) = PC(bl) - 1
+#define NEXT(bl)		bl->ip++
+#define PREV(bl)		bl->ip--
 
-void eval(C* bl) {
+void eval(H* bl) {
 	while(1) {
-		switch(*((B*)PC(bl))) {
+		switch(*(bl->ip)) {
 			case 'd': DUP(bl); NEXT(bl); break;
 			case '1': LIT(bl, 1); NEXT(bl); break;
 			case '>': GT(bl); NEXT(bl); break;
 			case '?': 
 				if (pop(bl) == 0) {
-						while (*((B*)PC(bl)) != '(') { NEXT(bl); }
+						while (*(bl->ip) != '(') { NEXT(bl); }
 				} else {
 						NEXT(bl);
 				}
 				break;
 			case '_': DEC(bl); NEXT(bl); break;
 			case '`': 
-				rpush(bl, (C)(PC(bl) + 1));
-				while (*((B*)PC(bl)) != ':') { PREV(bl); }
+				rpush(bl, (C)(bl->ip + 1));
+				while (*(bl->ip) != ':') { PREV(bl); }
 				break;
 			case 's': SWAP(bl); NEXT(bl); break;
 			case '+': ADD(bl); NEXT(bl); break;
 			case ';': 
-				if ((C*)RS(bl) != NULL) {
-					PC(bl) = rpop(bl);
+				if (bl->rp != NULL) {
+					bl->ip = (B*)rpop(bl);
 				} else {
 					return;
 				}

@@ -3,7 +3,7 @@
 
 #include "vm.h"
 
-void fib(C* bl) {
+void fib(H* bl) {
 	DUP(bl);
 	LIT(bl, 1);	
 	GT(bl);
@@ -19,32 +19,26 @@ void fib(C* bl) {
 }
 
 void main() {
-	printf("Sizeof byte: %ld\n", sizeof(B));
-	printf("Sizeof cell: %ld\n", sizeof(C));
-	printf("Sizeof pair: %ld\n", sizeof(P));
-	printf("Sizeof header: %ld\n", sizeof(H));
-
-	C bl[262000];
-	init_bl(bl, 262000);
+	C b[262000];
+	H* bl = init_bl(b, 262000);
 
 	// :fib d1>?_d_`s`+();
 	allot(bl, 15);
-	PC(bl) = (C)(bl + Hsz);
-	*((C*)(PC(bl) + 0)) = ':';
-	*((C*)(PC(bl) + 1)) = 'd';
-	*((C*)(PC(bl) + 2)) = '1';
-	*((C*)(PC(bl) + 3)) = '>';
-	*((C*)(PC(bl) + 4)) = '?';
-	*((C*)(PC(bl) + 5)) = '_';
-	*((C*)(PC(bl) + 6)) = 'd';
-	*((C*)(PC(bl) + 7)) = '_';
-	*((C*)(PC(bl) + 8)) = '`';
-	*((C*)(PC(bl) + 9)) = 's';
-	*((C*)(PC(bl) + 10)) = '`';
-	*((C*)(PC(bl) + 11)) = '+';
-	*((C*)(PC(bl) + 12)) = '(';
-	*((C*)(PC(bl) + 13)) = ')';
-	*((C*)(PC(bl) + 14)) = ';';
+	*(bl->ip + 0) = ':';
+	*(bl->ip + 1) = 'd';
+	*(bl->ip + 2) = '1';
+	*(bl->ip + 3) = '>';
+	*(bl->ip + 4) = '?';
+	*(bl->ip + 5) = '_';
+	*(bl->ip + 6) = 'd';
+	*(bl->ip + 7) = '_';
+	*(bl->ip + 8) = '`';
+	*(bl->ip + 9) = 's';
+	*(bl->ip + 10) = '`';
+	*(bl->ip + 11) = '+';
+	*(bl->ip + 12) = '(';
+	*(bl->ip + 13) = ')';
+	*(bl->ip + 14) = ';';
 
 	LIT(bl, 36);
 	eval(bl);
@@ -59,7 +53,8 @@ void main() {
 	//c->T = 2;
 	//eval(c);
 
-	printf("%ld  ok\n", pop(bl));
+	//printf("%ld  ok\n", pop(bl));
+	dump_stack(bl);
 
 	//free(c);
 	//dump_block(b);
