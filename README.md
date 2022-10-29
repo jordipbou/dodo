@@ -128,6 +128,8 @@ CONS
 		R#					relative address call				( a -- ) ( R: -- a (absolute) )
 		R#;					relative address tail call  ( a -- ) ( -- )
 
+		c<n>				call a c function from predefined c functions table
+
 		_						drop												( x -- )
 		d						dup													( x -- x x )
 		s						swap												( x y -- y x )
