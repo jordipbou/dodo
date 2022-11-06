@@ -1,10 +1,12 @@
 #include<stdint.h>
 #include<stddef.h>
 #include<string.h>
+#include<unistd.h>
+#include<sys/mman.h>
+#include<errno.h>
 
 typedef uint8_t B;							// BYTE
-typedef uint8_t D;							// DOUBLE BYTE
-typedef int64_t C;							// CELL - 64 bit or 32 bits
+typedef int64_t C;							// CELL
 
 #define IS_ALIGNED(a)		!(a & (sizeof(C) - 1))		
 #define AS_CELLS(b)			(b <= 0 ? 0 : ((b - 1) / sizeof(C)) + 1)
@@ -15,60 +17,88 @@ typedef struct _P {
 	C car;
 } P;														// PAIR - or list item
 
-typedef struct {
-	D len;												// 65536 chars maximum
-	B str[sizeof(C) - 2];					// padding to one cell
-} S;														// BYTE ARRAY (String)
-
-C equals(S* a, S* b) {
-	// TODO: Compare full cells, not just chars
-	if (*((C*)a) != *((C*)b)) return 0;
-	for (C i = 6; i < a->len; a++) {
-		if (a->str[i] != b->str[i]) return 0;
-	}
-	return 1;
+C length(P* l) {
+	for (C a = 0;; a++) { if (!l) { return a; } else { l = l->cdr; } }
 }
+
+typedef struct {
+	C len;												// length
+	B str[8];											// at least one cell of string data
+} S;														// COUNTED BYTE ARRAY (String)
+
+typedef struct {
+	C len;
+	B* code;
+} D;
 
 typedef struct {
 	P* cdr;
 	C flags;
-	S* name;
-	S* source;
-	S* code;
+	S* name;											
+	S* source;										
+	D* code;											
 } W;														// DICTIONARY WORD
 
+W* find(W* word, B* name) {
+	while (word != NULL && strcmp(word->name->str, name)) {
+		word = (W*)word->cdr;
+	}
+
+	return word;
+}
+
 typedef struct {
-	C size, err;									// size of block, status and error code
-	B* ip, * here;								// instruction ptr, here ptr
+	C err, st;										// status and error codes
+	C dsize, csize;								// size of block, status and error code
+	B* ip, * here, * chere;				// instruction ptr (RIP), here ptr
 	P* sp, * rp;									// stack ptr, return stack ptr
 	W* dp;												// dictionary ptr
 	P* ftail, * lowest, * fhead;	// head of free list, lowest assigned, tail
+	B* code;											// pointer to code space
 	B data[];											// start of data space
 } H;														// BLOCK HEADER
 
 #define FREE(bl)		((B*)(bl->ftail) - bl->here)
+#define PAGESIZE	sysconf(_SC_PAGESIZE)
 
-typedef int (*F)(H*);						// C FUNCTION
+H* init(C dsz /* Data size in bytes */, C csz /* Code size in bytes*/) {
+	dsz = (dsz + (sizeof(P)-1)) & ~(sizeof(P)-1);
+	csz = (csz + (PAGESIZE-1)) & ~(PAGESIZE-1);	
 
-// Initializes the doubly linked list of free pairs of cells.
+	// Allocate memory for data
+	H* h = malloc(dsz);
+	if (h == NULL) {
+		return (H*)-1;
+	}
 
-H* init(C* bl, C sz /* Size in cells of this block */) {
-	if (sz % 2 != 0) return NULL;
-
-	H* h = (H*)bl;
-	h->size = sz;
-	h->err = 0;
+	// Header data
+	h->dsize = dsz;
+	h->csize = csz;
+	h->st = h->err = 0;
 	P* p = h->ftail = (P*)(h->ip = h->here = &(h->data[0]));
 	h->sp = h->rp = NULL;
 	h->dp = NULL;
 
-	while (p < (P*)(bl + sz)) {	p->cdr = p - 1;	p->car = (C)(p + 1); p++;	}
+	// Initializes doubly linked list of free pairs
+	while (p < (P*)(((C*)h) + dsz)) { p->cdr = p - 1; p->car = (C)(p + 1); p++;	}
 	h->lowest = h->fhead = p - 1;
-
 	h->ftail->cdr = NULL;
 	h->fhead->car = (C)NULL;
 
+	// Allocate executable memory for code
+	h->code = mmap(NULL, csz, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_ANONYMOUS,	-1, 0);
+	if (h->code == (void *)-1) {
+		free(h);
+		return (H*)-2;
+	}
+	h->chere = h->code;
+
 	return h;
+}
+
+void deinit(H* h) {
+	munmap(h->code, h->csize);
+	free(h);
 }
 
 // Allocates bytes in groups of pairs of cells, as memory allocated is taken
@@ -79,9 +109,11 @@ C allot(H* bl, C nb /* number of bytes to allocate */) {
 	// TODO: Extreme cases are not correctly tested
 	while (FREE(bl) < nb) {
 		if ((P*)(bl->ftail->car) - bl->ftail != 1 || (P*)(bl->ftail->car) == bl->lowest) {
-			// Free pairs are not contiguous, it's not possible to allocate memory
+			// Not enough contiguous free pairs
 			return -1;
 		} else {
+			// TODO: This should be done in a temporary variable to keep things like
+			// they were if not enough memory to allocate
 			bl->ftail = (P*)bl->ftail->car;
 		}
 	}
@@ -118,6 +150,67 @@ void reclaim(H* bl, P* p /* pair that its returned */) {
 	bl->fhead = p;
 }
 
+S* compile_str(H* bl, B* str) {
+	C len = strlen(str);
+	// TODO: Check alignment?
+	S* s = (S*)(bl->here);
+	if (allot(bl, sizeof(C) + AS_CELLS(len))) {
+		return NULL;
+	} else {
+		s->len = len;
+		memset(s->str, 0, AS_CELLS(len));
+		memcpy(s->str, str, len);
+	}
+
+	return s;
+}
+
+D* compile_code(H* bl, B* code, C len) {
+	D* d = (D*)(bl->here);
+	B* chere = bl->chere;
+	if (allot(bl, 2*sizeof(C))) {
+		return NULL;
+	} else {
+		if (chere + len >= bl->code + bl->csize) return NULL;
+		if (mprotect(bl->code, bl->csize, PROT_WRITE)) return NULL;
+		memcpy(chere, code, len);
+		if (mprotect(bl->code, bl->csize, PROT_READ|PROT_EXEC)) return NULL;
+		d->len = len;
+		d->code = chere;
+		bl->chere += len;
+	}
+	return d;
+}
+
+int append_ripret(H* bl, D* d) {
+	B* chere = bl->chere;
+	if (mprotect(bl->code, bl->csize, PROT_WRITE)) return -1;
+	chere[0] = 0x48; chere[1] = 0xb8;
+	// Save chere + 11 
+	C* c = (C*)(chere + 2);
+	*c = (C)(chere + 11);
+	chere[10] = 0xC3;
+	if (mprotect(bl->code, bl->csize, PROT_READ|PROT_EXEC)) return -1;
+	d->len += 11;
+	bl->chere += 11;
+	return 0;
+}
+
+// TODO: Append code to compilation...maybe start compilation/end compilation
+
+W* compile_word(H* bl, B* name, B* source, B* code, C code_len, C flags) {
+	W* w = (W*)(bl->here);
+	if (allot(bl, sizeof(W))) {
+		return NULL;
+	}
+	w->flags = flags;
+	w->name = compile_str(bl, name);
+	w->source = compile_str(bl, source);
+	w->code = compile_code(bl, code, code_len);
+
+	return w;
+}
+
 #define PUSH(h, st, v)		st = cons(h, v, st)
 #define POP(h, st)				P* p = st; C v = p->car; st = p->cdr; reclaim(h, p); return v;
 
@@ -126,6 +219,24 @@ C pop(H* bl) { POP(bl, bl->sp); }
 void rpush(H* bl, C v) { PUSH(bl, bl->rp, v); }
 C rpop(H* bl) { POP(bl, bl->rp); }
 
+typedef int (*F)(H*);						// C FUNCTION
+
+void exec(H* bl, B* word) {
+	W* w = find(bl->dp, word);
+	while(1) {
+		// TODO: Calling convention on Linux and Windows x86_64 are different
+		// and use different registers for arguments
+		// One option is to change assembler to use different registers,
+		// the other option is change how assembler is called (parameters passed)
+		// to use the same assembler everywhere (Linux and Windows).
+		int res = ((int (*)(H*))(w->code->code))(bl);
+		if (res == 0) {
+			// TODO: Error code, check block for error type (or exit)
+		} else {
+			// TODO: Call C function
+		}
+	}
+}
 
 
 
@@ -134,121 +245,125 @@ C rpop(H* bl) { POP(bl, bl->rp); }
 
 #define IS(w, f)					(w->flags & f)
 
-//void dump_stack(H* bl) {
-//	printf("<%ld> ", length(bl->sp));
-//	for (P* p = bl->sp; p != NULL; p = p->cdr) { printf("%ld ", p->car); }
-//	printf("\n");
-//}
-
-// By defining the primitives as macros we can use them both in the switch
-// of eval and on tests directly without needing to evaluate.
-
-#define DUP(bl)			{ C x = pop(bl); push(bl, x); push(bl, x); }
-#define LIT(bl, v)	push(bl, v)
-#define GT(bl)			{ C x = pop(bl); C y = pop(bl); push(bl, y > x); }
-#define DEC(bl)			push(bl, pop(bl) - 1)
-#define SUB(bl)			{ C x = pop(bl); C y = pop(bl); push(bl, y - x); }
-#define SWAP(bl)		{ C x = pop(bl); C y = pop(bl); push(bl, x); push(bl, y); }
-#define ADD(bl)			{ C x = pop(bl); C y = pop(bl); push(bl, y + x); }
-
-// Current implementation is that of a bytecode interpreter. Only ASCII 
-// graphical characters are used, and if possible, the character represents
-// the primitive.
-
-#define NEXT(bl)		bl->ip++
-#define PREV(bl)		bl->ip--
-
-void eval(H* bl, F* t) {
-	while(1) {
-		switch(*(bl->ip)) {
-			case 'c': 
-				NEXT(bl);
-				t[*(bl->ip)](bl);
-				NEXT(bl);
-				break;
-			case 'd': DUP(bl); NEXT(bl); break;
-			case '1': LIT(bl, 1); NEXT(bl); break;
-			case '>': GT(bl); NEXT(bl); break;
-			case '?': 
-				if (pop(bl) == 0) {
-						while (*(bl->ip) != '(') { NEXT(bl); }
-				} else {
-						NEXT(bl);
-				}
-				break;
-			case '_': DEC(bl); NEXT(bl); break;
-			case '`': 
-				rpush(bl, (C)(bl->ip + 1));
-				while (*(bl->ip) != ':') { PREV(bl); }
-				break;
-			case 's': SWAP(bl); NEXT(bl); break;
-			case '+': ADD(bl); NEXT(bl); break;
-			case ';': 
-				if (bl->rp != NULL) {
-					bl->ip = (B*)rpop(bl);
-				} else {
-					return;
-				}
-				break;
-			default: NEXT(bl); break;
-		}
-	}
-}
-
-//void dump_string(S* s) {
-//	printf("<%d>%s\n", s->len, s->str);
-//}
+//// By defining the primitives as macros we can use them both in the switch
+//// of eval and on tests directly without needing to evaluate.
 //
-//void dump_dict(H* bl) {
-//	printf("Dictionary length: %ld\n", length(bl->dp));
-//	W* w = (W*)bl->dp;
-//	while (w != NULL) {
-//		printf("@%p[%p]%ld|%p|%p|%p\n", w, w->cdr, w->flags, w->name, w->source, w->code);
-//		printf("Flags::%ld\n", w->flags);
-//		printf("%p Name::%s (length: %d)\n", w->name->str, w->name->str, w->name->len);
-//		printf("Code::%s\n", w->code->str);
-//		//if (IS(w, PRIMITIVE)) {	printf("PRIMITIVE "); }
-//		//if (IS(w, CFUNC)) {	printf("CFUNC %d ", *(w->name.str + bytes(cells(w->name.len)) + 3)); }
-//		w = (W*)w->cdr;
-//		//printf("\n");
+//#define DUP(bl)			{ C x = pop(bl); push(bl, x); push(bl, x); }
+//#define LIT(bl, v)	push(bl, v)
+//#define GT(bl)			{ C x = pop(bl); C y = pop(bl); push(bl, y > x); }
+//#define DEC(bl)			push(bl, pop(bl) - 1)
+//#define SUB(bl)			{ C x = pop(bl); C y = pop(bl); push(bl, y - x); }
+//#define SWAP(bl)		{ C x = pop(bl); C y = pop(bl); push(bl, x); push(bl, y); }
+//#define ADD(bl)			{ C x = pop(bl); C y = pop(bl); push(bl, y + x); }
+//
+//// Current implementation is that of a bytecode interpreter. Only ASCII 
+//// graphical characters are used, and if possible, the character represents
+//// the primitive.
+//
+//#define NEXT(bl)		bl->ip++
+//#define PREV(bl)		bl->ip--
+//
+//void eval(H* bl, F* t) {
+//	while(1) {
+//		switch(*(bl->ip)) {
+//			case 'c': 
+//				NEXT(bl);
+//				t[*(bl->ip)](bl);
+//				NEXT(bl);
+//				break;
+//			case 'd': DUP(bl); NEXT(bl); break;
+//			case '1': LIT(bl, 1); NEXT(bl); break;
+//			case '>': GT(bl); NEXT(bl); break;
+//			case '?': 
+//				if (pop(bl) == 0) {
+//						while (*(bl->ip) != '(') { NEXT(bl); }
+//				} else {
+//						NEXT(bl);
+//				}
+//				break;
+//			case '_': DEC(bl); NEXT(bl); break;
+//			case '`': 
+//				rpush(bl, (C)(bl->ip + 1));
+//				while (*(bl->ip) != ':') { PREV(bl); }
+//				break;
+//			case 's': SWAP(bl); NEXT(bl); break;
+//			case '+': ADD(bl); NEXT(bl); break;
+//			case ';': 
+//				if (bl->rp != NULL) {
+//					bl->ip = (B*)rpop(bl);
+//				} else {
+//					return;
+//				}
+//				break;
+//			default: NEXT(bl); break;
+//		}
 //	}
 //}
 
-int add_cfunc(H* bl, F* t, B idx, F func, B* name_str, B name_len) {
-	// TODO: If any allot fails, go back to init state (here backwards)
-	W* w = (W*)(bl->here);
-	if (allot(bl, sizeof(W)) != 0) return -1;
-	printf("space for word header: %ld\n", ((char*)bl->here) - ((char*)w));
-	w->name = (S*)(bl->here);
-	w->source = NULL;
-	w->cdr = bl->dp;
-	bl->dp = (P*)w;
-	w->flags = CFUNC;
-	if (allot(bl, AS_BYTES(AS_CELLS(2 + name_len + 1))) != 0) return -2;
-	printf("space for name: %ld\n", ((char*)bl->here) - ((char*)w->name));
-	w->code = (S*)(bl->here);
-	w->name->len = name_len;
-	for (C i = 0; i < AS_BYTES(AS_CELLS(2 + name_len + 1)) - 2; i++) {
-		if (i < name_len) { w->name->str[i] = name_str[i]; }
-		else { w->name->str[i] = 0; }
-		printf("[%x] %c ", i, w->name->str[i]);
-	}
-	printf("\n1 name stored as:%s @ %p with len: %d\n", w->name->str, w->name, w->name->len);
-	if (allot(bl, 8) != 0) return -3;
-	printf("\n2 name stored as:%s @ %p with len: %d\n", w->name->str, w->name, w->name->len);
-	printf("space for code: %ld\n", ((char*)bl->here) - ((char*)w->code));
-	printf("\n3 name stored as:%s @ %p with len: %d\n", w->name->str, w->name, w->name->len);
-	w->code->len = 3;
-	printf("\n4 name stored as:%s @ %p with len: %d\n", w->name->str, w->name, w->name->len);
-	w->code->str[0] = 'c';
-	printf("\n5 name stored as:%s @ %p with len: %d\n", w->name->str, w->name, w->name->len);
-	w->code->str[1] = idx;
-	printf("\n6 name stored as:%s @ %p with len: %d\n", w->name->str, w->name, w->name->len);
-	w->code->str[2] = ';';
-	printf("\n7 name stored as:%s @ %p with len: %d\n", w->name->str, w->name, w->name->len);
-	w->code->str[3] = 0;
-
-	printf("\n8 name stored as:%s @ %p with len: %d\n", w->name->str, w->name, w->name->len);
-
-	return 0;
-}
+//int compile_str(H* bl, B* str, B len) {
+//	S* s = (S*)(bl->here);
+//	if (allot(bl, AS_BYTES(AS_CELLS(2 + len + 1))) != 0) return -1;
+//	s->len = len;
+//	for (C i = 0; i < AS_BYTES(AS_CELLS(2 + len + 1)) - 2; i++) {
+//		if (i < len) { s->str[i] = str[i]; }
+//		else { s->str[i] = 0; }
+//	}
+//
+//	return 0;
+//}
+//
+//int compile_code(H* bl, B* code, B len) {
+//	B* dest = (B*)(bl->here);
+//	if (allot(bl, AS_BYTES(AS_CELLS(len))) != 0) return -1;
+//	for (C i = 0; i < AS_BYTES(AS_CELLS(len)); i++, dest++) {
+//		if (i < len) { *dest = code[i]; }
+//		else { *dest = 0; }
+//	}
+//
+//	return 0;
+//}
+//
+//int add_word(H* bl, B* name, B nlen, B* code, B clen) {
+//	W* w = (W*)(bl->here);
+//	if (allot(bl, sizeof(W)) != 0) { bl->here = (B*)w; return -1; }
+//	w->flags = PRIMITIVE | CFUNC;
+//
+//	w->name = (B*)(bl->here);
+//	if (compile_str(bl, name, nlen) != 0) { bl->here = (B*)w; return -2; }
+//
+//	w->source = NULL;
+//
+//	w->code = (B*)(bl->here);
+//	if (compile_code(bl, code, clen) != 0) { bl->here = (B*)w; return -3; }
+//
+//	w->cdr = bl->dp;
+//	bl->dp = (P*)w;
+//
+//	return 0;
+//}
+//
+//int add_cfunc(H* bl, F* t, B idx, F func, B* name, B nlen) {
+//	B code[] = { 
+//		0xb8, 0x00, 0x00, 0x00,			// mov eax,0
+//		0xc3												// ret
+//	};
+//
+//	code[1] = idx;
+//	t[idx] = func;
+//
+//	return add_word(bl, name, nlen, code, 5);
+//}
+//
+//void call(H* bl, F* t, S* name) {
+//	W* w = bl->dp;
+//	while (!equals(w->name, name)) {
+//		w = (W*)(w->cdr);
+//	}
+//
+//	if (equals(w->name, name)) {
+//		B* c = w->code;
+//		//int res = ((int (*)(void))c)();
+//		//printf("Res: %d\n", res);
+//		//t[res](bl);
+//	}
+//}

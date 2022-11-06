@@ -2,8 +2,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/mman.h>
 
-#include "vm.h"
+#include "vm.d.h"
 
 int hello(H* bl) {
 	printf("Hello world!\n");
@@ -14,30 +15,23 @@ int hello2(H* bl) {
 }
 
 void main() {
-	printf("sizeof C:%d\n", sizeof(C));
-	printf("sizeof S:%d\n", sizeof(S));
+	printf("Sizeof S: %ld\n", sizeof(S));
 
-	C b[262000];
-	H* bl = init(b, 262000);
-	F t[32];
-	dump_dict(bl);
-	assert(add_cfunc(bl, t, 0, &hello, "hello", 5) == 0);
-	dump_dict(bl);
-	assert(add_cfunc(bl, t, 1, &hello2, "hello2", 6) == 0);
-	dump_dict(bl);
-	//t[0] = &hello;
-	//t[1] = &hello2;
+	//C* b = mmap(NULL, 65536 * sizeof(C), PROT_READ|PROT_WRITE|PROT_EXEC, MAP_ANONYMOUS|MAP_PRIVATE,-1,0);
+	////C b[262000];
 
-	//B* c = (B*)(b + szHEADER);
-	//*(c + 0) = 'c';
-	//*(c + 1) = 0;
-	//*(c + 2) = 'c';
-	//*(c + 3) = 1;
-	//*(c + 4) = '1';
-	//*(c + 5) = '1';
-	//*(c + 6) = '+';
-	//*(c + 7) = ';';
+	//assert(b != NULL);
 
-	//eval(bl, t);
-	//dump_stack(bl);
+
+	//H* bl = init(b, 262000);
+	//F t[32];
+
+	//assert(add_cfunc(bl, t, 15, &hello, "hello", 5) == 0);
+
+	//S* s = malloc(sizeof(S));
+	//s->len = 5;
+	//s->str[0] = 'h'; s->str[1] = 'e'; s->str[2] = 'l';
+	//s->str[3] = 'l'; s->str[4] = 'o'; s->str[6] = 0;
+
+	//call(bl, t, s);
 }
