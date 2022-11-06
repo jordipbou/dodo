@@ -23,24 +23,22 @@ C length(P* l) {
 
 typedef struct {
 	C len;												// length
-	B str[8];											// at least one cell of string data
+	union {
+		B str[8];											// at least one cell of string data
+		B* code;
+	} data;
 } S;														// COUNTED BYTE ARRAY (String)
-
-typedef struct {
-	C len;
-	B* code;
-} D;
 
 typedef struct {
 	P* cdr;
 	C flags;
 	S* name;											
 	S* source;										
-	D* code;											
+	S* code;											
 } W;														// DICTIONARY WORD
 
 W* find(W* word, B* name) {
-	while (word != NULL && strcmp(word->name->str, name)) {
+	while (word != NULL && strcmp(word->name->data.str, name)) {
 		word = (W*)word->cdr;
 	}
 
@@ -48,8 +46,8 @@ W* find(W* word, B* name) {
 }
 
 typedef struct {
-	C err, st;										// status and error codes
 	C dsize, csize;								// size of block, status and error code
+	C err, st;										// error codes and status
 	B* ip, * here, * chere;				// instruction ptr (RIP), here ptr
 	P* sp, * rp;									// stack ptr, return stack ptr
 	W* dp;												// dictionary ptr
@@ -68,7 +66,7 @@ H* init(C dsz /* Data size in bytes */, C csz /* Code size in bytes*/) {
 	// Allocate memory for data
 	H* h = malloc(dsz);
 	if (h == NULL) {
-		return (H*)-1;
+		return NULL;
 	}
 
 	// Header data
@@ -89,7 +87,7 @@ H* init(C dsz /* Data size in bytes */, C csz /* Code size in bytes*/) {
 	h->code = mmap(NULL, csz, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_ANONYMOUS,	-1, 0);
 	if (h->code == (void *)-1) {
 		free(h);
-		return (H*)-2;
+		return NULL;
 	}
 	h->chere = h->code;
 
@@ -150,7 +148,7 @@ void reclaim(H* bl, P* p /* pair that its returned */) {
 	bl->fhead = p;
 }
 
-S* compile_str(H* bl, B* str) {
+S* store_str(H* bl, B* str) {
 	C len = strlen(str);
 	// TODO: Check alignment?
 	S* s = (S*)(bl->here);
@@ -158,57 +156,89 @@ S* compile_str(H* bl, B* str) {
 		return NULL;
 	} else {
 		s->len = len;
-		memset(s->str, 0, AS_CELLS(len));
-		memcpy(s->str, str, len);
+		memset(s->data.str, 0, AS_CELLS(len));
+		memcpy(s->data.str, str, len);
+		return s;
 	}
-
-	return s;
 }
 
-D* compile_code(H* bl, B* code, C len) {
-	D* d = (D*)(bl->here);
-	B* chere = bl->chere;
+S* create_code(H* bl) {
+	S* s = (S*)(bl->here);
 	if (allot(bl, 2*sizeof(C))) {
 		return NULL;
-	} else {
-		if (chere + len >= bl->code + bl->csize) return NULL;
-		if (mprotect(bl->code, bl->csize, PROT_WRITE)) return NULL;
-		memcpy(chere, code, len);
-		if (mprotect(bl->code, bl->csize, PROT_READ|PROT_EXEC)) return NULL;
-		d->len = len;
-		d->code = chere;
-		bl->chere += len;
+	} else {	
+		s->len = 0;
+		s->data.code = bl->chere;
+		return s;
 	}
-	return d;
 }
 
-int append_ripret(H* bl, D* d) {
-	B* chere = bl->chere;
-	if (mprotect(bl->code, bl->csize, PROT_WRITE)) return -1;
-	chere[0] = 0x48; chere[1] = 0xb8;
-	// Save chere + 11 
-	C* c = (C*)(chere + 2);
-	*c = (C)(chere + 11);
-	chere[10] = 0xC3;
-	if (mprotect(bl->code, bl->csize, PROT_READ|PROT_EXEC)) return -1;
-	d->len += 11;
-	bl->chere += 11;
-	return 0;
-}
-
-// TODO: Append code to compilation...maybe start compilation/end compilation
-
-W* compile_word(H* bl, B* name, B* source, B* code, C code_len, C flags) {
+W* create(H* bl, B* name, B* source, C flags) {
 	W* w = (W*)(bl->here);
 	if (allot(bl, sizeof(W))) {
 		return NULL;
 	}
 	w->flags = flags;
-	w->name = compile_str(bl, name);
-	w->source = compile_str(bl, source);
-	w->code = compile_code(bl, code, code_len);
+	w->name = store_str(bl, name);
+	w->source = store_str(bl, source);
+	w->code = create_code(bl);
 
 	return w;
+}
+
+B* unprotect(H* bl) {
+	if (!mprotect(bl->code, bl->csize, PROT_WRITE)) return bl->chere;
+	else return NULL; 
+}
+
+B* protect(H* bl) {
+	if (!mprotect(bl->code, bl->csize, PROT_READ|PROT_EXEC)) return bl->chere;
+	else return NULL;
+}
+
+B* compile_byte(H* bl, S* s, B byte) {
+	if (unprotect(bl)) {
+		*(bl->chere) = byte;
+		if (protect(bl)) {
+			s->len++;
+			return bl->chere++;
+		}
+	}
+	return NULL;
+}
+
+B* compile_bytes(H* bl, S* s, B* bytes, C len) {
+	if (unprotect(bl)) {
+		memcpy(bl->chere, bytes, len);
+		if (protect(bl)) {
+			s->len += len;
+			return bl->chere += len;
+		}
+	}
+	return NULL;
+}
+
+B* compile_cell(H* bl, S* s, C c) {
+	if (unprotect(bl)) {
+		*((C*)(bl->chere)) = c;
+		if (protect(bl)) {
+			s->len += sizeof(C);
+			return bl->chere += sizeof(C);
+		}
+	}
+	return NULL;
+}
+
+B* compile_cfunc(H* bl, S* s, C idx) {
+	// mov r10, chere + 25
+	// mov [rdi + 32], r10
+	// mov rax, idx
+	// ret
+	if (!compile_bytes(bl, s, "\x49\xBA", 2)) return NULL;
+	if (!compile_cell(bl, s, (C)(bl->chere + 23))) return NULL;
+	if (!compile_bytes(bl, s, "\x4C\x89\x57\x20\x48\xB8", 6)) return NULL;
+	if (!compile_cell(bl, s, idx)) return NULL;
+	if (!compile_byte(bl, s, 0xC3)) return NULL;
 }
 
 #define PUSH(h, st, v)		st = cons(h, v, st)
@@ -229,7 +259,7 @@ void exec(H* bl, B* word) {
 		// One option is to change assembler to use different registers,
 		// the other option is change how assembler is called (parameters passed)
 		// to use the same assembler everywhere (Linux and Windows).
-		int res = ((int (*)(H*))(w->code->code))(bl);
+		int res = ((int (*)(H*))(w->code->data.code))(bl);
 		if (res == 0) {
 			// TODO: Error code, check block for error type (or exit)
 		} else {
@@ -300,7 +330,7 @@ void exec(H* bl, B* word) {
 //	}
 //}
 
-//int compile_str(H* bl, B* str, B len) {
+//int store_str(H* bl, B* str, B len) {
 //	S* s = (S*)(bl->here);
 //	if (allot(bl, AS_BYTES(AS_CELLS(2 + len + 1))) != 0) return -1;
 //	s->len = len;
@@ -312,7 +342,7 @@ void exec(H* bl, B* word) {
 //	return 0;
 //}
 //
-//int compile_code(H* bl, B* code, B len) {
+//int compile_bytes(H* bl, B* code, B len) {
 //	B* dest = (B*)(bl->here);
 //	if (allot(bl, AS_BYTES(AS_CELLS(len))) != 0) return -1;
 //	for (C i = 0; i < AS_BYTES(AS_CELLS(len)); i++, dest++) {
@@ -329,12 +359,12 @@ void exec(H* bl, B* word) {
 //	w->flags = PRIMITIVE | CFUNC;
 //
 //	w->name = (B*)(bl->here);
-//	if (compile_str(bl, name, nlen) != 0) { bl->here = (B*)w; return -2; }
+//	if (store_str(bl, name, nlen) != 0) { bl->here = (B*)w; return -2; }
 //
 //	w->source = NULL;
 //
 //	w->code = (B*)(bl->here);
-//	if (compile_code(bl, code, clen) != 0) { bl->here = (B*)w; return -3; }
+//	if (compile_bytes(bl, code, clen) != 0) { bl->here = (B*)w; return -3; }
 //
 //	w->cdr = bl->dp;
 //	bl->dp = (P*)w;

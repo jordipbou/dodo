@@ -11,14 +11,18 @@ void dump_stack(H* bl) {
 }
 
 void dump_string(S* s) {
-	printf("<%d>%s\n", s->len, s->str);
+	printf("<%ld>%s\n", s->len, s->data.str);
 }
 
 void dump_dict(H* bl) {
-	printf("Dictionary length: %ld\n", length(bl->dp));
+	printf("Dictionary length: %ld\n", length((P*)(bl->dp)));
 	W* w = (W*)bl->dp;
 	while (w != NULL) {
-		printf(": %s %s ;\n", w->name->str, w->source ? w->source->str : "");
+		if (w->source) {
+			printf(": %s %s ;\n", w->name->data.str, w->source->data.str);
+		} else {
+			printf(": %s ;\n", w->name->data.str);
+		}
 		//if (IS(w, PRIMITIVE)) {	printf("PRIMITIVE "); }
 		//if (IS(w, CFUNC)) {	printf("CFUNC %d ", *(w->name.str + bytes(cells(w->name.len)) + 3)); }
 		w = (W*)w->cdr;

@@ -6,8 +6,16 @@
 DODO is a interpreted, stack-based, concatenative, homoiconic language with
 manual memory management.
 
-Inspired mainly by Forth/Joy/Factor, APL/K and Lisp/Scheme (not in that order),
-its intended to be incorporated as a scripting engine in other programs.
+Inspired (not necessarily in that order) by:
+* Forth
+* Joy
+* Factor
+* RetroForth
+* Om
+* APL/K
+* Lisp/Scheme 
+
+Its intended to be incorporated as a scripting engine in other programs.
 
 The design requirements are:
 

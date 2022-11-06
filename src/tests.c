@@ -60,25 +60,26 @@ void test_find_word(void) {
 	S* s4 = malloc(sizeof(S) + 8);
 
 	s1->len = 3;
-	s1->str[0] = 'd'; s1->str[1] = 'u'; s1->str[2] = 'p';
+	s1->data.str[0] = 'd'; s1->data.str[1] = 'u'; s1->data.str[2] = 'p';
 
 	s2->len = 4;
-	s2->str[0] = 's'; s2->str[1] = 'w'; s2->str[2] = 'a'; s2->str[3] = 'p';
+	s2->data.str[0] = 's'; s2->data.str[1] = 'w'; 
+	s2->data.str[2] = 'a'; s2->data.str[3] = 'p';
 
 	s3->len = 1;
-	s3->str[0] = '+';
+	s3->data.str[0] = '+';
 
 	s4->len = 2;
-	s4->str[0] = '>'; s4->str[1] = 'r'; s4->str[2] = 0;
+	s4->data.str[0] = '>'; s4->data.str[1] = 'r'; s4->data.str[2] = 0;
 
 	W* w1 = malloc(sizeof(W));
 	W* w2 = malloc(sizeof(W));
 	W* w3 = malloc(sizeof(W));
 	W* w4 = malloc(sizeof(W));
 
-	w4->cdr = w3;
-	w3->cdr = w2;
-	w2->cdr = w1;
+	w4->cdr = (P*)w3;
+	w3->cdr = (P*)w2;
+	w2->cdr = (P*)w1;
 
 	w1->name = s1;
 	w2->name = s2;
@@ -221,47 +222,50 @@ void test_stack(void) {
 //	TEST_ASSERT_EQUAL_INT(75025, pop(bl));
 //}
 
-void test_compile_str(void) {
+void test_store_str(void) {
 	H* bl = init(1024, 1024);
 	TEST_ASSERT_NOT_NULL(bl);
 
-	C h = bl->here;
+	B* h = bl->here;
 	S* s = (S*)h;
 	unsigned char str[] = "Testing compile string!";
-	compile_str(bl, str);
+	store_str(bl, str);
 	TEST_ASSERT_EQUAL_INT(s->len, strlen(str));
-	TEST_ASSERT_EQUAL_INT(0, strcmp(s->str, str));
+	TEST_ASSERT_EQUAL_INT(0, strcmp(s->data.str, str));
 	TEST_ASSERT_EQUAL_INT(8 + AS_CELLS(strlen(str)), bl->here - h);
 
 	deinit(bl);
 }
 
-void test_compile_code(void) {
+void test_compile_bytes(void) {
 	H* bl = init(1024, 1024);
 	TEST_ASSERT_NOT_NULL(bl);
 
-	D* d = compile_code(bl, "test", 4);
-	TEST_ASSERT_EQUAL_PTR(bl->code, d->code);
+	S* s = create_code(bl);
+	TEST_ASSERT_NOT_NULL(compile_bytes(bl, s, "test", 4));
+	TEST_ASSERT_EQUAL_PTR(bl->code, s->data.code);
 
-	TEST_ASSERT_EQUAL_INT8('t', d->code[0]);
-	TEST_ASSERT_EQUAL_INT8('e', d->code[1]);
-	TEST_ASSERT_EQUAL_INT8('s', d->code[2]);
-	TEST_ASSERT_EQUAL_INT8('t', d->code[3]);
+	TEST_ASSERT_EQUAL_INT8('t', s->data.code[0]);
+	TEST_ASSERT_EQUAL_INT8('e', s->data.code[1]);
+	TEST_ASSERT_EQUAL_INT8('s', s->data.code[2]);
+	TEST_ASSERT_EQUAL_INT8('t', s->data.code[3]);
 
-	D* d2 = compile_code(bl, "demo", 4);
-	TEST_ASSERT_EQUAL_PTR(bl->code + 4, d2->code);
+	S* s2 = create_code(bl);
+	TEST_ASSERT_NOT_NULL(compile_bytes(bl, s2, "demo", 4));
+	TEST_ASSERT_EQUAL_PTR(bl->code + 4, s2->data.code);
 
-	TEST_ASSERT_EQUAL_INT8('d', d2->code[0]);
-	TEST_ASSERT_EQUAL_INT8('e', d2->code[1]);
-	TEST_ASSERT_EQUAL_INT8('m', d2->code[2]);
-	TEST_ASSERT_EQUAL_INT8('o', d2->code[3]);
+	TEST_ASSERT_EQUAL_INT8('d', s2->data.code[0]);
+	TEST_ASSERT_EQUAL_INT8('e', s2->data.code[1]);
+	TEST_ASSERT_EQUAL_INT8('m', s2->data.code[2]);
+	TEST_ASSERT_EQUAL_INT8('o', s2->data.code[3]);
 
 	// Test executing code: 
 	// mov rax,13
 	// ret
-	D* d3 = compile_code(bl, "\x48\xC7\xC0\x0D\x00\x00\x00\xC3", 8);
+	S* s3 = create_code(bl);
+	compile_bytes(bl, s3, "\x48\xC7\xC0\x0D\x00\x00\x00\xC3", 8);
 
-	int res = ((int (*)(void))(d3->code))();
+	int res = ((int (*)(void))(s3->data.code))();
 	TEST_ASSERT_EQUAL_INT(13, res);
 
 	deinit(bl);
@@ -284,56 +288,44 @@ void test_compile_code(void) {
 void test_error_code(void) {
 	H* bl = init(1024, 1024);
 
-	// mov QWORD PTR [rdi], 11
+	// mov QWORD PTR [rdi+16], 11
 	// ret
-	D* d = compile_code(bl, "\x48\xC7\x07\x0B\x00\x00\x00\xC3", 8);
+	S* s = create_code(bl);
+	compile_bytes(bl, s, "\x48\xC7\x47\x10\x0B\x00\x00\x00\xC3", 9);
 
-	((void (*)(H*))(d->code))(bl);
+	((void (*)(H*))(s->data.code))(bl);
 
 	TEST_ASSERT_EQUAL_INT(11, bl->err);
-
-	deinit(bl);
-}
-
-void test_append_ripret(void) {
-	H* bl = init(1024, 1024);
-
-	D* d = compile_code(bl, "", 0);
-	append_ripret(bl, d);
-
-	C rip = ((C (*)())(d->code))();
-
-	TEST_ASSERT_EQUAL_PTR(bl->code + 11, rip);
 
 	deinit(bl);
 }
 
 void test_asm_c_asm(void) {
 	H* bl = init(1024, 1024);
+	TEST_ASSERT_NOT_NULL(bl);
 
-	D* d = compile_code(bl, 
-
-	// mov QWORD PTR [rdi], 11
+	S* s = create_code(bl);
+	// mov QWORD PTR [rdi+16], 11
+	TEST_ASSERT_NOT_NULL(compile_bytes(bl, s, "\x48\xC7\x47\x10\x0B\x00\x00\x00", 8));
+	TEST_ASSERT_NOT_NULL(compile_cfunc(bl, s, 8));
+	// mov QWORD PTR [rdi+16], 57
 	// ret
-	D* d = compile_code(bl, "\x48\xC7\x07\x0B\x00\x00\x00", 7);
-	append_ripret(bl, d);
+	TEST_ASSERT_NOT_NULL(compile_bytes(bl, s, "\x48\xC7\x47\x10\x39\x00\x00\x00\xC3", 9));
 
-	C res = ((C (*)(H*))(d->code))(bl);
+	C res = ((C (*)(H*))(s->data.code))(bl);
 
 	TEST_ASSERT_EQUAL_INT(11, bl->err);
+	TEST_ASSERT_EQUAL_INT(res, 8);
 
+	TEST_ASSERT_EQUAL_PTR(s->data.code + 8 + 25, bl->ip);
 
+	((C (*)(H*))(bl->ip))(bl);
 
-	// Test executing code: 
-	// mov rax,13
-	// ret
-	D* d3 = compile_code(bl, "\x48\xC7\xC0\x0D\x00\x00\x00\xC3", 8);
+	TEST_ASSERT_EQUAL_INT(57, bl->err);
 
-	C res = ((C (*)(void))(d3->code))();
-	TEST_ASSERT_EQUAL_INT(13, res);
+	deinit(bl);
+}
 	
-	
-
 int main(void) {
 	UNITY_BEGIN();
 
@@ -354,11 +346,11 @@ int main(void) {
 	//RUN_TEST(test_fib);
 	//RUN_TEST(test_dictionary);
 
-	RUN_TEST(test_compile_str);
-	RUN_TEST(test_compile_code);
+	RUN_TEST(test_store_str);
+	RUN_TEST(test_compile_bytes);
 
 	RUN_TEST(test_error_code);
-	RUN_TEST(test_append_ripret);
+	RUN_TEST(test_asm_c_asm);
 
 	return UNITY_END();
 }

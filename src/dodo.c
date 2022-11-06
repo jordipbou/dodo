@@ -6,16 +6,12 @@
 
 #include "vm.d.h"
 
-int hello(H* bl) {
-	printf("Hello world!\n");
-}
-
-int hello2(H* bl) {
-	printf("Hello world again\n");
+int test(int a) {
+	return a += 5;
 }
 
 void main() {
-	printf("Sizeof S: %ld\n", sizeof(S));
+	printf("%d\n", test(10));
 
 	//C* b = mmap(NULL, 65536 * sizeof(C), PROT_READ|PROT_WRITE|PROT_EXEC, MAP_ANONYMOUS|MAP_PRIVATE,-1,0);
 	////C b[262000];
