@@ -1,10 +1,15 @@
 // TODO: Adapt this code to work on Windows also
 
-#include<stdint.h>
 #include<stdlib.h>
 #include<string.h>
+
+#ifdef __linux__
 #include<sys/mman.h>
 #include<unistd.h>
+#elif _WIN32
+#include<windows.h>
+#include<memoryapi.h>
+#endif
 
 typedef int8_t B;
 typedef int32_t H;
@@ -26,9 +31,15 @@ typedef struct {
 	B data[];				// Start of non-executable Data space
 } CTX;
 
-#define PAGESIZE	sysconf(_SC_PAGESIZE)
-
 CTX* init(int dsize, int csize) {
+#if __linux__
+	C PAGESIZE = sysconf(_SC_PAGESIZE);
+#elif _WIN32
+	SYSTEM_INFO si;
+	GetSystemInfo(&si);
+	C PAGESIZE = si.dwPageSize;
+#endif
+
 	csize = (csize + (PAGESIZE - 1)) & ~(PAGESIZE - 1);
 
 	CTX* ctx = malloc(dsize);
@@ -40,30 +51,53 @@ CTX* init(int dsize, int csize) {
 	ctx->chere = 0;
 	ctx->Ix = ctx->Lx = 0;
 
+#if __linux__
 	ctx->code = mmap(NULL, csize, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
 	if (ctx->code == (void *)-1) {
 		free(ctx);
 		return NULL;
 	}
+#elif _WIN32
+	ctx->code = VirtualAlloc(NULL, csize, MEM_COMMIT, PAGE_EXECUTE_READ);
+	if (!ctx->code) {
+		free(ctx);
+		return NULL;
+	}
+#endif
 
 	return ctx;
 }
 
 void deinit(CTX* ctx) {
+#if __linux__
 	munmap(ctx->code, ctx->csize);
+#elif _WIN32
+	VirtualFree(ctx->code, 0, MEM_RELEASE);
+#endif
 	free(ctx);
 }
 
 // Compilation to code space
 
 B* unprotect(CTX* ctx) {
+#if __linux__
 	if (!mprotect(ctx->code, ctx->csize, PROT_WRITE)) return ctx->code + ctx->chere;
 	else return NULL; 
+#elif _WIN32
+	H oldprot;
+	if (VirtualProtect(ctx->code, ctx->csize, PAGE_READWRITE, &oldprot)) return ctx->code + ctx->chere;
+	else return NULL;
+#endif
 }
 
 B* protect(CTX* ctx) {
+#if __linux__
 	if (!mprotect(ctx->code, ctx->csize, PROT_READ|PROT_EXEC)) return ctx->code + ctx->chere;
 	else return NULL;
+#elif _WIN32
+	H oldprot;
+	if (VirtualProtect(ctx->code, ctx->csize, PAGE_EXECUTE_READ, &oldprot)) return ctx->code + ctx->chere;
+#endif
 }
 
 B* compile_byte(CTX* ctx, B byte, STR* str) {
@@ -120,7 +154,7 @@ B* compile_cfunc(CTX* ctx, H idx, H lit, STR* str) {
 }
 
 #ifdef __linux__
-#define CALL(f, ctx)	((C (*)(void*, void*, CTX*))f)(NULL, NULL, ctx)
+#define CALL(f, ctx)	((C (*)(void*, void*, CTX*))(f))(NULL, NULL, ctx)
 #elif _WIN32
-#define CALL(f, ctx)	((C (*)(void*, CTX*))f)(NULL, ctx)
+#define CALL(f, ctx)	((C (*)(void*, CTX*))(f))(NULL, ctx)
 #endif
