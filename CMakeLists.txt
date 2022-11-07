@@ -13,7 +13,7 @@ set (CMAKE_EXE_LIMKER_FLAGS "")
 
 add_executable (
 	dodo 
-	src/dodo)
+	src/dodo.c)
 #	deps/stcp/src/stcp.c deps/stcp/src/socket.c)
 target_include_directories (dodo PRIVATE src) # deps/stcp/include)
 set_property (TARGET dodo PROPERTY C_STANDARD 99)
