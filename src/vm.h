@@ -1,5 +1,3 @@
-// TODO: Adapt this code to work on Windows also
-
 #include<stdlib.h>
 #include<string.h>
 
@@ -15,6 +13,9 @@ typedef int8_t B;
 typedef int32_t H;
 typedef int64_t C;
 
+typedef struct _CTX CTX;
+typedef void (*F)(CTX*);
+
 typedef struct {
 	C len;
 	union {
@@ -23,15 +24,16 @@ typedef struct {
 	} data;
 } STR;
 
-typedef struct {
+typedef struct _CTX {
 	C dsize, csize;	// Data size and Code size segments
 	C dhere, chere;	// Indexes to free space on data segment and on code segment
-	C Ix, Lx;				// Index register and Literal register for C/ASM communication
+	F* Fx;					// Address of function to call from C
+	C Lx;						// Index register and Literal register for C/ASM communication
 	B* code;				// Start of executable Code space
 	B data[];				// Start of non-executable Data space
 } CTX;
 
-CTX* init(int dsize, int csize) {
+CTX* init(C dsize, C csize) {
 #if __linux__
 	C PAGESIZE = sysconf(_SC_PAGESIZE);
 #elif _WIN32
@@ -49,7 +51,8 @@ CTX* init(int dsize, int csize) {
 	ctx->csize = csize;
 	ctx->dhere = sizeof(CTX);
 	ctx->chere = 0;
-	ctx->Ix = ctx->Lx = 0;
+	ctx->Fx = NULL;
+	ctx->Lx = 0;
 
 #if __linux__
 	ctx->code = mmap(NULL, csize, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
@@ -84,7 +87,7 @@ B* unprotect(CTX* ctx) {
 	if (!mprotect(ctx->code, ctx->csize, PROT_WRITE)) return ctx->code + ctx->chere;
 	else return NULL; 
 #elif _WIN32
-	H oldprot;
+	DWORD oldprot;
 	if (VirtualProtect(ctx->code, ctx->csize, PAGE_READWRITE, &oldprot)) return ctx->code + ctx->chere;
 	else return NULL;
 #endif
@@ -95,10 +98,14 @@ B* protect(CTX* ctx) {
 	if (!mprotect(ctx->code, ctx->csize, PROT_READ|PROT_EXEC)) return ctx->code + ctx->chere;
 	else return NULL;
 #elif _WIN32
-	H oldprot;
+	DWORD oldprot;
 	if (VirtualProtect(ctx->code, ctx->csize, PAGE_EXECUTE_READ, &oldprot)) return ctx->code + ctx->chere;
+	else return NULL;
 #endif
 }
+
+// TODO: protect and unprotect are called too much when compiling. It should be
+// possible to start compile state and end compilation state.
 
 B* compile_byte(CTX* ctx, B byte, STR* str) {
 	// TODO: Error checking for writing outside code block !!
@@ -126,7 +133,20 @@ B* compile_bytes(CTX* ctx, B* bytes, C len, STR* str) {
 	return NULL;
 }
 
-B* compile_literal(CTX* ctx, H lit, STR* str) {
+B* compile_cell(CTX* ctx, C lit, STR* str) {
+	// TODO: Error checking for writing outside code block !!
+	if (unprotect(ctx)) {
+		*((C*)(ctx->code + ctx->chere)) = lit;
+		if (protect(ctx)) {
+			if (str != NULL) str->len += sizeof(C);
+			ctx->chere += sizeof(C);
+			return ctx->code + ctx->chere;
+		}
+	}
+	return NULL;
+}
+
+B* compile_halfcell(CTX* ctx, H lit, STR* str) {
 	// TODO: Error checking for writing outside code block !!
 	if (unprotect(ctx)) {
 		*((H*)(ctx->code + ctx->chere)) = lit;
@@ -139,22 +159,46 @@ B* compile_literal(CTX* ctx, H lit, STR* str) {
 	return NULL;
 }
 
-B* compile_cfunc(CTX* ctx, H idx, H lit, STR* str) {
-	// mov DWORD PTR [rdi + 32], idx
-	// mov DWORD PTR [rdi + 40], lit
-	// mov rax, chere + 20
+B* compile_next(CTX* ctx, STR* str) {
+	// lea rax, [rcx + chere relative addressing of instruction after ret]
 	// ret
-	if (!compile_bytes(ctx, "\xC7\x42\x20", 3, str)) return NULL;
-	if (!compile_literal(ctx, idx, str)) return NULL;
-	if (!compile_bytes(ctx, "\xC7\x42\x28", 3, str)) return NULL;
-	if (!compile_literal(ctx, lit, str)) return NULL;
-	if (!compile_byte(ctx, 0xB8, str)) return NULL;
-	if (!compile_literal(ctx, ((H)(ctx->chere) + 5), str)) return NULL;
+	if (!compile_bytes(ctx, "\x48\x8D\x81", 3, str)) return NULL;
+	if (!compile_halfcell(ctx, (H)(ctx->chere + 5), str)) return NULL;
 	if (!compile_byte(ctx, 0xC3, str)) return NULL;
+	return ctx->code + ctx->chere;
+}
+
+B* compile_cfunc(CTX* ctx, F func, STR* str) {
+	// movabs r10, <C Func address>
+	// mov QWORD PTR [rdx + 32], r10
+	if (!compile_bytes(ctx, "\x49\xBA", 2, str)) return NULL;
+	if (!compile_cell(ctx, (C)func,  str)) return NULL;
+	if (!compile_bytes(ctx, "\x4C\x89\x52\x20", 4, str)) return NULL;
+	// lea rax, [rcx + chere relative addressing of instruction after ret]
+	// ret
+	if (!compile_next(ctx, str)) return NULL;
+	return ctx->code + ctx->chere;
+}
+
+B* compile_push(CTX* ctx, F func, C lit, STR* str) {
+	// mov r10, <PUSH function address>
+	// mov QWORD PTR [rdx + 32], r10
+	if (!compile_bytes(ctx, "\x49\xBA", 2, str)) return NULL;
+	if (!compile_cell(ctx, (C)func,  str)) return NULL;
+	if (!compile_bytes(ctx, "\x4C\x89\x52\x20", 4, str)) return NULL;
+	// mov r10, <64 bit literal>
+	// mov QWORD PTR [rdx + 40], r10
+	if (!compile_bytes(ctx, "\x49\xBA", 2, str)) return NULL;
+	if (!compile_cell(ctx, lit, str)) return NULL;
+	if (!compile_bytes(ctx, "\x4C\x89\x52\x28", 4, str)) return NULL;
+	// lea rax, [rcx + chere relative addressing of instruction after ret]
+	// ret
+	if (!compile_next(ctx, str)) return NULL;
+	return ctx->code + ctx->chere;
 }
 
 #ifdef __linux__
-#define CALL(f, ctx)	((C (*)(void*, void*, CTX*))(f))(NULL, NULL, ctx)
+#define CALL(f, ctx)	((B* (*)(void*, void*, CTX*, B*))(f))(NULL, NULL, ctx, ctx->code)
 #elif _WIN32
-#define CALL(f, ctx)	((C (*)(void*, CTX*))(f))(NULL, ctx)
+#define CALL(f, ctx)	((B* (*)(B*, CTX*))(f))(ctx->code, ctx)
 #endif

@@ -17,7 +17,7 @@ void test_block_initialization(void) {
 	TEST_ASSERT_GREATER_OR_EQUAL_INT(data_size, ctx->dsize);
 	TEST_ASSERT_GREATER_OR_EQUAL_INT(code_size, ctx->csize);
 
-	TEST_ASSERT_EQUAL_INT(0, ctx->Ix);
+	TEST_ASSERT_EQUAL_INT(0, ctx->Fx);
 	TEST_ASSERT_EQUAL_INT(0, ctx->Lx);
 
 	TEST_ASSERT_NOT_NULL(ctx->code);
@@ -72,17 +72,54 @@ void test_compile_literal(void) {
 
 	TEST_ASSERT_EQUAL_INT(0, ctx->chere);
 
-	compile_literal(ctx, 41378, NULL);
-	TEST_ASSERT_EQUAL_INT(sizeof(H), ctx->chere);
+	compile_cell(ctx, 41378, NULL);
+	TEST_ASSERT_EQUAL_INT(sizeof(C), ctx->chere);
 
-	TEST_ASSERT_EQUAL_INT32(41378, *((H*)(ctx->code)));
+	TEST_ASSERT_EQUAL_INT64(41378, *((C*)(ctx->code)));
 
-	compile_literal(ctx, 13, NULL);
-	TEST_ASSERT_EQUAL_INT(2*sizeof(H), ctx->chere);
+	compile_cell(ctx, 13, NULL);
+	TEST_ASSERT_EQUAL_INT(2*sizeof(C), ctx->chere);
 
-	TEST_ASSERT_EQUAL_INT32(13, *((H*)(ctx->code + sizeof(H))));
+	TEST_ASSERT_EQUAL_INT64(13, *((C*)(ctx->code + sizeof(C))));
+
+	compile_halfcell(ctx, 19923, NULL);
+	TEST_ASSERT_EQUAL_INT(2*sizeof(C) + sizeof(H), ctx->chere);
+
+	TEST_ASSERT_EQUAL_INT32(19923, *((H*)(ctx->code + 2*sizeof(C))));
+
+	compile_halfcell(ctx, -367, NULL);
+	TEST_ASSERT_EQUAL_INT(2*sizeof(C) + 2*sizeof(H), ctx->chere);
+
+	TEST_ASSERT_EQUAL_INT32(-367, *((H*)(ctx->code + 2*sizeof(C) + sizeof(H))));
 
 	deinit(ctx);
+}
+
+void test_compile_next(void) {
+	CTX* ctx = init(1024, 1024);
+	
+	TEST_ASSERT_EQUAL_INT(0, ctx->chere);
+
+	compile_next(ctx, NULL);
+
+	TEST_ASSERT_EQUAL_INT(8, ctx->chere);
+
+	B* NEXT = CALL(ctx->code, ctx);
+
+	TEST_ASSERT_EQUAL_PTR(ctx->code + 8, NEXT);
+
+	compile_next(ctx, NULL);
+
+	TEST_ASSERT_EQUAL_INT(16, ctx->chere);
+
+	NEXT = CALL(NEXT, ctx);
+
+	TEST_ASSERT_EQUAL_PTR(ctx->code + 16, NEXT);
+
+	deinit(ctx);
+}
+
+void generic_cfunc(CTX* ctx) {
 }
 
 void test_compile_cfunc(void) {
@@ -90,31 +127,32 @@ void test_compile_cfunc(void) {
 
 	TEST_ASSERT_EQUAL_INT(0, ctx->chere);
 
-	compile_cfunc(ctx, 13, 17, NULL);
+	compile_cfunc(ctx, &generic_cfunc, NULL);
 
-	TEST_ASSERT_EQUAL_INT(20, ctx->chere);
+	TEST_ASSERT_EQUAL_INT(22, ctx->chere);
 
-	C NEXT = CALL(ctx->code, ctx);
+	B* NEXT = CALL(ctx->code, ctx);
 
-	TEST_ASSERT_EQUAL_INT(13, ctx->Ix);
-	TEST_ASSERT_EQUAL_INT(17, ctx->Lx);
-	TEST_ASSERT_EQUAL_INT(20, NEXT);
+	TEST_ASSERT_EQUAL_PTR(&generic_cfunc, ctx->Fx);
+	TEST_ASSERT_EQUAL_INT(ctx->code + 22, NEXT);
 
-	compile_cfunc(ctx, 23, 31, NULL);
+	deinit(ctx);
+}
 
-	TEST_ASSERT_EQUAL_INT(40, ctx->chere);
+void test_compile_push(void) {
+	CTX* ctx = init(1024, 1024);
 
-	NEXT = CALL(ctx->code, ctx);
+	TEST_ASSERT_EQUAL_INT(0, ctx->chere);
 
-	TEST_ASSERT_EQUAL_INT(13, ctx->Ix);
-	TEST_ASSERT_EQUAL_INT(17, ctx->Lx);
-	TEST_ASSERT_EQUAL_INT(20, NEXT);
+	compile_push(ctx, &generic_cfunc, 13, NULL);
 
-	NEXT = CALL(ctx->code + NEXT, ctx);	
+	TEST_ASSERT_EQUAL_INT(36, ctx->chere);
 
-	TEST_ASSERT_EQUAL_INT(23, ctx->Ix);
-	TEST_ASSERT_EQUAL_INT(31, ctx->Lx);
-	TEST_ASSERT_EQUAL_INT(40, NEXT);
+	B* NEXT = CALL(ctx->code, ctx);
+
+	TEST_ASSERT_EQUAL_PTR(&generic_cfunc, ctx->Fx);
+	TEST_ASSERT_EQUAL_INT(13, ctx->Lx);
+	TEST_ASSERT_EQUAL_INT(ctx->code + 36, NEXT);
 
 	deinit(ctx);
 }
@@ -421,7 +459,10 @@ int main(void) {
 	RUN_TEST(test_compile_bytes);
 	RUN_TEST(test_compile_literal);
 
+	RUN_TEST(test_compile_next);
 	RUN_TEST(test_compile_cfunc);
+	RUN_TEST(test_compile_push);
+
 
 	//RUN_TEST(test_is_aligned);
 	//RUN_TEST(test_as_cells);
