@@ -1,6 +1,3 @@
-// TODO: Remove STR from compile, as it not needed!! That's something belonging
-// to dictionary, no to C/ASM interoperability.
-
 #include<stdlib.h>
 #include<string.h>
 #include<stddef.h>
@@ -13,33 +10,36 @@
 #include<memoryapi.h>
 #endif
 
-typedef int8_t B;
-typedef int32_t H;
-typedef int64_t C;
+#ifdef __linux__
+typedef int8_t BYTE;
+#endif
+typedef int32_t HALF;
+typedef int64_t CELL;
 
 typedef struct _CTX CTX;
-typedef void (*F)(CTX*);
+typedef void (*FUNC)(CTX*);
 
 typedef struct _CTX {
-	C dsize, csize;	// Data size and Code size segments
-	C chere;				// Relative address to free space on code segment
-	F* Fx;					// Address of function to call from C
-	C Lx;						// Index register and Literal register for C/ASM communication
-	C TOS, SOS;			// Top of stack and Second of the stack registers
-	B* code;				// Start of executable Code space
-	B data[];				// Start of non-executable Data space
+	CELL dsize, csize;	// Data size and Code size segments
+	CELL chere;					// Relative address to free space on code segment
+	FUNC* Fx;						// Address of function to call from C
+	CELL Lx;						// Index register and Literal register for C/ASM communication
+	BYTE* code;					// Start of executable Code space
+	BYTE data[];				// Start of non-executable Data space
 } CTX;
 
-CTX* init(C dsize, C csize) {
+#define ALIGN(addr, bound)	((CELL)csize + ((CELL)bound - 1)) & ~((CELL)bound - 1)
+
+CTX* init(CELL dsize, CELL csize) {
 #if __linux__
-	C PAGESIZE = sysconf(_SC_PAGESIZE);
+	CELL PAGESIZE = sysconf(_SC_PAGESIZE);
 #elif _WIN32
 	SYSTEM_INFO si;
 	GetSystemInfo(&si);
-	C PAGESIZE = si.dwPageSize;
+	CELL PAGESIZE = si.dwPageSize;
 #endif
 
-	csize = (csize + (PAGESIZE - 1)) & ~(PAGESIZE - 1);
+	csize = ALIGN(csize, PAGESIZE);
 
 	CTX* ctx = malloc(dsize);
 	if (!ctx) return NULL;
@@ -78,7 +78,7 @@ void deinit(CTX* ctx) {
 
 // Compilation to code space
 
-B* unprotect(CTX* ctx) {
+BYTE* unprotect(CTX* ctx) {
 #if __linux__
 	if (!mprotect(ctx->code, ctx->csize, PROT_WRITE)) return ctx->code + ctx->chere;
 	else return NULL; 
@@ -89,7 +89,7 @@ B* unprotect(CTX* ctx) {
 #endif
 }
 
-B* protect(CTX* ctx) {
+BYTE* protect(CTX* ctx) {
 #if __linux__
 	if (!mprotect(ctx->code, ctx->csize, PROT_READ|PROT_EXEC)) return ctx->code + ctx->chere;
 	else return NULL;
@@ -103,7 +103,7 @@ B* protect(CTX* ctx) {
 // TODO: protect and unprotect are called too much when compiling. It should be
 // possible to start compile state and end compilation state.
 
-B* compile_byte(CTX* ctx, B byte) {
+BYTE* compile_byte(CTX* ctx, BYTE byte) {
 	// TODO: Error checking for writing outside code block !!
 	if (unprotect(ctx)) {
 		*(ctx->code + ctx->chere) = byte;
@@ -115,7 +115,7 @@ B* compile_byte(CTX* ctx, B byte) {
 	return NULL;
 }
 
-B* compile_bytes(CTX* ctx, B* bytes, C len) {
+BYTE* compile_bytes(CTX* ctx, BYTE* bytes, CELL len) {
 	// TODO: Error checking for writing outside code block !!
 	if (unprotect(ctx)) {
 		memcpy(ctx->code + ctx->chere, bytes, len);
@@ -127,44 +127,44 @@ B* compile_bytes(CTX* ctx, B* bytes, C len) {
 	return NULL;
 }
 
-B* compile_cell(CTX* ctx, C lit) {
+BYTE* compile_cell(CTX* ctx, CELL lit) {
 	// TODO: Error checking for writing outside code block !!
 	if (unprotect(ctx)) {
-		*((C*)(ctx->code + ctx->chere)) = lit;
+		*((CELL*)(ctx->code + ctx->chere)) = lit;
 		if (protect(ctx)) {
-			ctx->chere += sizeof(C);
+			ctx->chere += sizeof(CELL);
 			return ctx->code + ctx->chere;
 		}
 	}
 	return NULL;
 }
 
-B* compile_halfcell(CTX* ctx, H lit) {
+BYTE* compile_halfcell(CTX* ctx, HALF lit) {
 	// TODO: Error checking for writing outside code block !!
 	if (unprotect(ctx)) {
-		*((H*)(ctx->code + ctx->chere)) = lit;
+		*((HALF*)(ctx->code + ctx->chere)) = lit;
 		if (protect(ctx)) {
-			ctx->chere += sizeof(H);
+			ctx->chere += sizeof(HALF);
 			return ctx->code + ctx->chere;
 		}
 	}
 	return NULL;
 }
 
-B* compile_next(CTX* ctx) {
+BYTE* compile_next(CTX* ctx) {
 	// lea rax, [rcx + chere relative addressing of instruction after ret]
 	// ret
 	if (!compile_bytes(ctx, "\x48\x8D\x81", 3)) return NULL;
-	if (!compile_halfcell(ctx, (H)(ctx->chere + 5))) return NULL;
+	if (!compile_halfcell(ctx, (HALF)(ctx->chere + 5))) return NULL;
 	if (!compile_byte(ctx, 0xC3)) return NULL;
 	return ctx->code + ctx->chere;
 }
 
-B* compile_cfunc(CTX* ctx, F func) {
+BYTE* compile_cfunc(CTX* ctx, FUNC func) {
 	// movabs r10, <C Func address>
 	// mov QWORD PTR [rdx + 32], r10
 	if (!compile_bytes(ctx, "\x49\xBA", 2)) return NULL;
-	if (!compile_cell(ctx, (C)func)) return NULL;
+	if (!compile_cell(ctx, (CELL)func)) return NULL;
 	if (!compile_bytes(ctx, "\x4C\x89\x52", 3)) return NULL;
 	if (!compile_byte(ctx, offsetof(CTX, Fx))) return NULL;
 	// lea rax, [rcx + chere relative addressing of instruction after ret]
@@ -173,11 +173,11 @@ B* compile_cfunc(CTX* ctx, F func) {
 	return ctx->code + ctx->chere;
 }
 
-B* compile_push(CTX* ctx, F func, C lit) {
+BYTE* compile_push(CTX* ctx, FUNC func, CELL lit) {
 	// mov r10, <PUSH function address>
 	// mov QWORD PTR [rdx + 32], r10
 	if (!compile_bytes(ctx, "\x49\xBA", 2)) return NULL;
-	if (!compile_cell(ctx, (C)func)) return NULL;
+	if (!compile_cell(ctx, (CELL)func)) return NULL;
 	if (!compile_bytes(ctx, "\x4C\x89\x52", 3)) return NULL;
 	if (!compile_byte(ctx, offsetof(CTX, Fx))) return NULL;
 	// mov r10, <64 bit literal>
@@ -193,7 +193,7 @@ B* compile_push(CTX* ctx, F func, C lit) {
 }
 
 #ifdef __linux__
-#define CALL(f, ctx)	((B* (*)(void*, void*, CTX*, B*))(f))(NULL, NULL, ctx, ctx->code)
+#define CALL(f, ctx)	((BYTE* (*)(void*, void*, CTX*, BYTE*))(f))(NULL, NULL, ctx, ctx->code)
 #elif _WIN32
-#define CALL(f, ctx)	((B* (*)(B*, CTX*))(f))(ctx->code, ctx)
+#define CALL(f, ctx)	((BYTE* (*)(BYTE*, CTX*))(f))(ctx->code, ctx)
 #endif

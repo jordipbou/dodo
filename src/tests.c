@@ -8,8 +8,8 @@ void setUp(void) {}
 void tearDown(void) {}
 
 void test_block_initialization(void) {
-	C data_size = 1024;
-	C code_size = 1024;
+	CELL data_size = 1024;
+	CELL code_size = 1024;
 
 	CTX* ctx = init(data_size, code_size);
 	TEST_ASSERT_NOT_NULL(ctx);
@@ -73,24 +73,24 @@ void test_compile_literal(void) {
 	TEST_ASSERT_EQUAL_INT(0, ctx->chere);
 
 	compile_cell(ctx, 41378);
-	TEST_ASSERT_EQUAL_INT(sizeof(C), ctx->chere);
+	TEST_ASSERT_EQUAL_INT(sizeof(CELL), ctx->chere);
 
-	TEST_ASSERT_EQUAL_INT64(41378, *((C*)(ctx->code)));
+	TEST_ASSERT_EQUAL_INT64(41378, *((CELL*)(ctx->code)));
 
 	compile_cell(ctx, 13);
-	TEST_ASSERT_EQUAL_INT(2*sizeof(C), ctx->chere);
+	TEST_ASSERT_EQUAL_INT(2*sizeof(CELL), ctx->chere);
 
-	TEST_ASSERT_EQUAL_INT64(13, *((C*)(ctx->code + sizeof(C))));
+	TEST_ASSERT_EQUAL_INT64(13, *((CELL*)(ctx->code + sizeof(CELL))));
 
 	compile_halfcell(ctx, 19923);
-	TEST_ASSERT_EQUAL_INT(2*sizeof(C) + sizeof(H), ctx->chere);
+	TEST_ASSERT_EQUAL_INT(2*sizeof(CELL) + sizeof(HALF), ctx->chere);
 
-	TEST_ASSERT_EQUAL_INT32(19923, *((H*)(ctx->code + 2*sizeof(C))));
+	TEST_ASSERT_EQUAL_INT32(19923, *((HALF*)(ctx->code + 2*sizeof(CELL))));
 
 	compile_halfcell(ctx, -367);
-	TEST_ASSERT_EQUAL_INT(2*sizeof(C) + 2*sizeof(H), ctx->chere);
+	TEST_ASSERT_EQUAL_INT(2*sizeof(CELL) + 2*sizeof(HALF), ctx->chere);
 
-	TEST_ASSERT_EQUAL_INT32(-367, *((H*)(ctx->code + 2*sizeof(C) + sizeof(H))));
+	TEST_ASSERT_EQUAL_INT32(-367, *((HALF*)(ctx->code + 2*sizeof(CELL) + sizeof(HALF))));
 
 	deinit(ctx);
 }
@@ -104,7 +104,7 @@ void test_compile_next(void) {
 
 	TEST_ASSERT_EQUAL_INT(8, ctx->chere);
 
-	B* NEXT = CALL(ctx->code, ctx);
+	BYTE* NEXT = CALL(ctx->code, ctx);
 
 	TEST_ASSERT_EQUAL_PTR(ctx->code + 8, NEXT);
 
@@ -131,7 +131,7 @@ void test_compile_cfunc(void) {
 
 	TEST_ASSERT_EQUAL_INT(22, ctx->chere);
 
-	B* NEXT = CALL(ctx->code, ctx);
+	BYTE* NEXT = CALL(ctx->code, ctx);
 
 	TEST_ASSERT_EQUAL_PTR(&generic_cfunc, ctx->Fx);
 	TEST_ASSERT_EQUAL_INT(ctx->code + 22, NEXT);
@@ -148,7 +148,7 @@ void test_compile_push(void) {
 
 	TEST_ASSERT_EQUAL_INT(36, ctx->chere);
 
-	B* NEXT = CALL(ctx->code, ctx);
+	BYTE* NEXT = CALL(ctx->code, ctx);
 
 	TEST_ASSERT_EQUAL_PTR(&generic_cfunc, ctx->Fx);
 	TEST_ASSERT_EQUAL_INT(13, ctx->Lx);
