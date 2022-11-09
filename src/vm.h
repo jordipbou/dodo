@@ -10,6 +10,8 @@
 #include<memoryapi.h>
 #endif
 
+// DATATYPES ------------------------------------------------------------------
+
 #ifdef __linux__
 typedef int8_t BYTE;
 #endif
@@ -21,14 +23,16 @@ typedef void (*FUNC)(CTX*);
 
 typedef struct _CTX {
 	CELL dsize, csize;	// Data size and Code size segments
-	CELL chere;					// Relative address to free space on code segment
+	BYTE* chere;				// Address to free space on code segment
 	FUNC* Fx;						// Address of function to call from C
-	CELL Lx;						// Index register and Literal register for C/ASM communication
+	CELL Lx;						// Literal register for C/ASM communication
 	BYTE* code;					// Start of executable Code space
 	BYTE data[];				// Start of non-executable Data space
 } CTX;
 
-#define ALIGN(addr, bound)	((CELL)csize + ((CELL)bound - 1)) & ~((CELL)bound - 1)
+// CONTEXT CREATION AND DESTRUCTION -------------------------------------------
+
+#define ALIGN(addr, bound)	((CELL)csize + ((CELL)bound-1)) & ~((CELL)bound-1)
 
 CTX* init(CELL dsize, CELL csize) {
 #if __linux__
@@ -46,7 +50,6 @@ CTX* init(CELL dsize, CELL csize) {
 
 	ctx->dsize = dsize;
 	ctx->csize = csize;
-	ctx->chere = 0;
 	ctx->Fx = NULL;
 	ctx->Lx = 0;
 
@@ -64,6 +67,8 @@ CTX* init(CELL dsize, CELL csize) {
 	}
 #endif
 
+	ctx->chere = ctx->code;
+
 	return ctx;
 }
 
@@ -76,120 +81,101 @@ void deinit(CTX* ctx) {
 	free(ctx);
 }
 
-// Compilation to code space
+// COMPILATION ----------------------------------------------------------------
+
+// Modifying compilation state
 
 BYTE* unprotect(CTX* ctx) {
 #if __linux__
-	if (!mprotect(ctx->code, ctx->csize, PROT_WRITE)) return ctx->code + ctx->chere;
-	else return NULL; 
+	if (!mprotect(ctx->code, ctx->csize, PROT_WRITE)) 
+		return ctx->chere;
+	else 
+		return NULL; 
 #elif _WIN32
 	DWORD oldprot;
-	if (VirtualProtect(ctx->code, ctx->csize, PAGE_READWRITE, &oldprot)) return ctx->code + ctx->chere;
-	else return NULL;
+	if (VirtualProtect(ctx->code, ctx->csize, PAGE_READWRITE, &oldprot)) 
+		return ctx->chere;
+	else 
+		return NULL;
 #endif
 }
 
-BYTE* protect(CTX* ctx) {
+BYTE* protect(CTX* ctx, BYTE* old_chere) {
 #if __linux__
-	if (!mprotect(ctx->code, ctx->csize, PROT_READ|PROT_EXEC)) return ctx->code + ctx->chere;
-	else return NULL;
+	if (!mprotect(ctx->code, ctx->csize, PROT_READ|PROT_EXEC)) 
+		return ctx->chere;
+	else {
+		ctx->chere = old_chere;
+		return NULL;
+	}
 #elif _WIN32
 	DWORD oldprot;
-	if (VirtualProtect(ctx->code, ctx->csize, PAGE_EXECUTE_READ, &oldprot)) return ctx->code + ctx->chere;
-	else return NULL;
+	if (VirtualProtect(ctx->code, ctx->csize, PAGE_EXECUTE_READ, &oldprot)) 
+		return ctx->chere;
+	else {
+		ctx->chere = old_chere;
+		return NULL;
+	}
 #endif
 }
 
-// TODO: protect and unprotect are called too much when compiling. It should be
-// possible to start compile state and end compilation state.
+// Compile helpers
 
-BYTE* compile_byte(CTX* ctx, BYTE byte) {
-	// TODO: Error checking for writing outside code block !!
-	if (unprotect(ctx)) {
-		*(ctx->code + ctx->chere) = byte;
-		if (protect(ctx)) {
-			ctx->chere++;
-			return ctx->code + ctx->chere;
-		}
-	}
-	return NULL;
+void compile_byte(CTX* ctx, BYTE byte) {
+	*(ctx->chere++) = byte;
 }
 
-BYTE* compile_bytes(CTX* ctx, BYTE* bytes, CELL len) {
-	// TODO: Error checking for writing outside code block !!
-	if (unprotect(ctx)) {
-		memcpy(ctx->code + ctx->chere, bytes, len);
-		if (protect(ctx)) {
-			ctx->chere += len;
-			return ctx->code + ctx->chere;
-		}
-	}
-	return NULL;
+void compile_bytes(CTX* ctx, BYTE* bytes, CELL len) {
+	memcpy(ctx->chere, bytes, len);
+	ctx->chere += len;
 }
 
-BYTE* compile_cell(CTX* ctx, CELL lit) {
-	// TODO: Error checking for writing outside code block !!
-	if (unprotect(ctx)) {
-		*((CELL*)(ctx->code + ctx->chere)) = lit;
-		if (protect(ctx)) {
-			ctx->chere += sizeof(CELL);
-			return ctx->code + ctx->chere;
-		}
-	}
-	return NULL;
+void compile_cell(CTX* ctx, CELL lit) {
+	*((CELL*)(ctx->chere)) = lit;
+	ctx->chere += sizeof(CELL);
 }
 
-BYTE* compile_halfcell(CTX* ctx, HALF lit) {
-	// TODO: Error checking for writing outside code block !!
-	if (unprotect(ctx)) {
-		*((HALF*)(ctx->code + ctx->chere)) = lit;
-		if (protect(ctx)) {
-			ctx->chere += sizeof(HALF);
-			return ctx->code + ctx->chere;
-		}
-	}
-	return NULL;
+void compile_halfcell(CTX* ctx, HALF lit) {
+	*((HALF*)(ctx->chere)) = lit;
+	ctx->chere += sizeof(HALF);
 }
 
-BYTE* compile_next(CTX* ctx) {
+void compile_next(CTX* ctx) {
 	// lea rax, [rcx + chere relative addressing of instruction after ret]
 	// ret
-	if (!compile_bytes(ctx, "\x48\x8D\x81", 3)) return NULL;
-	if (!compile_halfcell(ctx, (HALF)(ctx->chere + 5))) return NULL;
-	if (!compile_byte(ctx, 0xC3)) return NULL;
-	return ctx->code + ctx->chere;
+	compile_bytes(ctx, "\x48\x8D\x81", 3);
+	compile_halfcell(ctx, (HALF)((ctx->chere - ctx->code) + 5));
+	compile_byte(ctx, 0xC3);
 }
 
-BYTE* compile_cfunc(CTX* ctx, FUNC func) {
+void compile_cfunc(CTX* ctx, FUNC func) {
 	// movabs r10, <C Func address>
 	// mov QWORD PTR [rdx + 32], r10
-	if (!compile_bytes(ctx, "\x49\xBA", 2)) return NULL;
-	if (!compile_cell(ctx, (CELL)func)) return NULL;
-	if (!compile_bytes(ctx, "\x4C\x89\x52", 3)) return NULL;
-	if (!compile_byte(ctx, offsetof(CTX, Fx))) return NULL;
+	compile_bytes(ctx, "\x49\xBA", 2);
+	compile_cell(ctx, (CELL)func);
+	compile_bytes(ctx, "\x4C\x89\x52", 3);
+	compile_byte(ctx, offsetof(CTX, Fx));
 	// lea rax, [rcx + chere relative addressing of instruction after ret]
 	// ret
-	if (!compile_next(ctx)) return NULL;
-	return ctx->code + ctx->chere;
+	compile_next(ctx);
 }
 
-BYTE* compile_push(CTX* ctx, FUNC func, CELL lit) {
+void compile_push(CTX* ctx, FUNC func, CELL lit) {
 	// mov r10, <PUSH function address>
 	// mov QWORD PTR [rdx + 32], r10
-	if (!compile_bytes(ctx, "\x49\xBA", 2)) return NULL;
-	if (!compile_cell(ctx, (CELL)func)) return NULL;
-	if (!compile_bytes(ctx, "\x4C\x89\x52", 3)) return NULL;
-	if (!compile_byte(ctx, offsetof(CTX, Fx))) return NULL;
+	compile_bytes(ctx, "\x49\xBA", 2);
+	compile_cell(ctx, (CELL)func);
+	compile_bytes(ctx, "\x4C\x89\x52", 3);
+	compile_byte(ctx, offsetof(CTX, Fx));
 	// mov r10, <64 bit literal>
 	// mov QWORD PTR [rdx + 40], r10
-	if (!compile_bytes(ctx, "\x49\xBA", 2)) return NULL;
-	if (!compile_cell(ctx, lit)) return NULL;
-	if (!compile_bytes(ctx, "\x4C\x89\x52", 3)) return NULL;
-	if (!compile_byte(ctx, offsetof(CTX, Lx))) return NULL;
+	compile_bytes(ctx, "\x49\xBA", 2);
+	compile_cell(ctx, lit);
+	compile_bytes(ctx, "\x4C\x89\x52", 3);
+	compile_byte(ctx, offsetof(CTX, Lx));
 	// lea rax, [rcx + chere relative addressing of instruction after ret]
 	// ret
-	if (!compile_next(ctx)) return NULL;
-	return ctx->code + ctx->chere;
+	compile_next(ctx);
 }
 
 #ifdef __linux__
