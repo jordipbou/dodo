@@ -202,6 +202,102 @@ void test_compile_push(void) {
 	deinit(ctx);
 }
 
+// LISTS ----------------------------------------------------------------------
+
+void test_list_length(void) {
+	LIST list[4];
+
+	TEST_ASSERT_EQUAL_INT(0, length(NULL));
+
+	list[0].next = NULL;
+
+	TEST_ASSERT_EQUAL_INT(1, length(list));
+
+	list[0].next = &list[1];
+	list[1].next = NULL;
+
+	TEST_ASSERT_EQUAL_INT(2, length(list));
+
+	list[1].next = &list[2];
+	list[2].next = NULL;
+
+	TEST_ASSERT_EQUAL_INT(3, length(list));
+
+	list[2].next = &list[3];
+	list[3].next = NULL;
+
+	TEST_ASSERT_EQUAL_INT(4, length(list));
+	TEST_ASSERT_EQUAL_INT(3, length(list + 1));
+	TEST_ASSERT_EQUAL_INT(2, length(list + 2));
+	TEST_ASSERT_EQUAL_INT(1, length(list + 3));
+}
+
+// DICTIONARY -----------------------------------------------------------------
+
+void test_dictionary(void) {
+	CTX* ctx = init(1024, 1024);
+
+	TEST_ASSERT_NULL(ctx->dict);
+
+	LIST* w = malloc(sizeof(LIST));
+	STR* name = malloc(sizeof(STR));
+	name->len = 5;
+	memcpy(name->str, "hello", 5);
+	name->str[5] = 0;
+	w->name = name;
+	w->next = ctx->dict;
+
+	LIST* wr = find(w, "hello");
+
+	TEST_ASSERT_EQUAL_PTR(w, wr);
+
+	LIST* w2 = malloc(sizeof(LIST));
+	STR* name2 = malloc(sizeof(STR));
+	name2->len = 5;
+	memcpy(name2->str, "world", 5);
+	name2->str[5] = 0;
+	w2->name = name2;
+	w2->next = w;
+	
+	wr = find(w2, "world");
+
+	TEST_ASSERT_EQUAL_PTR(w2, wr);
+
+	wr = find(w2, "hello");
+
+	TEST_ASSERT_EQUAL_PTR(w, wr);
+
+	wr = find(w2, "nop");
+
+	TEST_ASSERT_NULL(wr);
+
+	wr = find(w, "world");
+
+	TEST_ASSERT_NULL(wr);
+
+	deinit(ctx);
+}
+
+void test_dictionary_length(void) {
+	CTX* ctx = init(1024, 1024);
+
+	TEST_ASSERT_EQUAL_INT(0, length(ctx->dict));
+
+	LIST* w = malloc(sizeof(LIST));
+	w->next = ctx->dict;
+	ctx->dict = w;
+
+	TEST_ASSERT_EQUAL_INT(1, length(ctx->dict));
+
+	LIST* w2 = malloc(sizeof(LIST));
+	w2->next = ctx->dict;
+	ctx->dict = w2;
+
+	TEST_ASSERT_EQUAL_INT(2, length(ctx->dict));
+
+	deinit(ctx);
+}
+
 //void test_compile_bytes(void) {
 //	H* bl = init(1024, 1024);
 //	TEST_ASSERT_NOT_NULL(bl);
@@ -261,25 +357,6 @@ void test_compile_push(void) {
 //	TEST_ASSERT_EQUAL_INT(24, AS_BYTES(AS_CELLS(17)));
 //	TEST_ASSERT_EQUAL_INT(24, AS_BYTES(AS_CELLS(24)));
 //	TEST_ASSERT_EQUAL_INT(32, AS_BYTES(AS_CELLS(25)));
-//}
-//
-//void test_list_length(void) {
-//	P list[4];
-//	TEST_ASSERT_EQUAL_INT(0, length(NULL));
-//	list[0].cdr = NULL;
-//	TEST_ASSERT_EQUAL_INT(1, length(list));
-//	list[0].cdr = &list[1];
-//	list[1].cdr = NULL;
-//	TEST_ASSERT_EQUAL_INT(2, length(list));
-//	list[1].cdr = &list[2];
-//	list[2].cdr = NULL;
-//	TEST_ASSERT_EQUAL_INT(3, length(list));
-//	list[2].cdr = &list[3];
-//	list[3].cdr = NULL;
-//	TEST_ASSERT_EQUAL_INT(4, length(list));
-//	TEST_ASSERT_EQUAL_INT(3, length(list + 1));
-//	TEST_ASSERT_EQUAL_INT(2, length(list + 2));
-//	TEST_ASSERT_EQUAL_INT(1, length(list + 3));
 //}
 //
 //void test_find_word(void) {
@@ -440,24 +517,10 @@ void test_compile_push(void) {
 //	deinit(bl);
 //}
 //
-////void test_dictionary(void) {
-////	C b[32];
-////	H* bl = init(b, 32);
-////	TEST_ASSERT_EQUAL_INT(0, length(bl->dp));
-////	W* w = malloc(sizeof(W));
-////	w->cdr = bl->dp;
-////	bl->dp = (P*)w;
-////	TEST_ASSERT_EQUAL_INT(1, length(bl->dp));
-////	W* w2 = malloc(sizeof(W));
-////	w2->cdr = bl->dp;
-////	bl->dp = (P*)w2;
-////	TEST_ASSERT_EQUAL_INT(2, length(bl->dp));
-////}
-//
 //void test_error_code(void) {
 //	H* bl = init(1024, 1024);
 //
-//	// mov QWORD PTR [rdi+16], 11
+//	// mov Q_WORD PTR [rdi+16], 11
 //	// ret
 //	S* s = create_code(bl);
 //	compile_bytes(bl, s, "\x48\xC7\x47\x10\x0B\x00\x00\x00\xC3", 9);
@@ -474,10 +537,10 @@ void test_compile_push(void) {
 //	TEST_ASSERT_NOT_NULL(bl);
 //
 //	S* s = create_code(bl);
-//	// mov QWORD PTR [rdi+16], 11
+//	// mov Q_WORD PTR [rdi+16], 11
 //	TEST_ASSERT_NOT_NULL(compile_bytes(bl, s, "\x48\xC7\x47\x10\x0B\x00\x00\x00", 8));
 //	TEST_ASSERT_NOT_NULL(compile_cfunc(bl, s, 8));
-//	// mov QWORD PTR [rdi+16], 57
+//	// mov Q_WORD PTR [rdi+16], 57
 //	// ret
 //	TEST_ASSERT_NOT_NULL(compile_bytes(bl, s, "\x48\xC7\x47\x10\x39\x00\x00\x00\xC3", 9));
 //
@@ -508,12 +571,15 @@ int main(void) {
 	RUN_TEST(test_compile_cfunc);
 	RUN_TEST(test_compile_push);
 
+	RUN_TEST(test_list_length);
+
+	RUN_TEST(test_dictionary);
+	RUN_TEST(test_dictionary_length);
 
 	//RUN_TEST(test_is_aligned);
 	//RUN_TEST(test_as_cells);
 	//RUN_TEST(test_as_bytes);
 	//
-	//RUN_TEST(test_list_length);
 
 	//RUN_TEST(test_find_word);
 
@@ -522,7 +588,6 @@ int main(void) {
 	//RUN_TEST(test_stack);
 
 	////RUN_TEST(test_fib);
-	////RUN_TEST(test_dictionary);
 
 	//RUN_TEST(test_store_str);
 

@@ -1,6 +1,6 @@
 #include <stdio.h>
 
-//#include "vm.d.h"
+#include "vm.h"
 
 void main() {
 }

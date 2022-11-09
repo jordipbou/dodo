@@ -4,23 +4,23 @@ project(dodo LANGUAGES C)
 set (dodo_VERSION_MAJOR 0)
 set (dodo_VERSION_MINOR 1)
 
+set (CMAKE_C_STANDARD 99)
+set (CMAKE_C_STANDARD_REQUIRED On)
+
 if (NOT CMAKE_BUILD_TYPE)
 	set (CMAKE_BUILD_TYPE Release)
 endif()
 
 set (CMAKE_C_FLAGS_RELEASE "-O3")
-set (CMAKE_EXE_LIMKER_FLAGS "")
+set (CMAKE_EXE_LINKER_FLAGS "")
 
 add_executable (
 	dodo 
 	src/dodo.c)
-#	deps/stcp/src/stcp.c deps/stcp/src/socket.c)
-target_include_directories (dodo PRIVATE src) # deps/stcp/include)
-set_property (TARGET dodo PROPERTY C_STANDARD 99)
+target_include_directories (dodo PRIVATE src)
 
 add_executable (
 	tests
 	src/tests.c
 	deps/Unity/src/unity.c)
 target_include_directories (tests PRIVATE src deps/Unity/src)
-set_property (TARGET tests PROPERTY C_STANDARD 99)

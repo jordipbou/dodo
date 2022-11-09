@@ -8,6 +8,7 @@
 #elif _WIN32
 #include<windows.h>
 #include<memoryapi.h>
+#include<stdint.h>
 #endif
 
 // DATATYPES ------------------------------------------------------------------
@@ -15,18 +16,44 @@
 #ifdef __linux__
 typedef int8_t BYTE;
 #endif
-typedef int16_t QUARTER;
 typedef int32_t HALF;
 typedef int64_t CELL;
 
 typedef struct _CTX CTX;
 typedef void (*FUNC)(CTX*);
 
+typedef struct {
+	CELL len;
+	union {
+		BYTE str[8];
+		BYTE* code;
+	};
+} STR;
+
+typedef struct _LIST {
+	struct _LIST* next;
+	union {
+		struct {
+			struct _LIST* prev;
+		};
+		struct {
+			CELL val;
+		};
+		struct {
+			CELL flags;
+			STR* name;
+			STR* source;
+			STR* code;
+		};
+	};
+} LIST;
+
 typedef struct _CTX {
 	CELL dsize, csize;	// Data size and Code size segments
 	BYTE* chere;				// Address to free space on code segment
 	FUNC* Fx;						// Address of function to call from C 
 	CELL Lx;						// Literal value register
+	LIST* dict;					// Start of dictionary linked list
 	BYTE* code;					// Start of executable Code space
 	BYTE data[];				// Start of non-executable Data space
 } CTX;
@@ -53,6 +80,7 @@ CTX* init(CELL dsize, CELL csize) {
 	ctx->csize = csize;
 	ctx->Fx = NULL;
 	ctx->Lx = 0;
+	ctx->dict = NULL;
 
 #if __linux__
 	ctx->code = mmap(NULL, csize, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
@@ -141,7 +169,7 @@ void compile_next(CTX* ctx) {
 
 void compile_reg(CTX* ctx, CELL lit, BYTE offset) {
 	// 0:  49 ba <C:Address of cfunc>			movabs r10,0xff00ff11ff22ff33
-	// a:  4c 89 52 <B:Fx offset>					mov    QWORD PTR [rdx+<Fx offset>],r10
+	// a:  4c 89 52 <B:Fx offset>					mov    Q_WORD PTR [rdx+<Fx offset>],r10
 	// 14 bytes
 	compile_bytes(ctx, "\x49\xBA", 2);
 	compile_lit(ctx, CELL, lit);
@@ -165,3 +193,19 @@ void compile_reg(CTX* ctx, CELL lit, BYTE offset) {
 	((BYTE* (*)(BYTE*, CTX*, void*, void*))(f))\
 		(ctx->code, ctx, NULL, NULL)
 #endif
+
+// LISTS ----------------------------------------------------------------------
+
+CELL length(LIST* l) {
+	for (CELL a = 0;; a++) { if (!l) { return a; } else { l = l->next; } }
+}
+
+// DICTIONARY -----------------------------------------------------------------
+
+LIST* find(LIST* word, BYTE* name) {
+	while (word && strcmp(word->name->str, name)) {
+		word = word->next;
+	}
+
+	return word;
+}
