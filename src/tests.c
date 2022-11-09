@@ -31,7 +31,7 @@ void test_compile_byte(void) {
 	TEST_ASSERT_EQUAL_INT(ctx->code, ctx->chere);
 
 	BYTE* chere = unprotect(ctx);
-	compile_byte(ctx, 0xC3);
+	compile_lit(ctx, BYTE, 0xC3);
 	protect(ctx, chere);
 
 	TEST_ASSERT_EQUAL_INT(ctx->code + 1, ctx->chere);
@@ -39,7 +39,7 @@ void test_compile_byte(void) {
 	TEST_ASSERT_EQUAL_INT8(0xC3, *(ctx->code));
 
 	chere = unprotect(ctx);
-	compile_byte(ctx, 0xB8);
+	compile_lit(ctx, BYTE, 0xB8);
 	protect(ctx, chere);
 
 	TEST_ASSERT_EQUAL_INT(ctx->code + 2, ctx->chere);
@@ -85,7 +85,7 @@ void test_compile_literal(void) {
 	TEST_ASSERT_EQUAL_INT(ctx->code, ctx->chere);
 
 	BYTE* chere = unprotect(ctx);
-	compile_cell(ctx, 41378);
+	compile_lit(ctx, CELL, 41378);
 	protect(ctx, chere);
 
 	TEST_ASSERT_EQUAL_INT(ctx->code + sizeof(CELL), ctx->chere);
@@ -93,7 +93,7 @@ void test_compile_literal(void) {
 	TEST_ASSERT_EQUAL_INT64(41378, *((CELL*)(ctx->code)));
 
 	chere = unprotect(ctx);
-	compile_cell(ctx, 13);
+	compile_lit(ctx, CELL, 13);
 	protect(ctx, chere);
 
 	TEST_ASSERT_EQUAL_INT(ctx->code + 2*sizeof(CELL), ctx->chere);
@@ -101,7 +101,7 @@ void test_compile_literal(void) {
 	TEST_ASSERT_EQUAL_INT64(13, *((CELL*)(ctx->code + sizeof(CELL))));
 
 	chere = unprotect(ctx);
-	compile_halfcell(ctx, 19923);
+	compile_lit(ctx, HALF, 19923);
 	protect(ctx, chere);
 
 	TEST_ASSERT_EQUAL_INT(ctx->code + 2*sizeof(CELL) + sizeof(HALF), ctx->chere);
@@ -109,7 +109,7 @@ void test_compile_literal(void) {
 	TEST_ASSERT_EQUAL_INT32(19923, *((HALF*)(ctx->code + 2*sizeof(CELL))));
 
 	chere = unprotect(ctx);
-	compile_halfcell(ctx, -367);
+	compile_lit(ctx, HALF, -367);
 	protect(ctx, chere);
 
 	TEST_ASSERT_EQUAL_INT(ctx->code + 2*sizeof(CELL) + 2*sizeof(HALF), ctx->chere);
