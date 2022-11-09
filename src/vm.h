@@ -1,5 +1,9 @@
+// TODO: Remove STR from compile, as it not needed!! That's something belonging
+// to dictionary, no to C/ASM interoperability.
+
 #include<stdlib.h>
 #include<string.h>
+#include<stddef.h>
 
 #ifdef __linux__
 #include<sys/mman.h>
@@ -16,19 +20,12 @@ typedef int64_t C;
 typedef struct _CTX CTX;
 typedef void (*F)(CTX*);
 
-typedef struct {
-	C len;
-	union {
-		B* code;
-		B str[sizeof(C)];
-	} data;
-} STR;
-
 typedef struct _CTX {
 	C dsize, csize;	// Data size and Code size segments
-	C dhere, chere;	// Indexes to free space on data segment and on code segment
+	C chere;				// Relative address to free space on code segment
 	F* Fx;					// Address of function to call from C
 	C Lx;						// Index register and Literal register for C/ASM communication
+	C TOS, SOS;			// Top of stack and Second of the stack registers
 	B* code;				// Start of executable Code space
 	B data[];				// Start of non-executable Data space
 } CTX;
@@ -49,7 +46,6 @@ CTX* init(C dsize, C csize) {
 
 	ctx->dsize = dsize;
 	ctx->csize = csize;
-	ctx->dhere = sizeof(CTX);
 	ctx->chere = 0;
 	ctx->Fx = NULL;
 	ctx->Lx = 0;
@@ -107,12 +103,11 @@ B* protect(CTX* ctx) {
 // TODO: protect and unprotect are called too much when compiling. It should be
 // possible to start compile state and end compilation state.
 
-B* compile_byte(CTX* ctx, B byte, STR* str) {
+B* compile_byte(CTX* ctx, B byte) {
 	// TODO: Error checking for writing outside code block !!
 	if (unprotect(ctx)) {
 		*(ctx->code + ctx->chere) = byte;
 		if (protect(ctx)) {
-			if (str != NULL) str->len++;
 			ctx->chere++;
 			return ctx->code + ctx->chere;
 		}
@@ -120,12 +115,11 @@ B* compile_byte(CTX* ctx, B byte, STR* str) {
 	return NULL;
 }
 
-B* compile_bytes(CTX* ctx, B* bytes, C len, STR* str) {
+B* compile_bytes(CTX* ctx, B* bytes, C len) {
 	// TODO: Error checking for writing outside code block !!
 	if (unprotect(ctx)) {
 		memcpy(ctx->code + ctx->chere, bytes, len);
 		if (protect(ctx)) {
-			if (str != NULL) str->len += len;
 			ctx->chere += len;
 			return ctx->code + ctx->chere;
 		}
@@ -133,12 +127,11 @@ B* compile_bytes(CTX* ctx, B* bytes, C len, STR* str) {
 	return NULL;
 }
 
-B* compile_cell(CTX* ctx, C lit, STR* str) {
+B* compile_cell(CTX* ctx, C lit) {
 	// TODO: Error checking for writing outside code block !!
 	if (unprotect(ctx)) {
 		*((C*)(ctx->code + ctx->chere)) = lit;
 		if (protect(ctx)) {
-			if (str != NULL) str->len += sizeof(C);
 			ctx->chere += sizeof(C);
 			return ctx->code + ctx->chere;
 		}
@@ -146,12 +139,11 @@ B* compile_cell(CTX* ctx, C lit, STR* str) {
 	return NULL;
 }
 
-B* compile_halfcell(CTX* ctx, H lit, STR* str) {
+B* compile_halfcell(CTX* ctx, H lit) {
 	// TODO: Error checking for writing outside code block !!
 	if (unprotect(ctx)) {
 		*((H*)(ctx->code + ctx->chere)) = lit;
 		if (protect(ctx)) {
-			if (str != NULL) str->len += sizeof(H);
 			ctx->chere += sizeof(H);
 			return ctx->code + ctx->chere;
 		}
@@ -159,41 +151,44 @@ B* compile_halfcell(CTX* ctx, H lit, STR* str) {
 	return NULL;
 }
 
-B* compile_next(CTX* ctx, STR* str) {
+B* compile_next(CTX* ctx) {
 	// lea rax, [rcx + chere relative addressing of instruction after ret]
 	// ret
-	if (!compile_bytes(ctx, "\x48\x8D\x81", 3, str)) return NULL;
-	if (!compile_halfcell(ctx, (H)(ctx->chere + 5), str)) return NULL;
-	if (!compile_byte(ctx, 0xC3, str)) return NULL;
+	if (!compile_bytes(ctx, "\x48\x8D\x81", 3)) return NULL;
+	if (!compile_halfcell(ctx, (H)(ctx->chere + 5))) return NULL;
+	if (!compile_byte(ctx, 0xC3)) return NULL;
 	return ctx->code + ctx->chere;
 }
 
-B* compile_cfunc(CTX* ctx, F func, STR* str) {
+B* compile_cfunc(CTX* ctx, F func) {
 	// movabs r10, <C Func address>
 	// mov QWORD PTR [rdx + 32], r10
-	if (!compile_bytes(ctx, "\x49\xBA", 2, str)) return NULL;
-	if (!compile_cell(ctx, (C)func,  str)) return NULL;
-	if (!compile_bytes(ctx, "\x4C\x89\x52\x20", 4, str)) return NULL;
+	if (!compile_bytes(ctx, "\x49\xBA", 2)) return NULL;
+	if (!compile_cell(ctx, (C)func)) return NULL;
+	if (!compile_bytes(ctx, "\x4C\x89\x52", 3)) return NULL;
+	if (!compile_byte(ctx, offsetof(CTX, Fx))) return NULL;
 	// lea rax, [rcx + chere relative addressing of instruction after ret]
 	// ret
-	if (!compile_next(ctx, str)) return NULL;
+	if (!compile_next(ctx)) return NULL;
 	return ctx->code + ctx->chere;
 }
 
-B* compile_push(CTX* ctx, F func, C lit, STR* str) {
+B* compile_push(CTX* ctx, F func, C lit) {
 	// mov r10, <PUSH function address>
 	// mov QWORD PTR [rdx + 32], r10
-	if (!compile_bytes(ctx, "\x49\xBA", 2, str)) return NULL;
-	if (!compile_cell(ctx, (C)func,  str)) return NULL;
-	if (!compile_bytes(ctx, "\x4C\x89\x52\x20", 4, str)) return NULL;
+	if (!compile_bytes(ctx, "\x49\xBA", 2)) return NULL;
+	if (!compile_cell(ctx, (C)func)) return NULL;
+	if (!compile_bytes(ctx, "\x4C\x89\x52", 3)) return NULL;
+	if (!compile_byte(ctx, offsetof(CTX, Fx))) return NULL;
 	// mov r10, <64 bit literal>
 	// mov QWORD PTR [rdx + 40], r10
-	if (!compile_bytes(ctx, "\x49\xBA", 2, str)) return NULL;
-	if (!compile_cell(ctx, lit, str)) return NULL;
-	if (!compile_bytes(ctx, "\x4C\x89\x52\x28", 4, str)) return NULL;
+	if (!compile_bytes(ctx, "\x49\xBA", 2)) return NULL;
+	if (!compile_cell(ctx, lit)) return NULL;
+	if (!compile_bytes(ctx, "\x4C\x89\x52", 3)) return NULL;
+	if (!compile_byte(ctx, offsetof(CTX, Lx))) return NULL;
 	// lea rax, [rcx + chere relative addressing of instruction after ret]
 	// ret
-	if (!compile_next(ctx, str)) return NULL;
+	if (!compile_next(ctx)) return NULL;
 	return ctx->code + ctx->chere;
 }
 

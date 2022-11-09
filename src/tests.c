@@ -30,12 +30,12 @@ void test_compile_byte(void) {
 
 	TEST_ASSERT_EQUAL_INT(0, ctx->chere);
 
-	compile_byte(ctx, 0xC3, NULL);
+	compile_byte(ctx, 0xC3);
 	TEST_ASSERT_EQUAL_INT(1, ctx->chere);
 
 	TEST_ASSERT_EQUAL_INT8(0xC3, *(ctx->code));
 
-	compile_byte(ctx, 0xB8, NULL);
+	compile_byte(ctx, 0xB8);
 	TEST_ASSERT_EQUAL_INT(2, ctx->chere);
 
 	TEST_ASSERT_EQUAL_INT8(0xC3, *(ctx->code));
@@ -49,7 +49,7 @@ void test_compile_bytes(void) {
 
 	TEST_ASSERT_EQUAL_INT(0, ctx->chere);
 
-	compile_bytes(ctx, "\xB8\x11\xFF\x00\xFF", 5, NULL);
+	compile_bytes(ctx, "\xB8\x11\xFF\x00\xFF", 5);
 	TEST_ASSERT_EQUAL_INT(5, ctx->chere);
 
 	TEST_ASSERT_EQUAL_INT8(0xB8, *(ctx->code));
@@ -58,7 +58,7 @@ void test_compile_bytes(void) {
 	TEST_ASSERT_EQUAL_INT8(0x00, *(ctx->code + 3));
 	TEST_ASSERT_EQUAL_INT8(0xFF, *(ctx->code + 4));
 
-	compile_bytes(ctx, "\xC7\x47", 2, NULL);
+	compile_bytes(ctx, "\xC7\x47", 2);
 	TEST_ASSERT_EQUAL_INT(7, ctx->chere);
 
 	TEST_ASSERT_EQUAL_INT8(0xC7, *(ctx->code + 5));
@@ -72,22 +72,22 @@ void test_compile_literal(void) {
 
 	TEST_ASSERT_EQUAL_INT(0, ctx->chere);
 
-	compile_cell(ctx, 41378, NULL);
+	compile_cell(ctx, 41378);
 	TEST_ASSERT_EQUAL_INT(sizeof(C), ctx->chere);
 
 	TEST_ASSERT_EQUAL_INT64(41378, *((C*)(ctx->code)));
 
-	compile_cell(ctx, 13, NULL);
+	compile_cell(ctx, 13);
 	TEST_ASSERT_EQUAL_INT(2*sizeof(C), ctx->chere);
 
 	TEST_ASSERT_EQUAL_INT64(13, *((C*)(ctx->code + sizeof(C))));
 
-	compile_halfcell(ctx, 19923, NULL);
+	compile_halfcell(ctx, 19923);
 	TEST_ASSERT_EQUAL_INT(2*sizeof(C) + sizeof(H), ctx->chere);
 
 	TEST_ASSERT_EQUAL_INT32(19923, *((H*)(ctx->code + 2*sizeof(C))));
 
-	compile_halfcell(ctx, -367, NULL);
+	compile_halfcell(ctx, -367);
 	TEST_ASSERT_EQUAL_INT(2*sizeof(C) + 2*sizeof(H), ctx->chere);
 
 	TEST_ASSERT_EQUAL_INT32(-367, *((H*)(ctx->code + 2*sizeof(C) + sizeof(H))));
@@ -100,7 +100,7 @@ void test_compile_next(void) {
 	
 	TEST_ASSERT_EQUAL_INT(0, ctx->chere);
 
-	compile_next(ctx, NULL);
+	compile_next(ctx);
 
 	TEST_ASSERT_EQUAL_INT(8, ctx->chere);
 
@@ -108,7 +108,7 @@ void test_compile_next(void) {
 
 	TEST_ASSERT_EQUAL_PTR(ctx->code + 8, NEXT);
 
-	compile_next(ctx, NULL);
+	compile_next(ctx);
 
 	TEST_ASSERT_EQUAL_INT(16, ctx->chere);
 
@@ -127,7 +127,7 @@ void test_compile_cfunc(void) {
 
 	TEST_ASSERT_EQUAL_INT(0, ctx->chere);
 
-	compile_cfunc(ctx, &generic_cfunc, NULL);
+	compile_cfunc(ctx, &generic_cfunc);
 
 	TEST_ASSERT_EQUAL_INT(22, ctx->chere);
 
@@ -144,7 +144,7 @@ void test_compile_push(void) {
 
 	TEST_ASSERT_EQUAL_INT(0, ctx->chere);
 
-	compile_push(ctx, &generic_cfunc, 13, NULL);
+	compile_push(ctx, &generic_cfunc, 13);
 
 	TEST_ASSERT_EQUAL_INT(36, ctx->chere);
 
