@@ -157,6 +157,7 @@ void test_compile_cfunc(void) {
 
 	BYTE* chere = unprotect(ctx);
 	compile_cfunc(ctx, &generic_cfunc);
+	compile_next(ctx);
 	protect(ctx, chere);
 
 	TEST_ASSERT_EQUAL_INT(ctx->code + 22, ctx->chere);
@@ -174,17 +175,29 @@ void test_compile_push(void) {
 
 	TEST_ASSERT_EQUAL_INT(ctx->code, ctx->chere);
 
+	TEST_ASSERT_EQUAL_INT(0, ctx->Lx);
+
 	BYTE* chere = unprotect(ctx);
-	compile_push(ctx, &generic_cfunc, 13);
+	compile_push(ctx, 13);
+	compile_next(ctx);
 	protect(ctx, chere);
 
-	TEST_ASSERT_EQUAL_INT(ctx->code + 36, ctx->chere);
+	TEST_ASSERT_EQUAL_INT(ctx->code + 22, ctx->chere);
 
 	BYTE* NEXT = CALL(ctx->code, ctx);
 
-	TEST_ASSERT_EQUAL_PTR(&generic_cfunc, ctx->Fx);
 	TEST_ASSERT_EQUAL_INT(13, ctx->Lx);
-	TEST_ASSERT_EQUAL_INT(ctx->code + 36, NEXT);
+	TEST_ASSERT_EQUAL_INT(ctx->code + 22, NEXT);
+
+	chere = unprotect(ctx);
+	compile_push(ctx, 17);
+	compile_next(ctx);
+	protect(ctx, chere);
+
+	NEXT = CALL(NEXT, ctx);
+
+	TEST_ASSERT_EQUAL_INT(17, ctx->Lx);
+	TEST_ASSERT_EQUAL_INT(ctx->code + 44, NEXT);
 
 	deinit(ctx);
 }

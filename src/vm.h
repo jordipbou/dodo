@@ -15,6 +15,7 @@
 #ifdef __linux__
 typedef int8_t BYTE;
 #endif
+typedef int16_t QUARTER;
 typedef int32_t HALF;
 typedef int64_t CELL;
 
@@ -24,9 +25,8 @@ typedef void (*FUNC)(CTX*);
 typedef struct _CTX {
 	CELL dsize, csize;	// Data size and Code size segments
 	BYTE* chere;				// Address to free space on code segment
-	FUNC* Fx;						// Address of function to call from C
-	CELL Lx;						// Literal register for C/ASM communication
-	CELL Tx, Sx;				// Top of the stack and second of the stack registers
+	FUNC* Fx;						// Address of function to call from C 
+	CELL Lx;						// Literal value register
 	BYTE* code;					// Start of executable Code space
 	BYTE data[];				// Start of non-executable Data space
 } CTX;
@@ -131,42 +131,26 @@ void compile_bytes(CTX* ctx, BYTE* bytes, CELL len) {
 }
 
 void compile_next(CTX* ctx) {
-	// lea rax, [rcx + chere relative addressing of instruction after ret]
-	// ret
+	// 0:  48 8d 81 <H:Address after ret>	lea    rax,[rcx + <address after ret>]
+	// 7:  c3															ret
+	// 8 bytes
 	compile_bytes(ctx, "\x48\x8D\x81", 3);
 	compile_lit(ctx, HALF, ctx->chere - ctx->code + 5);
 	compile_lit(ctx, BYTE, 0xC3);
 }
 
-void compile_cfunc(CTX* ctx, FUNC func) {
-	// movabs r10, <C Func address>
-	// mov QWORD PTR [rdx + 32], r10
-	compile_bytes(ctx, "\x49\xBA", 2);
-	compile_lit(ctx, CELL, func);
-	compile_bytes(ctx, "\x4C\x89\x52", 3);
-	compile_lit(ctx, BYTE, offsetof(CTX, Fx));
-	// lea rax, [rcx + chere relative addressing of instruction after ret]
-	// ret
-	compile_next(ctx);
-}
-
-void compile_push(CTX* ctx, FUNC func, CELL lit) {
-	// mov r10, <PUSH function address>
-	// mov QWORD PTR [rdx + 32], r10
-	compile_bytes(ctx, "\x49\xBA", 2);
-	compile_lit(ctx, CELL, func);
-	compile_bytes(ctx, "\x4C\x89\x52", 3);
-	compile_lit(ctx, BYTE, offsetof(CTX, Fx));
-	// mov r10, <64 bit literal>
-	// mov QWORD PTR [rdx + 40], r10
+void compile_reg(CTX* ctx, CELL lit, BYTE offset) {
+	// 0:  49 ba <C:Address of cfunc>			movabs r10,0xff00ff11ff22ff33
+	// a:  4c 89 52 <B:Fx offset>					mov    QWORD PTR [rdx+<Fx offset>],r10
+	// 14 bytes
 	compile_bytes(ctx, "\x49\xBA", 2);
 	compile_lit(ctx, CELL, lit);
 	compile_bytes(ctx, "\x4C\x89\x52", 3);
-	compile_lit(ctx, BYTE, offsetof(CTX, Lx));
-	// lea rax, [rcx + chere relative addressing of instruction after ret]
-	// ret
-	compile_next(ctx);
+	compile_lit(ctx, BYTE, offset);
 }
+
+#define compile_cfunc(ctx, cfunc)	compile_reg(ctx, (CELL)cfunc, offsetof(CTX, Fx))
+#define compile_push(ctx, lit)		compile_reg(ctx, lit, offsetof(CTX, Lx))
 
 // RDX: Pointer to context
 // RCX: Pointer to code space
@@ -174,10 +158,10 @@ void compile_push(CTX* ctx, FUNC func, CELL lit) {
 // R9: Second of the stack
 #ifdef __linux__
 #define CALL(f, ctx)\
-	((BYTE* (*)(void*, void*, CTX*, BYTE*, CELL, CELL))(f))\
-		(NULL, NULL, ctx, ctx->code, ctx->Tx, ctx->Sx)
+	((BYTE* (*)(void*, void*, CTX*, BYTE*, void*, void*))(f))\
+		(NULL, NULL, ctx, ctx->code, NULL, NULL)
 #elif _WIN32
 #define CALL(f, ctx)\
-	((BYTE* (*)(BYTE*, CTX*, CELL, CELL))(f))\
-		(ctx->code, ctx, ctx->Tx, ctx->Sx)
+	((BYTE* (*)(BYTE*, CTX*, void*, void*))(f))\
+		(ctx->code, ctx, NULL, NULL)
 #endif
