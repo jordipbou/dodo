@@ -7,6 +7,8 @@ void setUp(void) {}
 
 void tearDown(void) {}
 
+// CONTEXT AND COMPILATION ----------------------------------------------------
+
 void test_block_initialization(void) {
 	C data_size = 1024;
 	C code_size = 1024;
@@ -157,86 +159,92 @@ void test_compile_push(void) {
 	deinit(ctx);
 }
 
-//void test_compile_bytes(void) {
-//	H* bl = init(1024, 1024);
-//	TEST_ASSERT_NOT_NULL(bl);
-//
-//	S* s = create_code(bl);
-//	TEST_ASSERT_NOT_NULL(compile_bytes(bl, s, "test", 4));
-//	TEST_ASSERT_EQUAL_PTR(bl->code, s->data.code);
-//
-//	TEST_ASSERT_EQUAL_INT8('t', s->data.code[0]);
-//	TEST_ASSERT_EQUAL_INT8('e', s->data.code[1]);
-//	TEST_ASSERT_EQUAL_INT8('s', s->data.code[2]);
-//	TEST_ASSERT_EQUAL_INT8('t', s->data.code[3]);
-//
-//	S* s2 = create_code(bl);
-//	TEST_ASSERT_NOT_NULL(compile_bytes(bl, s2, "demo", 4));
-//	TEST_ASSERT_EQUAL_PTR(bl->code + 4, s2->data.code);
-//
-//	TEST_ASSERT_EQUAL_INT8('d', s2->data.code[0]);
-//	TEST_ASSERT_EQUAL_INT8('e', s2->data.code[1]);
-//	TEST_ASSERT_EQUAL_INT8('m', s2->data.code[2]);
-//	TEST_ASSERT_EQUAL_INT8('o', s2->data.code[3]);
-//
-//	// Test executing code: 
-//	// mov rax,13
-//	// ret
-//	S* s3 = create_code(bl);
-//	compile_bytes(bl, s3, "\x48\xC7\xC0\x0D\x00\x00\x00\xC3", 8);
-//
-//	int res = ((int (*)(void))(s3->data.code))();
-//	TEST_ASSERT_EQUAL_INT(13, res);
-//
-//	deinit(bl);
-//}
-//
-//void test_is_aligned(void) {
-//	TEST_ASSERT_TRUE(IS_ALIGNED(12345 << 3));
-//	TEST_ASSERT_FALSE(IS_ALIGNED(12345));
-//}
-//
-//void test_as_cells(void) {
-//	TEST_ASSERT_EQUAL_INT(0, AS_CELLS(0));
-//	TEST_ASSERT_EQUAL_INT(1, AS_CELLS(1));
-//	TEST_ASSERT_EQUAL_INT(1, AS_CELLS(8));
-//	TEST_ASSERT_EQUAL_INT(2, AS_CELLS(9));
-//	TEST_ASSERT_EQUAL_INT(2, AS_CELLS(16));
-//	TEST_ASSERT_EQUAL_INT(3, AS_CELLS(17));
-//	TEST_ASSERT_EQUAL_INT(3, AS_CELLS(24));
-//	TEST_ASSERT_EQUAL_INT(4, AS_CELLS(25));
-//}
-//
-//void test_as_bytes(void) {
-//	TEST_ASSERT_EQUAL_INT(0, AS_BYTES(AS_CELLS(0)));
-//	TEST_ASSERT_EQUAL_INT(8, AS_BYTES(AS_CELLS(1)));
-//	TEST_ASSERT_EQUAL_INT(8, AS_BYTES(AS_CELLS(8)));
-//	TEST_ASSERT_EQUAL_INT(16, AS_BYTES(AS_CELLS(9)));
-//	TEST_ASSERT_EQUAL_INT(16, AS_BYTES(AS_CELLS(16)));
-//	TEST_ASSERT_EQUAL_INT(24, AS_BYTES(AS_CELLS(17)));
-//	TEST_ASSERT_EQUAL_INT(24, AS_BYTES(AS_CELLS(24)));
-//	TEST_ASSERT_EQUAL_INT(32, AS_BYTES(AS_CELLS(25)));
-//}
-//
-//void test_list_length(void) {
-//	P list[4];
-//	TEST_ASSERT_EQUAL_INT(0, length(NULL));
-//	list[0].cdr = NULL;
-//	TEST_ASSERT_EQUAL_INT(1, length(list));
-//	list[0].cdr = &list[1];
-//	list[1].cdr = NULL;
-//	TEST_ASSERT_EQUAL_INT(2, length(list));
-//	list[1].cdr = &list[2];
-//	list[2].cdr = NULL;
-//	TEST_ASSERT_EQUAL_INT(3, length(list));
-//	list[2].cdr = &list[3];
-//	list[3].cdr = NULL;
-//	TEST_ASSERT_EQUAL_INT(4, length(list));
-//	TEST_ASSERT_EQUAL_INT(3, length(list + 1));
-//	TEST_ASSERT_EQUAL_INT(2, length(list + 2));
-//	TEST_ASSERT_EQUAL_INT(1, length(list + 3));
-//}
-//
+// MEMORY MANAGEMENT ----------------------------------------------------------
+
+void test_list_length(void) {
+	P list[4];
+	TEST_ASSERT_EQUAL_INT(0, length(NULL));
+	list[0].cdr = NULL;
+	TEST_ASSERT_EQUAL_INT(1, length(list));
+	list[0].cdr = &list[1];
+	list[1].cdr = NULL;
+	TEST_ASSERT_EQUAL_INT(2, length(list));
+	list[1].cdr = &list[2];
+	list[2].cdr = NULL;
+	TEST_ASSERT_EQUAL_INT(3, length(list));
+	list[2].cdr = &list[3];
+	list[3].cdr = NULL;
+	TEST_ASSERT_EQUAL_INT(4, length(list));
+	TEST_ASSERT_EQUAL_INT(3, length(list + 1));
+	TEST_ASSERT_EQUAL_INT(2, length(list + 2));
+	TEST_ASSERT_EQUAL_INT(1, length(list + 3));
+}
+
+void test_init_free(void) {
+	int dsize = 1024;
+	CTX* ctx = init(dsize, 255);
+
+	TEST_ASSERT_EQUAL_INT((dsize - sizeof(CTX)) / sizeof(P), length(ctx->fhead));
+
+	deinit(ctx);
+}
+
+void test_allot(void) {
+	int dsize = 1024, csize = 1024;;
+	CTX* ctx = init(dsize, csize);
+	TEST_ASSERT_NOT_NULL(ctx);
+	int fpairs = (dsize - sizeof(CTX)) / sizeof(P);
+	TEST_ASSERT_EQUAL_INT(fpairs, length(ctx->fhead));
+	
+	TEST_ASSERT_EQUAL_INT(0, FREE(ctx));
+
+	TEST_ASSERT_EQUAL_INT(0, allot(ctx, 2));
+	TEST_ASSERT_EQUAL_INT(fpairs - 1, length(ctx->fhead));
+	TEST_ASSERT_EQUAL_INT(2, (((B*)ctx) + ctx->dhere) - &(ctx->data[0]));
+	TEST_ASSERT_EQUAL_INT(14, FREE(ctx));
+
+	TEST_ASSERT_EQUAL_INT(0, allot(ctx, 33));
+	TEST_ASSERT_EQUAL_INT(fpairs - 3, length(ctx->fhead));
+	TEST_ASSERT_EQUAL_INT(35, (((B*)ctx) + ctx->dhere) - &(ctx->data[0]));
+	TEST_ASSERT_EQUAL_INT(13 , FREE(ctx));
+
+	// TODO: This one should fail!!
+	//TEST_ASSERT_EQUAL_INT(-1, allot(bl, bl->dsize));
+	TEST_ASSERT_EQUAL_INT(-1, allot(ctx, 65536));
+	// TODO: Correctly test extrem cases
+	//TEST_ASSERT_EQUAL_INT(fpairs - 3, length(bl->fhead));
+	//TEST_ASSERT_EQUAL_INT(35, bl->here - &(bl->data[0]));
+	//TEST_ASSERT_EQUAL_INT(125, FREE(bl));
+
+	deinit(ctx);
+}
+
+void test_cons_and_reclaim(void) {
+	int dsize = 1024, csize = 1024;
+	CTX* ctx = init(dsize, csize);
+	int fpairs = (dsize - sizeof(CTX)) / sizeof(P);
+	TEST_ASSERT_NOT_NULL(ctx);
+
+	TEST_ASSERT_EQUAL_INT(fpairs, length(ctx->fhead));
+
+	P *i1 = cons(ctx, 0, 0);
+	TEST_ASSERT_EQUAL_INT(fpairs - 1, length(ctx->fhead));
+
+	P *i2 = cons(ctx, 0, 0);
+	TEST_ASSERT_EQUAL_INT(fpairs - 2, length(ctx->fhead));
+
+	reclaim(ctx, i1);
+	TEST_ASSERT_EQUAL_INT(fpairs - 1, length(ctx->fhead));
+
+	reclaim(ctx, i2);
+	TEST_ASSERT_EQUAL_INT(fpairs, length(ctx->fhead));
+
+	TEST_ASSERT_EQUAL(i1, i2->cdr);
+	TEST_ASSERT_EQUAL(i2, ctx->fhead);
+	
+	deinit(ctx);
+}
+
 //void test_find_word(void) {
 //	S* s1 = malloc(sizeof(S) + 8);
 //	S* s2 = malloc(sizeof(S) + 8);
@@ -275,62 +283,6 @@ void test_compile_push(void) {
 //	TEST_ASSERT_EQUAL_PTR(w2, find(w4, "swap"));
 //	TEST_ASSERT_EQUAL_PTR(w1, find(w4, "dup"));
 //	TEST_ASSERT_NULL(find(w3, ">r"));
-//}
-//
-//void test_allot(void) {
-//	int data_size = 1024, code_size = 1024;;
-//	H* bl = init(data_size, code_size);
-//	TEST_ASSERT_NOT_NULL(bl);
-//	int fpairs = (((C*)bl) + bl->dsize - (C*)(&(bl->data[0]))) / 2;
-//	TEST_ASSERT_EQUAL_INT(fpairs, length(bl->fhead));
-//	
-//	TEST_ASSERT_EQUAL_INT(0, FREE(bl));
-//
-//	TEST_ASSERT_EQUAL_INT(0, allot(bl, 2));
-//	TEST_ASSERT_EQUAL_INT(fpairs - 1, length(bl->fhead));
-//	TEST_ASSERT_EQUAL_INT(2, bl->here - &(bl->data[0]));
-//	TEST_ASSERT_EQUAL_INT(14, FREE(bl));
-//
-//	TEST_ASSERT_EQUAL_INT(0, allot(bl, 33));
-//	TEST_ASSERT_EQUAL_INT(fpairs - 3, length(bl->fhead));
-//	TEST_ASSERT_EQUAL_INT(35, bl->here - &(bl->data[0]));
-//	TEST_ASSERT_EQUAL_INT(13 , FREE(bl));
-//
-//	// TODO: This one should fail!!
-//	//TEST_ASSERT_EQUAL_INT(-1, allot(bl, bl->dsize));
-//	TEST_ASSERT_EQUAL_INT(-1, allot(bl, 65536));
-//	// TODO: Correctly test extrem cases
-//	//TEST_ASSERT_EQUAL_INT(fpairs - 3, length(bl->fhead));
-//	//TEST_ASSERT_EQUAL_INT(35, bl->here - &(bl->data[0]));
-//	//TEST_ASSERT_EQUAL_INT(125, FREE(bl));
-//
-//	deinit(bl);
-//}
-//
-//void test_cons_and_reclaim(void) {
-//	int data_size = 1024, code_size = 1024;
-//	H* bl = init(data_size, code_size);
-//	TEST_ASSERT_NOT_NULL(bl);
-//	int fpairs = (((C*)bl) + bl->dsize - (C*)(&(bl->data[0]))) / 2;
-//
-//	TEST_ASSERT_EQUAL_INT(fpairs, length(bl->fhead));
-//
-//	P *i1 = cons(bl, 0, 0);
-//	TEST_ASSERT_EQUAL_INT(fpairs - 1, length(bl->fhead));
-//
-//	P *i2 = cons(bl, 0, 0);
-//	TEST_ASSERT_EQUAL_INT(fpairs - 2, length(bl->fhead));
-//
-//	reclaim(bl, i1);
-//	TEST_ASSERT_EQUAL_INT(fpairs - 1, length(bl->fhead));
-//
-//	reclaim(bl, i2);
-//	TEST_ASSERT_EQUAL_INT(fpairs, length(bl->fhead));
-//
-//	TEST_ASSERT_EQUAL(i1, i2->cdr);
-//	TEST_ASSERT_EQUAL(i2, bl->fhead);
-//	
-//	deinit(bl);
 //}
 //
 //void test_stack(void) {
@@ -453,6 +405,8 @@ void test_compile_push(void) {
 int main(void) {
 	UNITY_BEGIN();
 
+	// Context and compilation tests
+
 	RUN_TEST(test_block_initialization);
 
 	RUN_TEST(test_compile_byte);
@@ -463,17 +417,16 @@ int main(void) {
 	RUN_TEST(test_compile_cfunc);
 	RUN_TEST(test_compile_push);
 
+	// Memory management tests
 
-	//RUN_TEST(test_is_aligned);
-	//RUN_TEST(test_as_cells);
-	//RUN_TEST(test_as_bytes);
-	//
-	//RUN_TEST(test_list_length);
+	RUN_TEST(test_list_length);
+
+	RUN_TEST(test_init_free);
+	RUN_TEST(test_allot);
+	RUN_TEST(test_cons_and_reclaim);
 
 	//RUN_TEST(test_find_word);
 
-	//RUN_TEST(test_allot);
-	//RUN_TEST(test_cons_and_reclaim);
 	//RUN_TEST(test_stack);
 
 	////RUN_TEST(test_fib);

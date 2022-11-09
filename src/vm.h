@@ -24,14 +24,26 @@ typedef struct {
 	} data;
 } STR;
 
+typedef struct _P {
+	struct _P* cdr;
+	C car;
+} P;
+
 typedef struct _CTX {
-	C dsize, csize;	// Data size and Code size segments
+	C dsize, csize;	// Data size and Code size segments in bytes
 	C dhere, chere;	// Indexes to free space on data segment and on code segment
 	F* Fx;					// Address of function to call from C
 	C Lx;						// Index register and Literal register for C/ASM communication
+	P* ftail,* lowest,* fhead;	// Free list important pairs
 	B* code;				// Start of executable Code space
 	B data[];				// Start of non-executable Data space
 } CTX;
+
+#define ALIGN(addr, bound)	(((C)addr + ((C)bound - 1)) & ~((C)bound - 1))
+
+// CONTEXT AND COMPILATION ----------------------------------------------------
+
+void init_free(CTX*);
 
 CTX* init(C dsize, C csize) {
 #if __linux__
@@ -42,7 +54,7 @@ CTX* init(C dsize, C csize) {
 	C PAGESIZE = si.dwPageSize;
 #endif
 
-	csize = (csize + (PAGESIZE - 1)) & ~(PAGESIZE - 1);
+	csize = ALIGN(csize, PAGESIZE);
 
 	CTX* ctx = malloc(dsize);
 	if (!ctx) return NULL;
@@ -53,6 +65,8 @@ CTX* init(C dsize, C csize) {
 	ctx->chere = 0;
 	ctx->Fx = NULL;
 	ctx->Lx = 0;
+
+	ctx->ftail = ctx->lowest = ctx->fhead = NULL;
 
 #if __linux__
 	ctx->code = mmap(NULL, csize, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
@@ -67,6 +81,8 @@ CTX* init(C dsize, C csize) {
 		return NULL;
 	}
 #endif
+
+	init_free(ctx);
 
 	return ctx;
 }
@@ -202,3 +218,74 @@ B* compile_push(CTX* ctx, F func, C lit, STR* str) {
 #elif _WIN32
 #define CALL(f, ctx)	((B* (*)(B*, CTX*))(f))(ctx->code, ctx)
 #endif
+
+// MEMORY MANAGEMENT ----------------------------------------------------------
+
+C length(P* list) {
+	for (C a = 0;; a++) { if (!list) { return a; } else { list = list->cdr; } }
+}
+
+void init_free(CTX* ctx) {
+	P* p = ctx->ftail = (P*)(ALIGN(((B*)ctx) + ctx->dhere, sizeof(P)));
+
+	while (p <= (P*)(((B*)ctx) + ctx->dsize - sizeof(P))) {	
+		p->cdr = p - 1;
+		p->car = (C)(p + 1);
+		p++;
+	}
+
+	ctx->lowest = ctx->fhead = p - 1;
+	ctx->fhead->car = (C)NULL;
+	ctx->ftail->cdr = NULL;
+}
+
+// Allocates bytes in groups of pairs of cells, as memory allocated is taken
+// from the doubly linked list.
+
+#define FREE(ctx)		((B*)(ctx->ftail) - (((B*)ctx) + ctx->dhere))
+
+C allot(CTX* ctx, C bytes /* number of bytes to allocate */) {
+	// TODO: Allow negative numbers too
+	// TODO: Extreme cases are not correctly tested
+	while (FREE(ctx) < bytes) {
+		if ((P*)(ctx->ftail->car) - ctx->ftail != 1 || (P*)(ctx->ftail->car) == ctx->lowest) {
+			// Not enough contiguous free pairs
+			return -1;
+		} else {
+			// TODO: This should be done in a temporary variable to keep things like
+			// they were if not enough memory to allocate
+			ctx->ftail = (P*)ctx->ftail->car;
+		}
+	}
+	ctx->ftail->cdr = NULL;
+
+	ctx->dhere += bytes;
+
+	return 0;
+}
+
+// Construct a pair by taking one free pair from the doubly linked list.
+
+P* cons(CTX* ctx, C car, P* cdr) {
+	if (ctx->fhead == NULL) return NULL;
+
+	P* p = ctx->fhead;
+	ctx->fhead = p->cdr;
+	ctx->fhead->car = (C)NULL;
+
+	p->car = car;
+	p->cdr = cdr;
+
+	if (p < ctx->lowest) ctx->lowest = p;
+
+	return p;
+}
+
+// Return a pair to the free doubly linked list when its not in use anymore.
+
+void reclaim(CTX* ctx, P* p /* pair that its returned */) {
+	p->car = (C)NULL;
+	p->cdr = ctx->fhead;
+	ctx->fhead->car = (C)p;
+	ctx->fhead = p;
+}
