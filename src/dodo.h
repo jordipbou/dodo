@@ -1,142 +1,181 @@
-#include<stdio.h>
+#include<stdint.h>
+#include<stddef.h>
 
-#include "capybara.h"
+// Datatypes
 
-typedef struct _PAIR {
-	struct _PAIR* cdr;
-	CELL car;
-} PAIR;
-
-// Strings are a mixture of C zero terminated strings and Forth counted strings 
-// but with 16 bits for the count for an easy work both in C and Dodo.
+typedef int8_t BYTE;
+typedef int16_t WORD;		
+typedef int32_t HALF;		// Used mainly as index inside bytes and nodes arrays
+typedef int64_t CELL;
 
 typedef struct {
-	HALF len;
-	BYTE str[4];
-} STR;
+	HALF next;
+	WORD type;
+	WORD len;
+	union {
+		CELL prev;		// Doubly linked list node
+		CELL value;		// List node
+		struct {			// Dictionary node
+			HALF key;		// Pointer to key string (array) node
+			HALF val;		// Pointer to value node
+		};						
+		BYTE data[8];	// Array node
+	};
+} NODE;
 
-typedef struct _ENTRY {
-	struct _ENTRY* next;
-	HALF flags;
-	STR* name;
-	STR* source;
-	HALF codelen;
-	BYTE* code;
-	BYTE data[];
-} ENTRY;
+#define T_NUMBER				0
+#define T_LIST					8
+#define T_ARRAY					16	
+#define T_DICT					32	
+
+#define T_F_PRIMITIVE		64
+#define T_F_DOCOL				128
+#define T_F_DOVAR				256
+#define T_F_DOCONST			512
+#define T_F_IMMEDIATE		1024
+
+#define T_FREE					16384
+#define T_NIL						32768
+
+// Virtual machine context
 
 typedef struct {
-	CTX ctx;
-	HALF flags;
-	ENTRY* dict;
-	PAIR* dstack;			// Data stack
-	PAIR* rstack;			// Return stack
-	PAIR* lstack;			// Lists stack, used to manage lists memory more easily
-	PAIR* ftail, * flowest, * fhead;
-	// More stacks can be easily added (like control flow stack or exception
-	// stack) without taxing the memory.
-	PAIR* input;
-} DODO;
+	CELL size;						// Size of block
+	HALF bottom, here;		// Pointers to lowest and highest allocated bytes
+	HALF there, top;			// Pointers to lowest and highest nodes
+	HALF dstack, rstack;	// Pointers to first node in data and return stacks
+	HALF cstack, xstack;	// Pointers to first node in control and exception stacks
+	HALF dict, TIB;				// Pointers to dictionary list and terminal input buffer
+	NODE fstack;					// Doubly linked list of free nodes (also acts as NIL)
+} CTX;
 
-#define COMPILATION_STATE		1			// 0 interpreting 1 compiling
-#define BYE									2
+#define NIL		(offsetof(CTX, fstack) / sizeof(NODE))
 
-// DODO context initialization and destruction
+CTX* init(BYTE* block, CELL size) {
+	CTX* c = (CTX*)block;	
+	c->size = size;
 
-DODO* init_dodo() {
-	DODO* dodo = (DODO*)init(10*pagesize(), 10*pagesize());
-	if (!dodo) return NULL;
+	c->bottom = c->here = (HALF)sizeof(CTX);
+	c->there = (HALF)(sizeof(CTX) / sizeof(NODE));
+	c->top = (HALF)((size / sizeof(NODE)) - 1);
 
-	// Reserve enough space for DODO header
-	allot((CTX*)dodo, sizeof(DODO) - sizeof(CTX));
-	align((CTX*)dodo);
-	dodo->ctx.bottom = dodo->ctx.dhere;
-
-	dodo->ftail = (PAIR*)(dodo->ctx.dhere);
-	for (PAIR* p = dodo->ftail; p < (PAIR*)(top((CTX*)dodo) - sizeof(PAIR)); p++) {
-		p->cdr = p - 1;
-		p->car = (CELL)(p + 1);
-		dodo->fhead = p;
+	NODE* nodes = (NODE*)c;
+	for (HALF i = c->there; i <= c->top; i++) {
+		nodes[i].type = T_FREE;
+		nodes[i].next = i - 1;
+		nodes[i].prev = i + 1;
 	}
-	dodo->ftail->cdr = NULL;
-	dodo->fhead->car = (CELL)NULL;
-	dodo->flowest = dodo->fhead;
+	nodes[c->there].next = NIL;
+	nodes[c->top].prev = NIL;
+
+	c->dstack = NIL;
+	c->rstack = NIL;
+	c->cstack = NIL;
+	c->xstack = NIL;
+
+	c->fstack.next = c->top;
+	c->fstack.prev = c->there;
+	c->fstack.type = T_NIL;
+
+	return c;
 }
 
-void deinit_dodo(DODO* dodo) {
-	deinit((CTX*)dodo);
-}
+// Memory management
 
-PAIR* insert(DODO* dodo, PAIR* list, CELL car) {
-	if (dodo->fhead == NULL) return NULL;
+#define NODE_AT(c, idx)		(((NODE*)c)[idx])
+#define T(c)							NODE_AT(c, c->dstack)
+#define S(c)							NODE_AT(c, T(c).next)
 
-	// Remove one pair from unused list
-	PAIR* p = dodo->fhead;
-	dodo->fhead = p->cdr;
+#define RESERVED(c)			((c->there * sizeof(NODE)) - c->here)
 
-	// Add it to new list
-	p->cdr = list->cdr;
-	p->car = car;
-	list->cdr = p;
-
-	return p;
-}
-
-CELL remove(DODO* dodo, PAIR* list, PAIR* p) {
-	CELL value = p->car;
-	
-	p->cdr = dodo->fhead;
-	dodo->fhead = p;
-	p->car = (CELL)NULL;
-}
-
-void PUSH(DODO* dodo, CELL value) {
-	cons(dodo, dodo->dstack, value);
-}
-
-CELL POP(DODO* dodo) {
-	if (dodo->dstack == NULL) { /* TODO: Stack underflow */ }
-	PAIR* p = dodo->dstack;
-	CELL value = p->car;
-	dodo->dstack = p->cdr;
-	reclaim(dodo, p);
-	return value;
-}
-
-CELL length(PAIR* list) {
-	for(CELL a = 0;; a++) { if (!list) { return a; } else { list = list->cdr; } }
-}
-
-void _dump_stack(DODO* dodo) {
-	printf("<%ld> ", length(dodo->dstack));
-	for (PAIR* item = dodo->dstack; item != NULL; item = item->cdr) {
-		printf("%ld ", item->car);
+CELL length(CTX* c, HALF node) { 
+	NODE* nodes = (NODE*)c;
+	for (CELL c = 0;; c++) {
+		if (node == NIL) { return c; }
+		else { node = nodes[node].next; }
 	}
-	printf("\n");
 }
 
-void _free_pairs(DODO* dodo) {
-	PUSH(dodo, length(dodo->fhead));
-}
+#define FREE_NODES(c)		(length(c, c->fstack.next))
+#define DEPTH(c)				(length(c, c->dstack))
 
-void _bye(DODO* dodo) {
-	dodo->flags |= BYE;
-}
-
-void _read(DODO* dodo) {
-	if (dodo->input) {
-		// Parse tokens
+void allot(CTX* c, HALF bytes) {
+	if (bytes == 0) return;
+	if (bytes < 0) {
+		// TODO: Nodes should be returned to end of free doubly linked list !!
+		if ((c->here + bytes) > c->bottom) c->here += bytes;
+		else c->here = c->bottom;
 	} else {
-		CELL k = 0;
-		while (k != KEY_RETURN) {
-			
+		while (RESERVED(c) < bytes) {
+			if (NODE_AT(c, c->there).type & T_FREE) {
+				NODE_AT(c, NODE_AT(c, c->there).prev).next = NIL;
+				c->there++;	
+				c->fstack.prev = c->there;
+			} else {
+				// ERROR: Not enough contiguous nodes to free (Not enough memory)
+			}
 		}
+		c->here += bytes;
 	}
 }
 
-void _repl(DODO* dodo) {
-	while (!(dodo->flags & BYE)) {
-		_read(dodo);
-		_eval(dodo);
-	}
+void hold(NODE* nodes, HALF* src, HALF* dest, CELL val) {
+	HALF node = *src;
+	*src = nodes[node].next;
+	nodes[node].next = *dest;
+	*dest = node;
+	nodes[node].type = T_NUMBER;
+	nodes[node].val = val;
 }
+
+CELL release(NODE* nodes, HALF* src, HALF* dest) {
+	HALF node = *src;
+	*src = nodes[node].next;
+	nodes[node].next = *dest;
+	*dest = node;
+	return nodes[node].val;
+}
+
+#define push(c, val)		hold((NODE*)c, &c->fstack.next, &c->dstack, val)
+#define pop(c)					release((NODE*)c, &c->dstack, &c->fstack.next)
+#define rpush(c, val)		hold((NODE*)c, &c->fstack.next, &c->rstack, val)
+#define rpop(c)					release((NODE*)c, &c->rstack, &c->fstack.next)
+#define cpush(c, val)		hold((NODE*)c, &c->fstack.next, &c->cstack, val)
+#define cpop(c)					release((NODE*)c, &c->cstack, &c->fstack.next)
+#define xpush(c, val)		hold((NODE*)c, &c->fstack.next, &c->xstack)
+#define xpop(c)					release((NODE*)c, &c->xstack, &c->fstack.next)
+
+// Primitives
+
+void _add(CTX* c) { CELL x = pop(c); T(c).val += x; }
+void _dec(CTX* c) { T(c).val--; }
+
+void _gt(CTX* c) { CELL x = pop(c); T(c).val = T(c).val > x; }
+
+void _dup(CTX* c) { push(c, T(c).val); }
+void _swap(CTX* c) { CELL t = S(c).val; S(c).val = T(c).val; T(c).val = t; }
+
+void _docol(CTX* c) {
+}
+
+void _dovar(CTX* c) {
+}
+
+void _doconst(CTX* c) {
+}
+
+//void _create(CTX* c) {
+//	NODE* entry = &(((BYTE*)c)[c->here]);
+//	// Should take name from input string !!!!
+//	HALF name_len = strlen(name);
+//	allot(c, sizeof(NODE) + name_len - 7 + sizeof(CELL));
+//	// TODO: Check memory error
+//	entry->next = c->dict;
+//	entry->type = T_ENTRY;
+//	entry->flags = F_DOVAR;
+//	entry->name_len = name_len;
+//	for (CELL i = 0; i < entry->name_len; i++) {
+//		entry->data[i] = name[i];
+//	}
+//	entry->data[entry->name_len] = 0;
+//}

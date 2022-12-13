@@ -1,6 +1,30 @@
  --			                                                                      
 ({o ~~/)
 
+Based on Forth, APL/K, Lisp and Om. 
+
+Manual memory management based on stacks and manual freeing of resources.
+
+# VM Architecture
+
+* Based on contiguous memory and pairs.
+* Relative addresses (32 bits (16 bits on 32 bits system)):
+	- CPUs use relative addresses for jumps
+	- Allows saving an image
+	- Allows use of link in pairs without extracting type
+
+
+
+
+
+
+
+
+
+
+
+
+
 # DODO Layers
 
 C/ASM Interoperability and compilation

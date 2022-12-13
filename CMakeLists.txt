@@ -16,16 +16,15 @@ add_executable (
 	dodo 
 	src/dodo.c)
 
-target_include_directories (dodo PRIVATE src deps/capybara/src)
+target_include_directories (dodo PRIVATE src)
 
 set_property (TARGET dodo PROPERTY C_STANDARD 99)
-
 
 add_executable (
 	tests
 	src/tests.c
 	deps/Unity/src/unity.c)
 
-target_include_directories (tests PRIVATE src deps/capybara/src deps/Unity/src)
+target_include_directories (tests PRIVATE src deps/Unity/src)
 
 set_property (TARGET tests PROPERTY C_STANDARD 99)
