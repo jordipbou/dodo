@@ -3,24 +3,29 @@
 
 Based on Forth, APL/K, Lisp and Om. 
 
-Manual memory management based on stacks and manual freeing of resources.
+# Memory model
 
-# VM Architecture
+Memory is divided in context header, contiguous memory and node memory regions.
 
-* Based on contiguous memory and pairs.
-* Relative addresses (32 bits (16 bits on 32 bits system)):
-	- CPUs use relative addresses for jumps
-	- Allows saving an image
-	- Allows use of link in pairs without extracting type
+## Node based memory region
 
+Region is divided in blocks of two cells. Initially, they are all connected
+as a linked list of free nodes. As they are being used (on the stack or
+anywhere) there are taken from that list. Used nodes can be returned back
+to the list.
 
+## Contiguous region
 
+As in Forth. 
 
+# Words
 
-
-
-
-
+	next word
+	type
+	code
+	name	->	data stack (if closure, nil if not)
+	--
+	data
 
 
 

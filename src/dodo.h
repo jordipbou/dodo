@@ -1,167 +1,257 @@
 #include<stdint.h>
-#include<stddef.h>
-
-// Datatypes
 
 typedef int8_t BYTE;
-typedef int16_t WORD;		
-typedef int32_t HALF;		// Used mainly as index inside bytes and nodes arrays
-typedef int64_t CELL;
+typedef intptr_t CELL;		// Data stack item's size (could be 16, 32 or 64 bits)
 
 typedef struct {
-	HALF next;
-	WORD type;
-	WORD len;				//Array length
-	union {
-		CELL prev;		// Doubly linked list for free nodes
-		CELL value;		// List node
-		BYTE data[8];	// Array node
-	};
-} NODE;
-
-#define T_NUMBER				0
-#define T_LIST					8
-#define T_ARRAY					16	
-#define T_DICT					32	
-
-#define T_F_PRIMITIVE		512	
-#define T_F_DOCOL				1024
-#define T_F_DOVAR				2048
-#define T_F_DOCONST			4096
-#define T_F_IMMEDIATE		8192
-
-#define T_FREE					16384
-#define T_NIL						32768
-
-// Virtual machine context
+	CELL car;					// First item, also next on lists
+	CELL cdr;					// Second item, also prev on free stack
+} PAIR;
 
 typedef struct {
-	CELL size;						// Size of block
-	HALF bottom, here;		// Pointers to lowest and highest allocated bytes
-	HALF there, top;			// Pointers to lowest and highest nodes
-	HALF dstack, rstack;	// Pointers to data and return stacks
+	CELL status;								// Status and error codes
+	CELL bottom, here;					// Pointers to lowest and highest allocated bytes
+	CELL there, top;						// Pointers to lowest and highest nodes
+	CELL dstack, free, rstack;	// Pointers to data, free and return stacks
+	CELL dict;									// Pointer to last defined word
+	CELL Ax;
 } CTX;
 
+typedef void (*FUNC)(CTX*);
+
+#define S_OK								0
+
+#define T_FREE							0
+#define T_LIT								1
+#define T_WORD							2
+#define T_QUOT							3
+
 #define NIL									0
+
 #define ALIGN(addr, bound)	((CELL)addr + ((CELL)bound-1)) & ~((CELL)bound-1)
 
 CTX* init(BYTE* block, CELL size) {
-	CTX* c = (CTX*)block;	
-	// TODO: Size must be NODE aligned (floor aligned, as block is fixed size)
-	c->size = size;
+	CTX* ctx = (CTX*)block;	
+	ctx->bottom = ctx->here = (CELL)((BYTE*)ctx) + sizeof(CTX);
+	ctx->there = (CELL)ALIGN(((BYTE*)ctx) + sizeof(CTX), sizeof(PAIR));
+	ctx->top = (CELL)ALIGN((((BYTE*)ctx) + size) - sizeof(PAIR) - 1, sizeof(PAIR));
 
-	c->bottom = c->here = (HALF)sizeof(CTX);
-	// TODO: c->there must be NODE aligned, independent of CTX size
-	c->there = (HALF)(sizeof(CTX) / sizeof(NODE));
-	c->top = (HALF)((size / sizeof(NODE)) - 1);
-
-	NODE* nodes = (NODE*)c;
-	for (HALF i = c->there; i <= c->top; i++) {
-		nodes[i].type = T_FREE;
-		nodes[i].next = i + 1;
-		nodes[i].prev = i - 1;
+	for (CELL i = ctx->there; i <= ctx->top; i += sizeof(PAIR)) {
+		PAIR* p = (PAIR*)i;
+		p->car = i == ctx->there ? NIL : i - sizeof(PAIR);
+		p->cdr = i == ctx->top ? NIL : i + sizeof(PAIR);
 	}
-	nodes[c->there].prev = NIL;
-	nodes[c->top].next = NIL;
 
-	c->dstack = c->top;
-	c->rstack = NIL;
+	ctx->dstack = ctx->rstack = ctx->dict = NIL;
+	ctx->free = ctx->top;
 
-	return c;
+	ctx->status = S_OK;
+
+	return ctx;
 }
 
-// Memory management
-
-#define NODE_AT(c, idx)		(((NODE*)c)[idx])
-#define STACK(c)					NODE_AT(c, c->dstack)
-#define T(c)							NODE_AT(c, STACK(c).next)
-#define S(c)							NODE_AT(c, T(c).next)
-
-#define RESERVED(c)			((c->there * sizeof(NODE)) - c->here)
-
-#define DIR_NEXT				1
-#define DIR_PREV				0
-
-CELL length(CTX* c, CELL direction, HALF node) { 
-	NODE* nodes = (NODE*)c;
-	for (CELL c = 0;; c++) {
-		if (node == NIL) { return c; }
-		else { 
-			if (direction == DIR_NEXT) {
-				node = nodes[node].next;
-			} else {
-				node = nodes[node].prev;
-			}
-		}
+CELL depth(CELL p) { 
+	CELL c = 0; 
+	while (1) { 
+		if (p == 0) { return c; } 
+		else { c++; p = ((PAIR*)p)->car & -4; } 
 	}
 }
 
-#define FREE_NODES(c)		(length(c, DIR_PREV, NODE_AT(c, c->dstack).prev))
-#define DEPTH(c)				(length(c, DIR_NEXT, NODE_AT(c, c->dstack).next))
+CELL cons(CTX* ctx, CELL car, CELL type, CELL cdr) {
+	PAIR* p = (PAIR*)ctx->free;
+	ctx->free = ((PAIR*)ctx->free)->car & -4;
+	p->car = car | type;
+	p->cdr = cdr;
+	return (CELL)p;
+}
 
-void allot(CTX* c, HALF bytes) {
+void push(CTX* ctx, CELL n) { ctx->dstack = cons(ctx, ctx->dstack, T_LIT, n); }
+void rpush(CTX* ctx, CELL n) { ctx->rstack = cons(ctx, ctx->rstack, T_LIT, n); }
+
+CELL reclaim(CTX* ctx, CELL* src) {
+	PAIR* p = (PAIR*)*src;
+	CELL v = p->cdr;
+	CELL n = p->car & -4;
+	p->car = ctx->free;
+	((PAIR*)ctx->free)->cdr = (CELL)p;
+	ctx->free = (CELL)p;
+	*src = n;
+	return v;
+}
+
+CELL pop(CTX* ctx) { return reclaim(ctx, &ctx->dstack); }
+CELL rpop(CTX* ctx) { return reclaim(ctx, &ctx->rstack); }
+
+#define RESERVED(ctx)			(ctx->there - ctx->here)
+
+void _allot(CTX* ctx) {
+	CELL bytes = pop(ctx);
 	if (bytes == 0) return;
 	if (bytes < 0) {
-		// TODO: Nodes should be returned to end of free doubly linked list !!
-		if ((c->here + bytes) > c->bottom) c->here += bytes;
-		else c->here = c->bottom;
+		if ((ctx->here - bytes) > ctx->bottom) ctx->here -= bytes;
+		else ctx->here = ctx->bottom;
+		// TODO: Available pairs should be returned to end of free doubly linked list !!
 	} else {
-		while (RESERVED(c) < bytes) {
-			if (NODE_AT(c, c->there).type & T_FREE) {
-				NODE_AT(c, NODE_AT(c, c->there).next).prev = NODE_AT(c, c->there).prev;
-				c->there++;	
+		while (RESERVED(ctx) < bytes) {
+			if ((((PAIR*)ctx->there)->car & 3) == T_FREE) {
+				((PAIR*)(((PAIR*)ctx->there)->cdr))->car = ((PAIR*)ctx->there)->car;
+				ctx->there += sizeof(PAIR);	
 			} else {
 				// ERROR: Not enough contiguous nodes to free (Not enough memory)
 			}
 		}
-		c->here += bytes;
+		ctx->here += bytes;
 	}
 }
 
-void push(CTX* c, CELL n) {
-	c->dstack = STACK(c).prev;
-	T(c).value = n;
-	T(c).type = T_NUMBER;
-}
-
-CELL pop(CTX* c) {
-	CELL n = T(c).value;
-	T(c).prev = c->dstack;
-	T(c).type = T_FREE;
-	c->dstack = STACK(c).next;
-
-	return n;
-}
-
-// TODO: hold function to add node to stacks/lists other than data stack
-// TODO: release function to return node to free doubly linked list
-//void hold(NODE* nodes, HALF* src, HALF* dest, CELL val) {
-//	HALF node = *src;
-//	*src = nodes[node].next;
-//	nodes[node].next = *dest;
-//	*dest = node;
-//	nodes[node].type = T_NUMBER;
-//	nodes[node].value = val;
+//void _node_align(CTX* c) { c->here = c->there; }
+//
+//// TODO: align 
+//
+//#define T(c)								T_NODE(c)->value
+//#define S(c)								S_NODE(c)->value
+//
+//void _dup(CTX* c) { push(c, T(c)); }
+//void _swap(CTX* c) { CELL t = S(c); S(c) = T(c); T(c) = t; }
+//
+//void _add(CTX* c) { CELL x = pop(c); T(c) += x; }
+//
+//void _dec(CTX* c) { T(c)--; }
+//
+//void _gt(CTX* c) { CELL x = pop(c); T(c) = T(c) > x; }
+//
+//void _header(CTX* c) {
+//	CELL name_length = pop(c);
+//	BYTE* name_addr = (BYTE*)pop(c);
+//
+//	node_align(c);
+//
+//	NODE* name = NODE_AT(c, c->here);
+//	push(c, sizeof(NODE)); allot(c);
+//
+//	name->next = NIL;
+//	name->type = T_ARRAY;
+//	name->len = name_length;
+//
+//	push(c, name_length - 6);
+//	allot(c);
+//
+//	node_align(c);
+//
+//	for (CELL i = 0; i < ((((BYTE*)c) + c->here) - &name->data); i++) {
+//		if (i < name_length) { name->data[i] = name_addr[i]; }
+//		else { name->data[i] = 0; }
+//	}
+//
+//	NODE* word = NODE_AT(c, c->here);
+//	push(c, sizeof(NODE)); allot(c);
+//	word->next = NIL;			// Will point to c->dict after reveal
+//	word->type = T_DICT;
+//	word->name = REL(name);
+//	word->code = NIL;
+//
+//	// Data will start after word node, but must be allocated
 //}
 //
-//CELL release(NODE* nodes, HALF* src, HALF* dest) {
-//	HALF node = *src;
-//	*src = nodes[node].next;
-//	nodes[node].next = *dest;
-//	*dest = node;
-//	return nodes[node].value;
-//}
-
-// TODO: rpush and rpop
-//#define rpush(c, val)		hold((NODE*)c, &c->fstack.next, &c->rstack, val)
-//#define rpop(c)					release((NODE*)c, &c->rstack, &c->fstack.next)
-
-// Primitives
-
-void _add(CTX* c) { CELL x = pop(c); T(c).value += x; }
-void _dec(CTX* c) { T(c).value--; }
-
-void _gt(CTX* c) { CELL x = pop(c); T(c).value = T(c).value > x; }
-
-void _dup(CTX* c) { push(c, T(c).value); }
-void _swap(CTX* c) { CELL t = S(c).value; S(c).value = T(c).value; T(c).value = t; }
+////void cons(CTX* c, HALF next) {
+////	// TODO: Takes one node from free stack (the one previous to stack)
+////	// TODO: Sets next and type to T_LIST
+////	// TODO: Pushes address to stack
+////}
+////
+////void forget(CTX* c, HALF addr) {
+////	// TODO: Returns nodes recursively (takes type into account) to free stack
+////}
+////
+////// Primitives
+////
+////// TODO: Check stack errors ?!
+////
+////void _add(CTX* c) { CELL x = pop(c); T(c).value += x; }
+////void _sub(CTX* c) { CELL x = pop(c); T(c).value -= x; }
+////void _mul(CTX* c) { CELL x = pop(c); T(c).value *= x; }
+////void _div(CTX* c) { CELL x = pop(c); T(c).value /= x; }
+////void _mod(CTX* c) { CELL x = pop(c); T(c).value %= x; }
+////
+////void _dec(CTX* c) { T(c).value--; }
+////void _inc(CTX* c) { T(c).value++; }
+////
+////void _gt(CTX* c) { CELL x = pop(c); T(c).value = T(c).value > x; }
+////void _lt(CTX* c) { CELL x = pop(c); T(c).value = T(c).value < x; }
+////void _eq(CTX* c) { CELL x = pop(c); T(c).value = T(c).value == x; }
+////void _neq(CTX *c) { CELL x = pop(c); T(c).value = T(c).value != x; }
+////
+////void _dup(CTX* c) { push(c, T(c).value); }
+////void _swap(CTX* c) { CELL t = S(c).value; S(c).value = T(c).value; T(c).value = t; }
+////
+////void _ret(CTX* c) { c->status = S_RET; }
+////
+////void _store(CTX* c) { CELL i = pop(c); CELL x = pop(c); *((CELL*)(((BYTE*)c) + i)) = x; }
+////void _fetch(CTX* c) { CELL i = pop(c); push(c, *((CELL*)(((BYTE*)c) + i))); }
+////
+////void _comma(CTX* c) { 
+////	CELL x = pop(c); 
+////	HALF here = c->here;
+////	allot(c, sizeof(CELL));
+////	*((CELL*)(c + here)) = x;
+////}
+////
+////// Definition creation
+////
+////void _header(CTX* c, BYTE* name, HALF type) {
+////	//align2(c);
+////	NODE* word = (((NODE*)c) + c->here);
+////	allot(c, sizeof(NODE));
+////	word->next = c->dict;	
+////	word->type = type;
+////	word->len = strlen(name);
+////	// TODO: Name is fixed to less than 6 here
+////	for (CELL i = 0; i < 6; i++) {
+////		if (i < word->len) {
+////			word->data[i] = name[i];
+////		} else {
+////			word->data[i] = 0;
+////		}
+////	}
+////}
+////
+////// Inner interpreter
+////
+////// DOUBT: Right now, I'm not using a return stack, as every call is made
+////// directly in C, is that correct? Can a standard FORTH be implemented
+////// that way?
+////// It seems the only real problem will be with control flow words. Only!
+////
+////void _execute(CTX*c, NODE* word);
+////
+////#define DFA(w)		((CELL*)(ALIGN(w + sizeof(CELL) + w->len - 6, sizeof(CELL))))
+////
+////void _docol(CTX* c, CELL* dfa) {
+////	NODE* nodes = (NODE*)c;
+////	HALF* word = (HALF*)dfa;	
+////	while (c->status == S_OK) {
+////		_execute(c, &NODE_AT(c, *word));
+////		word++;
+////	}
+////}
+////
+////void _dovar(CTX* c, CELL* dfa) {
+////	push(c, (CELL)dfa);
+////}
+////
+////void _doconst(CTX* c, CELL* dfa) {
+////	push(c, *dfa);
+////}
+////
+////void _execute(CTX* c, NODE* word) {
+////	if (word->type && T_F_PRIMITIVE) {
+////		((FUNC)(DFA(word)))(c);
+////	} else if (word->type && T_F_DOCOL) { 
+////		_docol(c, DFA(word));
+////	} else if (word->type && T_F_DOVAR) {
+////		_dovar(c, DFA(word));
+////	} else if (word->type && T_F_DOCONST) {
+////		_doconst(c, DFA(word));
+////	}
+////}
