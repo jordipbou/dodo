@@ -68,24 +68,26 @@ void allot(CTX* ctx, CELL bytes) {
 }
 
 void align(CTX* ctx) { 
-	while(((CELL)ctx->here) != ALIGN(ctx->here, sizeof(CELL))) { allot(ctx, 1); } 
+	allot(ctx, ALIGN(ctx->here, sizeof(CELL)) - ((CELL)ctx->here)); 
 }
 
-CELL depth(PAIR* p) {
+CELL depth(PAIR* p) {	
 	CELL c = 0; 
-	while (1) { 
-		if (p == NIL) { return c; } 
-		else { c++; p = NEXT(p); }
-	}
+	while (1) { if (p == NIL) { return c; } else { c++; p = NEXT(p); } }
 }
 
-PAIR* cons(CTX* ctx, PAIR* next, CELL type, CELL value) {
+PAIR* cons(CTX* ctx, CELL value, CELL type, PAIR* next) {
 	PAIR* p = ctx->free;
 	ctx->free = p->next;
 	p->next = (PAIR*)((CELL)next | type);
 	p->value = value;
 	return p;
 }
+
+#define ncons(ctx, value, next)		cons(ctx, value, T_NUM, next)
+#define pcons(ctx, value, next)		cons(ctx, value, T_PRIM, next)
+#define wcons(ctx, value, next)		cons(ctx, value, T_WORD, next)
+#define lcons(ctx, value, next)		cons(ctx, value, T_LIST, next)
 
 PAIR* reclaim(CTX* ctx, PAIR* p) {
 	if (p == NIL) return NIL;				
@@ -98,6 +100,11 @@ PAIR* reclaim(CTX* ctx, PAIR* p) {
 }
 
 // --------------------------------------------------------------------------
+
+// TODO: I don't really see a benefit of using different operators for lists
+// and for ctx->dstack, as don't know how to use them inside DODO. Better to
+// use a stack of stacks, or just a default stack (dstack) and all operations
+// work on there.
 
 #define BINOP(name, op) \
 	PAIR* name(CTX* ctx, PAIR* list) { \
@@ -123,11 +130,13 @@ BINOP(lte, <=);
 BINOP(and, &&);
 BINOP(or, ||);
 
-PAIR* dup(CTX* ctx, PAIR* list) { return cons(ctx, list, TYPE(list), list->value); }
+// TODO: Dup it's not deep copying if its a list !!!
+
+PAIR* dup(CTX* ctx, PAIR* list) { return cons(ctx, list->value, TYPE(list), list); }
 void _dup(CTX* ctx) { ctx->dstack = dup(ctx, ctx->dstack); }
 
 #define W_PRIMITIVE					1
-#define W_COLON_DEF	3
+#define W_COLON_DEF					3
 
 #define F_NON_IMMEDIATE			1
 #define F_IMMEDIATE					3
@@ -135,7 +144,6 @@ void _dup(CTX* ctx) { ctx->dstack = dup(ctx, ctx->dstack); }
 #define NFA(w)		((PAIR*)(w->value))
 #define DFA(w)		(NEXT(NFA(w)))
 #define CFA(w)		(NEXT(DFA(w)))
-#define XT(w)			(CFA(w))
 
 PAIR* create(CTX* ctx, BYTE* name, CELL nlen, PAIR* body) {
 	BYTE* here = ctx->here;
@@ -150,10 +158,12 @@ PAIR* create(CTX* ctx, BYTE* name, CELL nlen, PAIR* body) {
 
 	align(ctx);
 
-	PAIR* cfa = body == NIL ? cons(ctx, NIL, W_COLON_DEF, (CELL)ctx->here) : body;
-	PAIR* dfa = cons(ctx, cfa, T_NUM, (CELL)ctx->here);
-	PAIR* nfa = cons(ctx, dfa, F_NON_IMMEDIATE, (CELL)here);
-	PAIR* word = cons(ctx, NIL, T_WORD, (CELL)nfa);
+	PAIR* cfa = body == NIL ? cons(ctx, (CELL)ctx->here, W_COLON_DEF, NIL) : body;
+	PAIR* dfa = ncons(ctx, (CELL)ctx->here, cfa);
+	// TODO: nfa should not point to here, but be a string node itself that
+	// can be freed?
+	PAIR* nfa = cons(ctx, (CELL)here, F_NON_IMMEDIATE, dfa);
+	PAIR* word = wcons(ctx, (CELL)nfa, NIL);
 
 	return word;
 }
@@ -169,11 +179,11 @@ void inner(CTX* ctx, PAIR* ip) {
 		} else {
 			switch (TYPE(ip)) {
 				case T_NUM: 
-					ctx->dstack = cons(ctx, ctx->dstack, T_NUM, ip->value);
+					ctx->dstack = ncons(ctx, ip->value, ctx->dstack);
 					ip = NEXT(ip);
 					break;
 				case T_WORD: 
-					ctx->rstack = cons(ctx, ctx->rstack, T_NUM, (CELL)NEXT(ip));
+					ctx->rstack = ncons(ctx, (CELL)NEXT(ip), ctx->rstack);
 					ip = (PAIR*)ip->value;
 					break;
 				case T_PRIM:
@@ -182,7 +192,8 @@ void inner(CTX* ctx, PAIR* ip) {
 					break;
 				case T_LIST: 
 					// TODO: List should be deep copied here, shouldn't it?
-					ctx->dstack = cons(ctx, ctx->dstack, T_LIST, ip->value);
+					// No, it should just be moved!!
+					ctx->dstack = cons(ctx, ip->value, T_LIST, ctx->dstack);
 					break;
 			}
 		}

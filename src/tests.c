@@ -48,6 +48,10 @@ void test_allot() {
 }
 
 void test_align() {
+	CELL size = 256;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
 	// TODO
 }
 
@@ -59,12 +63,12 @@ void test_cons() {
 	CELL free_nodes = (size - sizeof(CTX)) / sizeof(PAIR);
 
 	TEST_ASSERT_EQUAL_INT(free_nodes, depth(ctx->free));
-	PAIR* p = cons(ctx, NIL, T_NUM, 13);
+	PAIR* p = ncons(ctx, 13, NIL);
 	TEST_ASSERT_EQUAL_INT(free_nodes - 1, depth(ctx->free));
 	TEST_ASSERT_EQUAL_INT(NIL, NEXT(p));
 	TEST_ASSERT_EQUAL_INT(13, p->value);
 	TEST_ASSERT_EQUAL_INT(1, depth(p));
-	PAIR* p2 = cons(ctx, p, T_NUM, 17);
+	PAIR* p2 = ncons(ctx, 17, p);
 	TEST_ASSERT_EQUAL_INT(free_nodes - 2, depth(ctx->free));
 	TEST_ASSERT_EQUAL_INT(p, NEXT(p2));
 	TEST_ASSERT_EQUAL_INT(17, p2->value);
@@ -80,7 +84,7 @@ void test_reclaim() {
 	CELL free_nodes = (size - sizeof(CTX)) / sizeof(PAIR);
 
 	TEST_ASSERT_EQUAL_INT(free_nodes, depth(ctx->free));
-	PAIR* p = cons(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 13), T_NUM, 17), T_NUM, 21);
+	PAIR* p = ncons(ctx, 21, ncons(ctx, 17, ncons(ctx, 13, NIL)));
 	TEST_ASSERT_EQUAL_INT(3, depth(p));
 	TEST_ASSERT_EQUAL_INT(free_nodes - 3, depth(ctx->free));
 	p = reclaim(ctx, p);
@@ -102,7 +106,7 @@ void test_binops() {
 	BYTE block[size];
 	CTX* ctx = init(block, size);
 
-	PAIR* p = cons(ctx, cons(ctx, NIL, T_NUM, 7), T_NUM, 13);
+	PAIR* p = ncons(ctx, 13, ncons(ctx, 7, NIL));
 	TEST_ASSERT_EQUAL_INT(2, depth(p));
 
 	p = add(ctx, p);
@@ -110,160 +114,160 @@ void test_binops() {
 	TEST_ASSERT_EQUAL_INT(1, depth(p));
 	reclaim(ctx, p);
 
-	p = sub(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 13), T_NUM, 7));
+	p = sub(ctx, ncons(ctx, 7, ncons(ctx, 13, NIL)));
 	TEST_ASSERT_EQUAL_INT(p->value, 6);
 	TEST_ASSERT_EQUAL_INT(1, depth(p));
 	reclaim(ctx, p);
 
-	p = mul(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 13), T_NUM, 7));
+	p = mul(ctx, ncons(ctx, 7, ncons(ctx, 13, NIL)));
 	TEST_ASSERT_EQUAL_INT(p->value, 91);
 	TEST_ASSERT_EQUAL_INT(1, depth(p));
 	reclaim(ctx, p);
 
-	p = div(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 30), T_NUM, 5));
+	p = div(ctx, ncons(ctx, 5, ncons(ctx, 30, NIL)));
 	TEST_ASSERT_EQUAL_INT(p->value, 6);
 	TEST_ASSERT_EQUAL_INT(1, depth(p));
 	reclaim(ctx, p);
 
-	p = mod(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 9), T_NUM, 2));
+	p = mod(ctx, ncons(ctx, 2, ncons(ctx, 9, NIL)));
 	TEST_ASSERT_EQUAL_INT(p->value, 1);
 	TEST_ASSERT_EQUAL_INT(1, depth(p));
 	reclaim(ctx, p);
 
 
-	p = gt(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 13), T_NUM, 7));
+	p = gt(ctx, ncons(ctx, 7, ncons(ctx, 13, NIL)));
 	TEST_ASSERT_EQUAL_INT(p->value, 1);
 	TEST_ASSERT_EQUAL_INT(1, depth(p));
 	reclaim(ctx, p);
 
-	p = gt(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 7), T_NUM, 13));
+	p = gt(ctx, ncons(ctx, 13, ncons(ctx, 7, NIL)));
 	TEST_ASSERT_EQUAL_INT(p->value, 0);
 	TEST_ASSERT_EQUAL_INT(1, depth(p));
 	reclaim(ctx, p);
 
-	p = gt(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 7), T_NUM, 7));
+	p = gt(ctx, ncons(ctx, 7, ncons(ctx, 7, NIL)));
 	TEST_ASSERT_EQUAL_INT(p->value, 0);
 	TEST_ASSERT_EQUAL_INT(1, depth(p));
 	reclaim(ctx, p);
 
 
-	p = lt(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 13), T_NUM, 7));
+	p = lt(ctx, ncons(ctx, 7, ncons(ctx, 13, NIL)));
 	TEST_ASSERT_EQUAL_INT(p->value, 0);
 	TEST_ASSERT_EQUAL_INT(1, depth(p));
 	reclaim(ctx, p);
 
-	p = lt(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 7), T_NUM, 13));
+	p = lt(ctx, ncons(ctx, 13, ncons(ctx, 7, NIL)));
 	TEST_ASSERT_EQUAL_INT(p->value, 1);
 	TEST_ASSERT_EQUAL_INT(1, depth(p));
 	reclaim(ctx, p);
 
-	p = lt(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 7), T_NUM, 7));
+	p = lt(ctx, ncons(ctx, 7, ncons(ctx, 7, NIL)));
 	TEST_ASSERT_EQUAL_INT(p->value, 0);
 	TEST_ASSERT_EQUAL_INT(1, depth(p));
 	reclaim(ctx, p);
 
 
-	p = eq(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 13), T_NUM, 7));
+	p = eq(ctx, ncons(ctx, 7, ncons(ctx, 13, NIL)));
 	TEST_ASSERT_EQUAL_INT(p->value, 0);
 	TEST_ASSERT_EQUAL_INT(1, depth(p));
 	reclaim(ctx, p);
 
-	p = eq(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 7), T_NUM, 13));
+	p = eq(ctx, ncons(ctx, 13, ncons(ctx, 7, NIL)));
 	TEST_ASSERT_EQUAL_INT(p->value, 0);
 	TEST_ASSERT_EQUAL_INT(1, depth(p));
 	reclaim(ctx, p);
 
-	p = eq(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 7), T_NUM, 7));
-	TEST_ASSERT_EQUAL_INT(p->value, 1);
-	TEST_ASSERT_EQUAL_INT(1, depth(p));
-	reclaim(ctx, p);
-
-
-	p = neq(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 13), T_NUM, 7));
-	TEST_ASSERT_EQUAL_INT(p->value, 1);
-	TEST_ASSERT_EQUAL_INT(1, depth(p));
-	reclaim(ctx, p);
-
-	p = neq(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 7), T_NUM, 13));
-	TEST_ASSERT_EQUAL_INT(p->value, 1);
-	TEST_ASSERT_EQUAL_INT(1, depth(p));
-	reclaim(ctx, p);
-
-	p = neq(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 7), T_NUM, 7));
-	TEST_ASSERT_EQUAL_INT(p->value, 0);
-	TEST_ASSERT_EQUAL_INT(1, depth(p));
-	reclaim(ctx, p);
-
-
-	p = gte(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 13), T_NUM, 7));
-	TEST_ASSERT_EQUAL_INT(p->value, 1);
-	TEST_ASSERT_EQUAL_INT(1, depth(p));
-	reclaim(ctx, p);
-
-	p = gte(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 7), T_NUM, 13));
-	TEST_ASSERT_EQUAL_INT(p->value, 0);
-	TEST_ASSERT_EQUAL_INT(1, depth(p));
-	reclaim(ctx, p);
-
-	p = gte(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 7), T_NUM, 7));
+	p = eq(ctx, ncons(ctx, 7, ncons(ctx, 7, NIL)));
 	TEST_ASSERT_EQUAL_INT(p->value, 1);
 	TEST_ASSERT_EQUAL_INT(1, depth(p));
 	reclaim(ctx, p);
 
 
-	p = lte(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 13), T_NUM, 7));
-	TEST_ASSERT_EQUAL_INT(p->value, 0);
-	TEST_ASSERT_EQUAL_INT(1, depth(p));
-	reclaim(ctx, p);
-
-	p = lte(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 7), T_NUM, 13));
+	p = neq(ctx, ncons(ctx, 7, ncons(ctx, 13, NIL)));
 	TEST_ASSERT_EQUAL_INT(p->value, 1);
 	TEST_ASSERT_EQUAL_INT(1, depth(p));
 	reclaim(ctx, p);
 
-	p = lte(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 7), T_NUM, 7));
+	p = neq(ctx, ncons(ctx, 13, ncons(ctx, 7, NIL)));
 	TEST_ASSERT_EQUAL_INT(p->value, 1);
 	TEST_ASSERT_EQUAL_INT(1, depth(p));
 	reclaim(ctx, p);
 
-
-	p = and(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 0), T_NUM, 0));
+	p = neq(ctx, ncons(ctx, 7, ncons(ctx, 7, NIL)));
 	TEST_ASSERT_EQUAL_INT(p->value, 0);
 	TEST_ASSERT_EQUAL_INT(1, depth(p));
 	reclaim(ctx, p);
 
-	p = and(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 0), T_NUM, 1));
+
+	p = gte(ctx, ncons(ctx, 7, ncons(ctx, 13, NIL)));
+	TEST_ASSERT_EQUAL_INT(p->value, 1);
+	TEST_ASSERT_EQUAL_INT(1, depth(p));
+	reclaim(ctx, p);
+
+	p = gte(ctx, ncons(ctx, 13, ncons(ctx, 7, NIL)));
 	TEST_ASSERT_EQUAL_INT(p->value, 0);
 	TEST_ASSERT_EQUAL_INT(1, depth(p));
 	reclaim(ctx, p);
 
-	p = and(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 1), T_NUM, 0));
-	TEST_ASSERT_EQUAL_INT(p->value, 0);
-	TEST_ASSERT_EQUAL_INT(1, depth(p));
-	reclaim(ctx, p);
-
-	p = and(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 1), T_NUM, 1));
+	p = gte(ctx, ncons(ctx, 7, ncons(ctx, 7, NIL)));
 	TEST_ASSERT_EQUAL_INT(p->value, 1);
 	TEST_ASSERT_EQUAL_INT(1, depth(p));
 	reclaim(ctx, p);
 
 
-	p = or(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 0), T_NUM, 0));
+	p = lte(ctx, ncons(ctx, 7, ncons(ctx, 13, NIL)));
 	TEST_ASSERT_EQUAL_INT(p->value, 0);
 	TEST_ASSERT_EQUAL_INT(1, depth(p));
 	reclaim(ctx, p);
 
-	p = or(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 0), T_NUM, 1));
+	p = lte(ctx, ncons(ctx, 13, ncons(ctx, 7, NIL)));
 	TEST_ASSERT_EQUAL_INT(p->value, 1);
 	TEST_ASSERT_EQUAL_INT(1, depth(p));
 	reclaim(ctx, p);
 
-	p = or(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 1), T_NUM, 0));
+	p = lte(ctx, ncons(ctx, 7, ncons(ctx, 7, NIL)));
 	TEST_ASSERT_EQUAL_INT(p->value, 1);
 	TEST_ASSERT_EQUAL_INT(1, depth(p));
 	reclaim(ctx, p);
 
-	p = or(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 1), T_NUM, 1));
+
+	p = and(ctx, ncons(ctx, 0, ncons(ctx, 0, NIL)));
+	TEST_ASSERT_EQUAL_INT(p->value, 0);
+	TEST_ASSERT_EQUAL_INT(1, depth(p));
+	reclaim(ctx, p);
+
+	p = and(ctx, ncons(ctx, 1, ncons(ctx, 0, NIL)));
+	TEST_ASSERT_EQUAL_INT(p->value, 0);
+	TEST_ASSERT_EQUAL_INT(1, depth(p));
+	reclaim(ctx, p);
+
+	p = and(ctx, ncons(ctx, 0, ncons(ctx, 1, NIL)));
+	TEST_ASSERT_EQUAL_INT(p->value, 0);
+	TEST_ASSERT_EQUAL_INT(1, depth(p));
+	reclaim(ctx, p);
+
+	p = and(ctx, ncons(ctx, 1, ncons(ctx, 1, NIL)));
+	TEST_ASSERT_EQUAL_INT(p->value, 1);
+	TEST_ASSERT_EQUAL_INT(1, depth(p));
+	reclaim(ctx, p);
+
+
+	p = or(ctx, ncons(ctx, 0, ncons(ctx, 0, NIL)));
+	TEST_ASSERT_EQUAL_INT(p->value, 0);
+	TEST_ASSERT_EQUAL_INT(1, depth(p));
+	reclaim(ctx, p);
+
+	p = or(ctx, ncons(ctx, 1, ncons(ctx, 0, NIL)));
+	TEST_ASSERT_EQUAL_INT(p->value, 1);
+	TEST_ASSERT_EQUAL_INT(1, depth(p));
+	reclaim(ctx, p);
+
+	p = or(ctx, ncons(ctx, 0, ncons(ctx, 1, NIL)));
+	TEST_ASSERT_EQUAL_INT(p->value, 1);
+	TEST_ASSERT_EQUAL_INT(1, depth(p));
+	reclaim(ctx, p);
+
+	p = or(ctx, ncons(ctx, 1, ncons(ctx, 1, NIL)));
 	TEST_ASSERT_EQUAL_INT(p->value, 1);
 	TEST_ASSERT_EQUAL_INT(1, depth(p));
 	reclaim(ctx, p);
@@ -293,20 +297,20 @@ void test_inner_interpreter() {
 
 	TEST_ASSERT_EQUAL_INT(0, depth(ctx->dstack));
 
-	inner(ctx, cons(ctx, cons(ctx, NIL, T_NUM, 7), T_NUM, 13));
+	inner(ctx, ncons(ctx, 13, ncons(ctx, 7, NIL)));
 
 	TEST_ASSERT_EQUAL_INT(2, depth(ctx->dstack));
 	TEST_ASSERT_EQUAL_INT(7, ctx->dstack->value);
 	TEST_ASSERT_EQUAL_INT(13, NEXT(ctx->dstack)->value);
 
-	inner(ctx, cons(ctx, NIL, T_PRIM, (CELL)&_add));
+	inner(ctx, cons(ctx, (CELL)&_add, T_PRIM, NIL));
 
 	TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
 	TEST_ASSERT_EQUAL_INT(20, ctx->dstack->value);
 
-	PAIR* square = create(ctx, "square", 6, cons(ctx, cons(ctx, NIL, T_PRIM, (CELL)&_mul), T_PRIM, (CELL)&_dup));
+	PAIR* square = create(ctx, "square", 6, cons(ctx, (CELL)&_dup, T_PRIM, cons(ctx, (CELL)&_mul, T_PRIM, NIL)));
 
-	inner(ctx, XT(square));
+	inner(ctx, CFA(square));
 
 	TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
 	TEST_ASSERT_EQUAL_INT(400, ctx->dstack->value);
