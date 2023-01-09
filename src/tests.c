@@ -274,18 +274,25 @@ void test_binops() {
 
 }
 
-void test_create() {
+void test_header_reveal() {
 	CELL size = 256;
 	BYTE block[size];
 	CTX* ctx = init(block, size);
 
 	BYTE* here = ctx->here;
-	PAIR* w = create(ctx, "test", 4, NIL);
+	PAIR* w = header(ctx, "test", 4, NIL);
 	TEST_ASSERT_EQUAL_INT(T_WORD, TYPE(w));
 	TEST_ASSERT_EQUAL_INT(4, *((CELL*)(NFA(w)->value)));
 	TEST_ASSERT_EQUAL_STRING("test", ((BYTE*)NFA(w)->value) + sizeof(CELL));
 	TEST_ASSERT_EQUAL_INT(here + sizeof(CELL) + 4 + 1, DFA(w)->value);
 	TEST_ASSERT_EQUAL_INT(here + sizeof(CELL) + 4 + 1, CFA(w)->value);
+
+	TEST_ASSERT_NULL(ctx->dict);
+
+	reveal(ctx, w);
+
+	TEST_ASSERT_EQUAL_PTR(w, ctx->dict);
+	TEST_ASSERT_NULL(ctx->dict->next);
 }
 
 void test_inner_interpreter() {
@@ -308,9 +315,12 @@ void test_inner_interpreter() {
 	TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
 	TEST_ASSERT_EQUAL_INT(20, ctx->dstack->value);
 
-	PAIR* square = create(ctx, "square", 6, cons(ctx, (CELL)&_dup, T_PRIM, cons(ctx, (CELL)&_mul, T_PRIM, NIL)));
+	PAIR* body = pcons(ctx, &_dup, pcons(ctx, &_mul, NIL));
+	create(ctx, "square", 6, body);
 
-	inner(ctx, CFA(square));
+	TEST_ASSERT_EQUAL_PTR(body, CFA(ctx->dict));
+
+	inner(ctx, CFA(ctx->dict));
 
 	TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
 	TEST_ASSERT_EQUAL_INT(400, ctx->dstack->value);
@@ -328,7 +338,7 @@ int main() {
 	RUN_TEST(test_reclaim);
 	RUN_TEST(test_binops);
 
-	RUN_TEST(test_create);
+	RUN_TEST(test_header_reveal);
 
 	RUN_TEST(test_inner_interpreter);
 

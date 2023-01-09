@@ -5,23 +5,29 @@ typedef intptr_t	CELL;
 
 typedef struct _PAIR {
 	struct _PAIR* next;
-	CELL value;
+	CELL value;	
 } PAIR;
 
 #define TYPE(pair)					(((CELL)pair->next) & 7)
 #define NEXT(pair)					((PAIR*)(((CELL)pair->next) & -8))
+
+#define NFA(word)						((PAIR*)(word->value))
+#define DFA(word)						(NEXT(NFA(word)))
+#define CFA(word)						(NEXT(DFA(word)))
 
 #define T_FREE							0
 #define T_NUM								1
 #define T_PRIM							2
 #define T_WORD							3
 #define T_LIST							4
+#define T_BRANCH						5			// TODO: I don't know if I like this
 
 typedef struct {
 	CELL err;
 	BYTE* bottom, * here;
 	PAIR* there, * top;
 	PAIR* dstack, * free, * rstack;
+	PAIR* dict;
 } CTX;
 
 typedef void (*FUNC)(CTX*);
@@ -40,7 +46,7 @@ CTX* init(BYTE* block, CELL size) {
 		p->value = (CELL)(p == ctx->top ? NIL : p + 1);
 	}
 
-	ctx->rstack = ctx->dstack = NIL;
+	ctx->dict = ctx->rstack = ctx->dstack = NIL;
 	ctx->err = NIL;
 
 	return ctx;
@@ -85,26 +91,26 @@ PAIR* cons(CTX* ctx, CELL value, CELL type, PAIR* next) {
 }
 
 #define ncons(ctx, value, next)		cons(ctx, value, T_NUM, next)
-#define pcons(ctx, value, next)		cons(ctx, value, T_PRIM, next)
-#define wcons(ctx, value, next)		cons(ctx, value, T_WORD, next)
-#define lcons(ctx, value, next)		cons(ctx, value, T_LIST, next)
+#define pcons(ctx, value, next)		cons(ctx, (CELL)value, T_PRIM, next)
+#define wcons(ctx, value, next)		cons(ctx, (CELL)value, T_WORD, next)
+#define lcons(ctx, value, next)		cons(ctx, (CELL)value, T_LIST, next)
+#define bcons(ctx, b, a)					cons(ctx, (CELL)b, T_BRANCH, a)
 
 PAIR* reclaim(CTX* ctx, PAIR* p) {
 	if (p == NIL) return NIL;				
 	PAIR* tail = NEXT(p);
 	p->next = ctx->free;
 	p->value = NIL;
-	ctx->free->value = (CELL)p;
+	if (p->next != NIL) { p->next->value = (CELL)p; }
 	ctx->free = p;
 	return tail;
 }
 
-// --------------------------------------------------------------------------
+void deep_reclaim(CTX* ctx, PAIR* list) {
+	while (reclaim(ctx, list) != NIL) { }
+}
 
-// TODO: I don't really see a benefit of using different operators for lists
-// and for ctx->dstack, as don't know how to use them inside DODO. Better to
-// use a stack of stacks, or just a default stack (dstack) and all operations
-// work on there.
+// --------------------------------------------------------------------------
 
 #define BINOP(name, op) \
 	PAIR* name(CTX* ctx, PAIR* list) { \
@@ -135,17 +141,19 @@ BINOP(or, ||);
 PAIR* dup(CTX* ctx, PAIR* list) { return cons(ctx, list->value, TYPE(list), list); }
 void _dup(CTX* ctx) { ctx->dstack = dup(ctx, ctx->dstack); }
 
+PAIR* swap(CTX* ctx, PAIR* list) { 
+	CELL t = list->value; list->value = list->next->value; list->next->value = t;
+	return list;
+}
+void _swap(CTX* ctx) { ctx->dstack = swap(ctx, ctx->dstack); }
+
 #define W_PRIMITIVE					1
 #define W_COLON_DEF					3
 
 #define F_NON_IMMEDIATE			1
 #define F_IMMEDIATE					3
 
-#define NFA(w)		((PAIR*)(w->value))
-#define DFA(w)		(NEXT(NFA(w)))
-#define CFA(w)		(NEXT(DFA(w)))
-
-PAIR* create(CTX* ctx, BYTE* name, CELL nlen, PAIR* body) {
+PAIR* header(CTX* ctx, BYTE* name, CELL nlen, PAIR* body) {
 	BYTE* here = ctx->here;
 
 	allot(ctx, sizeof(CELL) + nlen + 1);
@@ -159,6 +167,7 @@ PAIR* create(CTX* ctx, BYTE* name, CELL nlen, PAIR* body) {
 	align(ctx);
 
 	PAIR* cfa = body == NIL ? cons(ctx, (CELL)ctx->here, W_COLON_DEF, NIL) : body;
+	// TODO: It's dfa needed or just pushing it on CFA its enough?
 	PAIR* dfa = ncons(ctx, (CELL)ctx->here, cfa);
 	// TODO: nfa should not point to here, but be a string node itself that
 	// can be freed?
@@ -166,6 +175,21 @@ PAIR* create(CTX* ctx, BYTE* name, CELL nlen, PAIR* body) {
 	PAIR* word = wcons(ctx, (CELL)nfa, NIL);
 
 	return word;
+}
+
+void reveal(CTX* ctx, PAIR* header) {
+	header->next = ctx->dict;
+	ctx->dict = header;
+}
+
+void create(CTX* ctx, BYTE* name, CELL nlen, PAIR* body) {
+	reveal(ctx, header(ctx, name, nlen, body));
+}
+
+void body(CTX* ctx, PAIR* word, PAIR* cfa) {
+	PAIR* old_cfa = CFA(word);
+	DFA(word)->next = (PAIR*)(((CELL)cfa) | 1);
+	deep_reclaim(ctx, old_cfa);
 }
 
 void inner(CTX* ctx, PAIR* ip) {
@@ -193,7 +217,17 @@ void inner(CTX* ctx, PAIR* ip) {
 				case T_LIST: 
 					// TODO: List should be deep copied here, shouldn't it?
 					// No, it should just be moved!!
-					ctx->dstack = cons(ctx, ip->value, T_LIST, ctx->dstack);
+					ctx->dstack = lcons(ctx, ip->value, ctx->dstack);
+					ip = NEXT(ip);
+					break;
+				case T_BRANCH:
+					if (ctx->dstack->value == 0) {
+						ctx->dstack = reclaim(ctx, ctx->dstack);
+						ip = NEXT(ip);
+					} else {
+						ctx->dstack = reclaim(ctx, ctx->dstack);
+						ip = (PAIR*)ip->value;
+					}
 					break;
 			}
 		}
