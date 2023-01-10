@@ -1,34 +1,41 @@
 #include<stdio.h>
 #include "dodo.h"
 
+void dump_stack(CTX* ctx) {
+	printf("<%ld> ", depth(ctx->dstack));
+	PAIR* p = ctx->dstack;
+	while (p != NIL) { printf("%ld ", p->value); p = NEXT(p); }
+	printf("\n");
+}
+
+void fib(CTX* ctx) {
+	dup(ctx);
+	ctx->dstack = ncons(ctx, 1, ctx->dstack);
+	gt(ctx);
+	if (TOS(ctx)) {
+		POP(ctx);
+		ctx->dstack = ncons(ctx, 1, ctx->dstack);
+		sub(ctx);
+		dup(ctx);
+		ctx->dstack = ncons(ctx, 1, ctx->dstack);
+		sub(ctx);
+		fib(ctx);
+		swap(ctx);
+		fib(ctx);
+		add(ctx);
+	} else {
+		POP(ctx);
+	}
+}
+
 void main() {
 	CELL size = 8192;
 	BYTE block[size];
 	CTX* ctx = init(block, size);
 
-	PAIR* fib = header(ctx, "fib", 3, NIL);
-	printf("fib %p\n", &fib);
-	printf("fib nfa: %p dfa: %p cfa: %p\n", (PAIR*)fib->value, NEXT(((PAIR*)fib->value)), NEXT((NEXT(((PAIR*)fib->value)))));
-	printf("fib NFA: %p DFA: %p CFA: %p\n", NFA(fib), DFA(fib), CFA(fib));
-	body(ctx, fib, 
-		pcons(ctx, &_dup,
-		ncons(ctx, 1,
-		pcons(ctx, &_gt,
-		bcons(ctx, 
-			ncons(ctx, 1,
-			pcons(ctx, &_sub,
-			pcons(ctx, &_dup,
-			ncons(ctx, 1,
-			pcons(ctx, &_sub,
-			wcons(ctx, CFA(fib),
-			pcons(ctx, &_swap,
-			wcons(ctx, CFA(fib),
-			pcons(ctx, &_add, NIL))))))))),
-				NIL)))));
-				
-	ctx->dstack = ncons(ctx, 36, NIL);
+	ctx->dstack = ncons(ctx, 36, ctx->dstack);
 
-	inner(ctx, CFA(fib));
+	fib(ctx);
 
-	printf("%ld\n", ctx->dstack->value);
+	printf("%ld\n", TOS(ctx));
 }
