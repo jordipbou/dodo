@@ -1,4 +1,5 @@
 #include<stdint.h>
+#include<string.h>
 
 typedef int8_t		BYTE;
 typedef intptr_t	CELL;
@@ -40,14 +41,14 @@ CTX* init(BYTE* block, CELL size) {
 
 #define RESERVED(ctx)				(((CELL)ctx->there) - ((CELL)ctx->here))
 
-#define TYPE(pair)					(((CELL)pair->next) & 7)
+#define TYPE(pair)					(pair == NIL ? NIL : ((CELL)pair->next) & 7)
 #define NEXT(pair)					((PAIR*)(((CELL)pair->next) & -8))
 
 #define T_FREE							0
 #define T_NUM								1
 #define T_PRIM							2
-#define T_WORD							3
-#define T_LIST							4
+#define T_WORD							4
+#define T_LIST							7
 
 #define E_NOT_ENOUGH_MEMORY		-1
 
@@ -138,11 +139,10 @@ void gt(CTX* ctx) { SOS(ctx) = SOS(ctx) > TOS(ctx); POP(ctx); }
 void lt(CTX* ctx) { SOS(ctx) = SOS(ctx) < TOS(ctx); POP(ctx); }
 void eq(CTX* ctx) { SOS(ctx) = SOS(ctx) == TOS(ctx); POP(ctx); }
 void neq(CTX* ctx) { SOS(ctx) = SOS(ctx) != TOS(ctx); POP(ctx); }
-void gte(CTX* ctx) { SOS(ctx) = SOS(ctx) >= TOS(ctx); POP(ctx); }
-void lte(CTX* ctx) { SOS(ctx) = SOS(ctx) <= TOS(ctx); POP(ctx); }
 
 void and(CTX* ctx) { SOS(ctx) = SOS(ctx) && TOS(ctx); POP(ctx); }
 void or(CTX* ctx) { SOS(ctx) = SOS(ctx) || TOS(ctx); POP(ctx); }
+void not(CTX* ctx) { TOS(ctx) = !TOS(ctx); }
 
 void dup(CTX* ctx) { 
 	if (TYPE(ctx->dstack) == T_LIST) {
@@ -159,86 +159,104 @@ void swap(CTX* ctx) {
 	ctx->dstack = sos;
 }
 
-// CORRECTLY TESTED UNTIL HERE -----------------------------------------------
+PAIR* header(CTX* ctx, BYTE* name, CELL nlen, CELL type) {
+	align(ctx); 
+	BYTE* str = ctx->here;
+	*((CELL*)ctx->here) = nlen;
+	allot(ctx, sizeof(CELL) + nlen + 1);
 
-//#define W_PRIMITIVE					1
-//#define W_COLON_DEF					3
-//
-//#define F_NON_IMMEDIATE			1
-//#define F_IMMEDIATE					3
-//
-//PAIR* header(CTX* ctx, BYTE* name, CELL nlen, PAIR* body) {
-//	BYTE* here = ctx->here;
-//
-//	allot(ctx, sizeof(CELL) + nlen + 1);
-//
-//	*((CELL*)here) = nlen;
-//	for (CELL i = 0; i < nlen; i++) {
-//		here[sizeof(CELL) + i] = name[i];	
-//	}
-//	here[sizeof(CELL) + nlen] = 0;
-//
-//	align(ctx);
-//
-//	PAIR* cfa = body == NIL ? cons(ctx, (CELL)ctx->here, W_COLON_DEF, NIL) : body;
-//	// TODO: It's dfa needed or just pushing it on CFA its enough?
-//	PAIR* dfa = ncons(ctx, (CELL)ctx->here, cfa);
-//	// TODO: nfa should not point to here, but be a string node itself that
-//	// can be freed?
-//	PAIR* nfa = cons(ctx, (CELL)here, F_NON_IMMEDIATE, dfa);
-//	PAIR* word = wcons(ctx, (CELL)nfa, NIL);
-//
-//	return word;
-//}
-//
-//void reveal(CTX* ctx, PAIR* header) {
-//	header->next = ctx->dict;
-//	ctx->dict = header;
-//}
-//
-//void create(CTX* ctx, BYTE* name, CELL nlen, PAIR* body) {
-//	reveal(ctx, header(ctx, name, nlen, body));
-//}
-//
-//#define NFA(word)						((PAIR*)(word->value))
-//#define DFA(word)						(NEXT(NFA(word)))
-//#define CFA(word)						(NEXT(DFA(word)))
-//
-//void body(CTX* ctx, PAIR* word, PAIR* cfa) {
-//	PAIR* old_cfa = CFA(word);
-//	DFA(word)->next = (PAIR*)(((CELL)cfa) | 1);
-//	while (old_cfa != NIL) { old_cfa = reclaim(ctx, old_cfa); }
-//}
-//
-//void inner(CTX* ctx, PAIR* ip) {
-//	while(ctx->err == NIL) {
-//		if (ip == NIL) {
-//			if (ctx->rstack == NIL) return;
-//			else {
-//				ip = (PAIR*)ctx->rstack->value;
-//				ctx->rstack = reclaim(ctx, ctx->rstack);
-//			}
-//		} else {
-//			switch (TYPE(ip)) {
-//				case T_NUM: 
-//					ctx->dstack = ncons(ctx, ip->value, ctx->dstack);
-//					ip = NEXT(ip);
-//					break;
-//				case T_WORD: 
-//					ctx->rstack = ncons(ctx, (CELL)NEXT(ip), ctx->rstack);
-//					ip = (PAIR*)ip->value;
-//					break;
-//				case T_PRIM:
-//					((FUNC)ip->value)(ctx);
-//					ip = NEXT(ip);
-//					break;
-//				case T_LIST: 
-//					// TODO: List should be deep copied here, shouldn't it?
-//					// No, it should just be moved!!
-//					ctx->dstack = lcons(ctx, ip->value, ctx->dstack);
-//					ip = NEXT(ip);
-//					break;
-//			}
-//		}
-//	}
-//}
+	for (CELL i = 0; i < nlen; i++) {
+		str[sizeof(CELL) + i] = name[i];	
+	}
+	str[sizeof(CELL) + nlen] = 0;
+
+	return cons(ctx, (CELL)ncons(ctx, (CELL)str, ncons(ctx, (CELL)ctx->here, NIL)), type, NIL);
+}
+
+#define NFA(word)						((PAIR*)(word->value))
+#define DFA(word)						(NEXT(NFA(word)))
+#define CFA(word)						(NEXT(DFA(word)))
+
+PAIR* body(CTX* ctx, PAIR* word, PAIR* cfa) {
+	PAIR* old_cfa = CFA(word);
+	DFA(word)->next = (PAIR*)(((CELL)cfa) | T_NUM);
+	while (old_cfa != NIL) { old_cfa = reclaim(ctx, old_cfa); }
+	return word;
+}
+
+PAIR* reveal(CTX* ctx, PAIR* header) {
+	header->next = ctx->dict;
+	ctx->dict = header;
+	return header;
+}
+
+#define T_IMMEDIATE							1
+#define IS_IMMEDIATE(word)			(TYPE(word) & T_IMMEDIATE)
+
+void immediate(CTX* ctx) {
+	ctx->dict->next = (PAIR*)(((CELL)ctx->dict->next) | T_IMMEDIATE);
+}
+
+PAIR* find(CTX* ctx, BYTE* name, CELL nlen) {
+	PAIR* word = ctx->dict;
+	// TODO: Change strcmp here to custom string comparison (starting on name length)
+	while (word != NIL && strcmp(name, ((BYTE*)(NFA(word)->value) + sizeof(CELL)))) {
+		word = NEXT(word);
+	}
+	return word;
+}
+
+void inner(CTX* ctx, PAIR* ip) {
+	while(ctx->err == NIL) {
+		if (ip == NIL) {
+			if (ctx->rstack == NIL) return;
+			else {
+				ip = (PAIR*)ctx->rstack->value;
+				ctx->rstack = reclaim(ctx, ctx->rstack);
+			}
+		} else {
+			switch (TYPE(ip)) {
+				case T_NUM: 
+					ctx->dstack = ncons(ctx, ip->value, ctx->dstack);
+					ip = NEXT(ip);
+					break;
+				case T_WORD: 
+					ctx->rstack = ncons(ctx, (CELL)NEXT(ip), ctx->rstack);
+					ip = (PAIR*)ip->value;
+					break;
+				case T_PRIM:
+					((FUNC)ip->value)(ctx);
+					ip = NEXT(ip);
+					break;
+				case T_LIST: 
+					ctx->dstack = lcons(ctx, (CELL)copy(ctx, (PAIR*)ip->value), ctx->dstack);
+					ip = NEXT(ip);
+					break;
+			}
+		}
+	}
+}
+
+CTX* dodo(CTX* ctx) {
+	reveal(ctx, body(ctx, header(ctx, "+", 1, T_PRIM), pcons(ctx, &add, NIL)));
+	reveal(ctx, body(ctx, header(ctx, "-", 1, T_PRIM), pcons(ctx, &sub, NIL)));
+	reveal(ctx, body(ctx, header(ctx, "*", 1, T_PRIM), pcons(ctx, &mul, NIL)));
+	reveal(ctx, body(ctx, header(ctx, "/", 1, T_PRIM), pcons(ctx, &div, NIL)));
+	reveal(ctx, body(ctx, header(ctx, "mod", 3, T_PRIM), pcons(ctx, &mod, NIL)));
+
+	reveal(ctx, body(ctx, header(ctx, ">", 1, T_PRIM), pcons(ctx, &gt, NIL)));
+	reveal(ctx, body(ctx, header(ctx, "<", 1, T_PRIM), pcons(ctx, &lt, NIL)));
+	reveal(ctx, body(ctx, header(ctx, "=", 1, T_PRIM), pcons(ctx, &eq, NIL)));
+	reveal(ctx, body(ctx, header(ctx, "<>", 2, T_PRIM), pcons(ctx, &neq, NIL)));
+
+	reveal(ctx, body(ctx, header(ctx, "and", 3, T_PRIM), pcons(ctx, &and, NIL)));
+	reveal(ctx, body(ctx, header(ctx, "or", 2, T_PRIM), pcons(ctx, &or, NIL)));
+	reveal(ctx, body(ctx, header(ctx, "invert", 3, T_PRIM), pcons(ctx, &not, NIL)));
+
+	reveal(ctx, body(ctx, header(ctx, "dup", 3, T_PRIM), pcons(ctx, &dup, NIL)));
+	reveal(ctx, body(ctx, header(ctx, "swap", 4, T_PRIM), pcons(ctx, &swap, NIL)));
+
+	return ctx;
+}
+
+// TODO: Outer interpreter to be able to load a forth file 

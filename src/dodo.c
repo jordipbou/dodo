@@ -31,11 +31,20 @@ void fib(CTX* ctx) {
 void main() {
 	CELL size = 8192;
 	BYTE block[size];
-	CTX* ctx = init(block, size);
+	CTX* ctx = dodo(init(block, size));
 
-	ctx->dstack = ncons(ctx, 36, ctx->dstack);
+	//ctx->dstack = ncons(ctx, 36, ctx->dstack);
 
-	fib(ctx);
+	//fib(ctx);
+
+	PAIR* p = 
+		ncons(ctx, 5,
+		ncons(ctx, 7,
+		pcons(ctx, CFA(find(ctx, "+", 1))->value, 
+		ncons(ctx, 3,
+		pcons(ctx, CFA(find(ctx, "-", 1))->value, NIL)))));
+	
+	inner(ctx, p);
 
 	printf("%ld\n", TOS(ctx));
 }

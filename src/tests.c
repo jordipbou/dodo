@@ -79,11 +79,12 @@ void test_cons() {
 	CELL free_nodes = (size - sizeof(CTX)) / sizeof(PAIR);
 
 	TEST_ASSERT_EQUAL_INT(free_nodes, depth(ctx->free));
-	PAIR* p = ncons(ctx, 13, NIL);
+	PAIR* p = cons(ctx, 13, T_WORD, NIL);
 	TEST_ASSERT_EQUAL_INT(free_nodes - 1, depth(ctx->free));
 	TEST_ASSERT_EQUAL_INT(NIL, NEXT(p));
 	TEST_ASSERT_EQUAL_INT(13, p->value);
 	TEST_ASSERT_EQUAL_INT(1, depth(p));
+	TEST_ASSERT_EQUAL_INT(T_WORD, TYPE(p));
 	PAIR* p2 = ncons(ctx, 17, p);
 	TEST_ASSERT_EQUAL_INT(free_nodes - 2, depth(ctx->free));
 	TEST_ASSERT_EQUAL_INT(p, NEXT(p2));
@@ -96,6 +97,7 @@ void test_cons() {
 	TEST_ASSERT_EQUAL_INT(0, depth(ctx->free));
 	PAIR* p3 = ncons(ctx, 21, NIL);
 	TEST_ASSERT_EQUAL_PTR(NIL, p3);
+	TEST_ASSERT_EQUAL_INT(NIL, TYPE(p3));
 }
 
 void test_reclaim() {
@@ -250,42 +252,6 @@ void test_binops() {
 	TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
 	POP(ctx);
 
-	ctx->dstack = ncons(ctx, 7, ncons(ctx, 13, NIL));
-	gte(ctx);
-	TEST_ASSERT_EQUAL_INT(TOS(ctx), 1);
-	TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-	POP(ctx);
-
-	ctx->dstack = ncons(ctx, 13, ncons(ctx, 7, NIL));
-	gte(ctx);
-	TEST_ASSERT_EQUAL_INT(TOS(ctx), 0);
-	TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-	POP(ctx);
-
-	ctx->dstack = ncons(ctx, 7, ncons(ctx, 7, NIL));
-	gte(ctx);
-	TEST_ASSERT_EQUAL_INT(TOS(ctx), 1);
-	TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-	POP(ctx);
-
-	ctx->dstack = ncons(ctx, 7, ncons(ctx, 13, NIL));
-	lte(ctx);
-	TEST_ASSERT_EQUAL_INT(TOS(ctx), 0);
-	TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-	POP(ctx);
-
-	ctx->dstack = ncons(ctx, 13, ncons(ctx, 7, NIL));
-	lte(ctx);
-	TEST_ASSERT_EQUAL_INT(TOS(ctx), 1);
-	TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-	POP(ctx);
-
-	ctx->dstack = ncons(ctx, 7, ncons(ctx, 7, NIL));
-	lte(ctx);
-	TEST_ASSERT_EQUAL_INT(TOS(ctx), 1);
-	TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-	POP(ctx);
-
 	ctx->dstack = ncons(ctx, 0, ncons(ctx, 0, NIL));
 	and(ctx);
 	TEST_ASSERT_EQUAL_INT(TOS(ctx), 0);
@@ -387,64 +353,106 @@ void test_swap() {
 	TEST_ASSERT_EQUAL_INT(7, SOS(ctx));
 }
 
-///void test_header_reveal() {
-//	CELL size = 256;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//
-//	BYTE* here = ctx->here;
-//	PAIR* w = header(ctx, "test", 4, NIL);
-//	TEST_ASSERT_EQUAL_INT(T_WORD, TYPE(w));
-//	TEST_ASSERT_EQUAL_INT(4, *((CELL*)(NFA(w)->value)));
-//	TEST_ASSERT_EQUAL_STRING("test", ((BYTE*)NFA(w)->value) + sizeof(CELL));
-//	TEST_ASSERT_EQUAL_INT(here + sizeof(CELL) + 4 + 1, DFA(w)->value);
-//	TEST_ASSERT_EQUAL_INT(here + sizeof(CELL) + 4 + 1, CFA(w)->value);
-//
-//	TEST_ASSERT_NULL(ctx->dict);
-//
-//	reveal(ctx, w);
-//
-//	TEST_ASSERT_EQUAL_PTR(w, ctx->dict);
-//	TEST_ASSERT_NULL(ctx->dict->next);
-//}
-//
-//void test_inner_interpreter() {
-//	CELL size = 256;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//
-//	inner(ctx, NIL);
-//
-//	TEST_ASSERT_EQUAL_INT(0, depth(ctx->dstack));
-//
-//	inner(ctx, ncons(ctx, 13, ncons(ctx, 7, NIL)));
-//
-//	TEST_ASSERT_EQUAL_INT(2, depth(ctx->dstack));
-//	TEST_ASSERT_EQUAL_INT(7, ctx->dstack->value);
-//	TEST_ASSERT_EQUAL_INT(13, NEXT(ctx->dstack)->value);
-//
-//	inner(ctx, cons(ctx, (CELL)&_add, T_PRIM, NIL));
-//
-//	TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-//	TEST_ASSERT_EQUAL_INT(20, ctx->dstack->value);
-//
-//	PAIR* body = pcons(ctx, &_dup, pcons(ctx, &_mul, NIL));
-//	create(ctx, "square", 6, body);
-//
-//	TEST_ASSERT_EQUAL_PTR(body, CFA(ctx->dict));
-//
-//	inner(ctx, CFA(ctx->dict));
-//
-//	TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-//	TEST_ASSERT_EQUAL_INT(400, ctx->dstack->value);
-//}
+void test_header_body_reveal() {
+	CELL size = 256;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	BYTE* here = ctx->here;
+	PAIR* w = header(ctx, "test", 4, T_WORD);
+	TEST_ASSERT_EQUAL_INT(T_WORD, TYPE(w));
+	TEST_ASSERT_EQUAL_INT(4, *((CELL*)(NFA(w)->value)));
+	TEST_ASSERT_EQUAL_STRING("test", ((BYTE*)NFA(w)->value) + sizeof(CELL));
+	TEST_ASSERT_EQUAL_INT(here + sizeof(CELL) + 4 + 1, DFA(w)->value);
+	TEST_ASSERT_EQUAL_INT(NIL, CFA(w));
+
+	TEST_ASSERT_NULL(ctx->dict);
+
+	PAIR* cfa = ncons(ctx, 7, ncons(ctx, 13, NIL));
+	body(ctx, w, cfa);
+
+	TEST_ASSERT_EQUAL_INT(cfa, CFA(w));
+	TEST_ASSERT_EQUAL_INT(7, CFA(w)->value);
+	TEST_ASSERT_EQUAL_INT(13, NEXT(CFA(w))->value);
+
+	reveal(ctx, w);
+
+	TEST_ASSERT_EQUAL_PTR(w, ctx->dict);
+	TEST_ASSERT_NULL(ctx->dict->next);
+
+	TEST_ASSERT_FALSE(IS_IMMEDIATE(w));
+
+	immediate(ctx);
+
+	TEST_ASSERT_TRUE(IS_IMMEDIATE(w));
+}
+
+void test_find() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	PAIR* dup = reveal(ctx, header(ctx, "dup", 3, T_PRIM));
+	PAIR* swap = reveal(ctx, header(ctx, "swap", 4, T_PRIM));
+	PAIR* test = reveal(ctx, header(ctx, "test", 4, T_WORD));
+
+	TEST_ASSERT_EQUAL_PTR(dup, find(ctx, "dup", 3));
+	TEST_ASSERT_EQUAL_PTR(swap, find(ctx, "swap", 4));
+	TEST_ASSERT_EQUAL_PTR(test, find(ctx, "test", 4));
+	TEST_ASSERT_EQUAL_PTR(NIL, find(ctx, "nop", 3));
+
+	TEST_ASSERT_EQUAL_PTR(test, ctx->dict);
+	TEST_ASSERT_EQUAL_PTR(swap, NEXT(ctx->dict));
+	TEST_ASSERT_EQUAL_PTR(dup, NEXT(NEXT(ctx->dict)));
+	TEST_ASSERT_EQUAL_PTR(NIL, NEXT(NEXT(NEXT(ctx->dict))));
+}
+
+void test_inner_interpreter() {
+	CELL size = 256;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	inner(ctx, NIL);
+
+	TEST_ASSERT_EQUAL_INT(0, depth(ctx->dstack));
+
+	inner(ctx, ncons(ctx, 13, ncons(ctx, 7, NIL)));
+
+	TEST_ASSERT_EQUAL_INT(2, depth(ctx->dstack));
+	TEST_ASSERT_EQUAL_INT(7, ctx->dstack->value);
+	TEST_ASSERT_EQUAL_INT(13, NEXT(ctx->dstack)->value);
+
+	inner(ctx, cons(ctx, (CELL)&add, T_PRIM, NIL));
+
+	TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
+	TEST_ASSERT_EQUAL_INT(20, ctx->dstack->value);
+
+	PAIR* cfa = pcons(ctx, &dup, pcons(ctx, &mul, NIL));
+	reveal(ctx, body(ctx, header(ctx, "square", 6, T_PRIM), cfa));
+
+	TEST_ASSERT_EQUAL_PTR(cfa, CFA(ctx->dict));
+
+	inner(ctx, CFA(ctx->dict));
+
+	TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
+	TEST_ASSERT_EQUAL_INT(400, ctx->dstack->value);
+
+	// TODO: Test a list node in CFA
+}
+
+void test_dodo_initialization() {
+	CELL size = 4096;
+	BYTE block[size];
+	CTX* ctx = dodo(init(block, size));
+
+	TEST_ASSERT_EQUAL_PTR(&add, CFA(find(ctx, "+", 1))->value);
+}
 
 int main() {
 	UNITY_BEGIN();
 
 	RUN_TEST(test_block_initialization);
 
-	//RUN_TEST(test_free_depth);
 	RUN_TEST(test_allot);
 	RUN_TEST(test_align);
 	RUN_TEST(test_cons);
@@ -456,9 +464,12 @@ int main() {
 	RUN_TEST(test_dup_list);
 	RUN_TEST(test_swap);
 
-	//RUN_TEST(test_header_reveal);
+	RUN_TEST(test_header_body_reveal);
+	RUN_TEST(test_find);
 
-	//RUN_TEST(test_inner_interpreter);
+	RUN_TEST(test_inner_interpreter);
+
+	RUN_TEST(test_dodo_initialization);
 
 	return UNITY_END();
 }
