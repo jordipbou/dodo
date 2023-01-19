@@ -12,6 +12,7 @@ typedef struct _PAIR {
 	union {
 		CELL value;
 		struct _PAIR* prev;
+		struct _PAIR* stack;
 		tCELL ref;
 	};
 } PAIR;
@@ -19,7 +20,8 @@ typedef struct _PAIR {
 typedef struct {
 	CELL err;
 	BYTE* here;
-	PAIR* there, * top, * dstack, * free, * dict;
+	PAIR* there, * top, * free, * dict;
+	PAIR stacks;
 } CTX;
 
 typedef void (*FUNC)(CTX*);
@@ -60,7 +62,9 @@ CTX* init(BYTE* block, CELL size) {
 		p->next = AS(T_FREE, p == ctx->there ? NIL : p - 1);
 	}
 
-	ctx->dict = ctx->dstack = NIL;
+	ctx->stacks.next = NIL;
+	ctx->stacks.ref = NIL;
+	ctx->dict = NIL;
 	ctx->err = NIL;
 
 	return ctx;
@@ -122,10 +126,10 @@ void allot(CTX* ctx, CELL bytes) {
 
 void align(CTX* ctx) { allot(ctx, ALIGN(ctx->here, sizeof(CELL)) - ((CELL)ctx->here)); }
 
-#define TOS(ctx)				(ctx->dstack->value)
-#define SOS(ctx)				(NEXT(ctx->dstack)->value)
-#define POP(ctx)				(ctx->dstack = reclaim(ctx, ctx->dstack))
-#define PUSH(ctx, t, v)	(ctx->dstack = alloc(ctx, t, v, ctx->dstack))
+#define TOS(ctx)				(ctx->stacks.stack->value)
+#define SOS(ctx)				(NEXT(ctx->stacks.stack)->value)
+#define POP(ctx)				(ctx->stacks.stack = reclaim(ctx, ctx->stacks.stack))
+#define PUSH(ctx, t, v)	(ctx->stacks.stack = alloc(ctx, t, v, ctx->stacks.stack))
 
 void inner(CTX* ctx, PAIR* xlist) {
 	PAIR* ip = xlist;
@@ -160,20 +164,20 @@ void _or(CTX* ctx) { SOS(ctx) = SOS(ctx) || TOS(ctx); POP(ctx); }
 void _not(CTX* ctx) { TOS(ctx) = !TOS(ctx); }
 
 void _dup(CTX* ctx) { 
-	if (IS(T_LIST, ctx->dstack)) {
-		PUSH(ctx, T_LIST, (CELL)clone(ctx, REF(ctx->dstack)));
+	if (IS(T_LIST, ctx->stacks.stack)) {
+		PUSH(ctx, T_LIST, (CELL)clone(ctx, REF(ctx->stacks.stack)));
 	} else {
-		PUSH(ctx, TYPE(ctx->dstack->next), TOS(ctx));
+		PUSH(ctx, TYPE(ctx->stacks.stack->next), TOS(ctx));
 	}
 }
 
 void _swap(CTX* ctx) {
-	PAIR* fos = ctx->dstack;
-	PAIR* sos = NEXT(ctx->dstack);
-	PAIR* tos = NEXT(NEXT(ctx->dstack));
-	ctx->dstack = sos;
-	ctx->dstack->next = AS(TYPE(sos->next), fos);
-	NEXT(ctx->dstack)->next = AS(TYPE(fos->next), tos);
+	PAIR* fos = ctx->stacks.stack;
+	PAIR* sos = NEXT(ctx->stacks.stack);
+	PAIR* tos = NEXT(NEXT(ctx->stacks.stack));
+	ctx->stacks.stack = sos;
+	ctx->stacks.stack->next = AS(TYPE(sos->next), fos);
+	NEXT(ctx->stacks.stack)->next = AS(TYPE(fos->next), tos);
 }
 
 // ----------------------------------------------------------------------------

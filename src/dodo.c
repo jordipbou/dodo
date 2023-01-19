@@ -6,7 +6,7 @@ void main() {
 	BYTE block[size];
 	CTX* ctx = init(block, size);
 
-	ctx->dstack = alloc(ctx, T_ATOM, 36, ctx->dstack);
+	ctx->stacks.stack = alloc(ctx, T_ATOM, 36, ctx->stacks.stack);
 
 	PAIR* xlist = 
 		alloc(ctx, T_PRIMITIVE, (CELL)&_dup,
