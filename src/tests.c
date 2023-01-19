@@ -119,7 +119,7 @@ void test_align() {
 	TEST_ASSERT_EQUAL_INT(0, ctx->err);
 }
 
-void test_alloc() {
+void test_cons() {
 	CELL size = 256;
 	BYTE block[size];
 	CTX* ctx = init(block, size);
@@ -127,23 +127,23 @@ void test_alloc() {
 	CELL free_nodes = (size - sizeof(CTX)) / sizeof(PAIR);
 
 	TEST_ASSERT_EQUAL_INT(free_nodes, depth(ctx->free));
-	PAIR* p = alloc(ctx, T_LIST, 13, NIL);
+	PAIR* p = cons(ctx, T_LIST, 13, NIL);
 	TEST_ASSERT_EQUAL_INT(free_nodes - 1, depth(ctx->free));
 	TEST_ASSERT_EQUAL_INT(NIL, NEXT(p));
 	TEST_ASSERT_EQUAL_INT(13, p->value);
 	TEST_ASSERT_EQUAL_INT(1, depth(p));
 	TEST_ASSERT(IS(T_LIST, p));
-	PAIR* p2 = alloc(ctx, T_ATOM, 17, p);
+	PAIR* p2 = cons(ctx, T_ATOM, 17, p);
 	TEST_ASSERT_EQUAL_INT(free_nodes - 2, depth(ctx->free));
 	TEST_ASSERT_EQUAL_INT(p, NEXT(p2));
 	TEST_ASSERT_EQUAL_INT(17, p2->value);
 	TEST_ASSERT_EQUAL_INT(13, NEXT(p2)->value);
 	TEST_ASSERT_EQUAL_INT(2, depth(p2));
 
-	while (depth(ctx->free) > 0) { alloc(ctx, T_ATOM, 1, NIL); }
+	while (depth(ctx->free) > 0) { cons(ctx, T_ATOM, 1, NIL); }
 
 	TEST_ASSERT_EQUAL_INT(0, depth(ctx->free));
-	PAIR* p3 = alloc(ctx, T_ATOM, 21, NIL);
+	PAIR* p3 = cons(ctx, T_ATOM, 21, NIL);
 	TEST_ASSERT_EQUAL_PTR(NIL, p3);
 	TEST_ASSERT_EQUAL_INT(ERR_NOT_ENOUGH_MEMORY, ctx->err);
 }
@@ -156,7 +156,7 @@ void test_reclaim() {
 	CELL free_nodes = (size - sizeof(CTX)) / sizeof(PAIR);
 
 	TEST_ASSERT_EQUAL_INT(free_nodes, depth(ctx->free));
-	PAIR* p = alloc(ctx, T_ATOM, 21, alloc(ctx, T_ATOM, 17, alloc(ctx, T_ATOM, 13, NIL)));
+	PAIR* p = cons(ctx, T_ATOM, 21, cons(ctx, T_ATOM, 17, cons(ctx, T_ATOM, 13, NIL)));
 	TEST_ASSERT_EQUAL_INT(3, depth(p));
 	TEST_ASSERT_EQUAL_INT(free_nodes - 3, depth(ctx->free));
 	p = reclaim(ctx, p);
@@ -172,7 +172,7 @@ void test_reclaim() {
 	TEST_ASSERT_EQUAL_INT(0, depth(p));
 	TEST_ASSERT_EQUAL_INT(free_nodes, depth(ctx->free));
 
-	p = alloc(ctx, T_LIST, (CELL)alloc(ctx, T_ATOM, 13, alloc(ctx, T_ATOM, 17, NIL)), alloc(ctx, T_ATOM, 21, NIL));
+	p = cons(ctx, T_LIST, (CELL)cons(ctx, T_ATOM, 13, cons(ctx, T_ATOM, 17, NIL)), cons(ctx, T_ATOM, 21, NIL));
 	TEST_ASSERT_EQUAL_INT(2, depth(p));
 	TEST_ASSERT_EQUAL_INT(2, depth((PAIR*)p->value));
 	TEST_ASSERT_EQUAL_INT(free_nodes - 4, depth(ctx->free));
@@ -190,14 +190,14 @@ void test_reclaim() {
 //
 //	TEST_ASSERT_EQUAL_INT(0, depth(ctx->stacks.stack));
 //
-//	ctx->ip = alloc(ctx, T_ATOM, 13, alloc(ctx, T_ATOM, 7, NIL));
+//	ctx->ip = cons(ctx, T_ATOM, 13, cons(ctx, T_ATOM, 7, NIL));
 //	inner(ctx);
 //
 //	TEST_ASSERT_EQUAL_INT(2, depth(ctx->stacks.stack));
 //	TEST_ASSERT_EQUAL_INT(7, ctx->stacks.stack->value);
 //	TEST_ASSERT_EQUAL_INT(13, NEXT(ctx->stacks.stack)->value);
 //
-//	ctx->ip = alloc(ctx, T_PRIMITIVE, (CELL)&_add, NIL);
+//	ctx->ip = cons(ctx, T_PRIMITIVE, (CELL)&_add, NIL);
 //	inner(ctx);
 //
 //	TEST_ASSERT_EQUAL_INT(1, depth(ctx->stacks.stack));
@@ -207,7 +207,7 @@ void test_reclaim() {
 //}
 
 //void test_inner_interpreter_words() {
-	//PAIR* cfa = palloc(ctx, &_dup, palloc(ctx, &_mul, NIL));
+	//PAIR* cfa = pcons(ctx, &_dup, pcons(ctx, &_mul, NIL));
 	//reveal(ctx, body(ctx, header(ctx, "square", 6, T_PRIM), cfa));
 
 	//TEST_ASSERT_EQUAL_PTR(cfa, CFA(ctx->dict));
@@ -219,22 +219,22 @@ void test_reclaim() {
 	//TEST_ASSERT_EQUAL_INT(400, ctx->stacks.stack->value);
 
 	//ctx->ip = 
-	//	nalloc(ctx, 1, 
-	//		balloc(ctx, 
-	//			nalloc(ctx, 7, NIL), 
-	//			nalloc(ctx, 13, NIL), 
-	//			nalloc(ctx, 5, palloc(ctx, &_add, NIL))));
+	//	ncons(ctx, 1, 
+	//		bcons(ctx, 
+	//			ncons(ctx, 7, NIL), 
+	//			ncons(ctx, 13, NIL), 
+	//			ncons(ctx, 5, pcons(ctx, &_add, NIL))));
 
 	//inner(ctx);
 
 	//TEST_ASSERT_EQUAL_INT(12, ctx->stacks.stack->value);
 
 	//ctx->ip = 
-	//	nalloc(ctx, 0, 
-	//		balloc(ctx, 
-	//			nalloc(ctx, 7, NIL), 
-	//			nalloc(ctx, 13, NIL), 
-	//			nalloc(ctx, 5, palloc(ctx, &_add, NIL))));
+	//	ncons(ctx, 0, 
+	//		bcons(ctx, 
+	//			ncons(ctx, 7, NIL), 
+	//			ncons(ctx, 13, NIL), 
+	//			ncons(ctx, 5, pcons(ctx, &_add, NIL))));
 
 	//inner(ctx);
 
@@ -261,7 +261,7 @@ void test_binops() {
 	BYTE block[size];
 	CTX* ctx = init(block, size);
 
-	ctx->stacks.stack = alloc(ctx, T_ATOM, 13, alloc(ctx, T_ATOM, 7, NIL));
+	ctx->stacks.stack = cons(ctx, T_ATOM, 13, cons(ctx, T_ATOM, 7, NIL));
 	TEST_ASSERT_EQUAL_INT(2, depth(ctx->stacks.stack));
 
 	_add(ctx);
@@ -269,145 +269,145 @@ void test_binops() {
 	TEST_ASSERT_EQUAL_INT(1, depth(ctx->stacks.stack));
 	POP(ctx);
 
-	ctx->stacks.stack = alloc(ctx, T_ATOM, 7, alloc(ctx, T_ATOM, 13, NIL));
+	ctx->stacks.stack = cons(ctx, T_ATOM, 7, cons(ctx, T_ATOM, 13, NIL));
 	_sub(ctx);
 	TEST_ASSERT_EQUAL_INT(TOS(ctx), 6);
 	TEST_ASSERT_EQUAL_INT(1, depth(ctx->stacks.stack));
 	POP(ctx);
 
-	ctx->stacks.stack = alloc(ctx, T_ATOM, 7, alloc(ctx, T_ATOM, 13, NIL));
+	ctx->stacks.stack = cons(ctx, T_ATOM, 7, cons(ctx, T_ATOM, 13, NIL));
 	_mul(ctx);
 	TEST_ASSERT_EQUAL_INT(TOS(ctx), 91);
 	TEST_ASSERT_EQUAL_INT(1, depth(ctx->stacks.stack));
 	POP(ctx);
 
-	ctx->stacks.stack = alloc(ctx, T_ATOM, 5, alloc(ctx, T_ATOM, 30, NIL));
+	ctx->stacks.stack = cons(ctx, T_ATOM, 5, cons(ctx, T_ATOM, 30, NIL));
 	_div(ctx);
 	TEST_ASSERT_EQUAL_INT(TOS(ctx), 6);
 	TEST_ASSERT_EQUAL_INT(1, depth(ctx->stacks.stack));
 	POP(ctx);
 
-	ctx->stacks.stack = alloc(ctx, T_ATOM, 2, alloc(ctx, T_ATOM, 9, NIL));
+	ctx->stacks.stack = cons(ctx, T_ATOM, 2, cons(ctx, T_ATOM, 9, NIL));
 	_mod(ctx);
 	TEST_ASSERT_EQUAL_INT(TOS(ctx), 1);
 	TEST_ASSERT_EQUAL_INT(1, depth(ctx->stacks.stack));
 	POP(ctx);
 
-	ctx->stacks.stack = alloc(ctx, T_ATOM, 7, alloc(ctx, T_ATOM, 13, NIL));
+	ctx->stacks.stack = cons(ctx, T_ATOM, 7, cons(ctx, T_ATOM, 13, NIL));
 	_gt(ctx);
 	TEST_ASSERT_EQUAL_INT(TOS(ctx), 1);
 	TEST_ASSERT_EQUAL_INT(1, depth(ctx->stacks.stack));
 	POP(ctx);
 
-	ctx->stacks.stack = alloc(ctx, T_ATOM, 13, alloc(ctx, T_ATOM, 7, NIL));
+	ctx->stacks.stack = cons(ctx, T_ATOM, 13, cons(ctx, T_ATOM, 7, NIL));
 	_gt(ctx);
 	TEST_ASSERT_EQUAL_INT(TOS(ctx), 0);
 	TEST_ASSERT_EQUAL_INT(1, depth(ctx->stacks.stack));
 	POP(ctx);
 
-	ctx->stacks.stack = alloc(ctx, T_ATOM, 7, alloc(ctx, T_ATOM, 7, NIL));
+	ctx->stacks.stack = cons(ctx, T_ATOM, 7, cons(ctx, T_ATOM, 7, NIL));
 	_gt(ctx);
 	TEST_ASSERT_EQUAL_INT(TOS(ctx), 0);
 	TEST_ASSERT_EQUAL_INT(1, depth(ctx->stacks.stack));
 	POP(ctx);
 
-	ctx->stacks.stack = alloc(ctx, T_ATOM, 7, alloc(ctx, T_ATOM, 13, NIL));
+	ctx->stacks.stack = cons(ctx, T_ATOM, 7, cons(ctx, T_ATOM, 13, NIL));
 	_lt(ctx);
 	TEST_ASSERT_EQUAL_INT(TOS(ctx), 0);
 	TEST_ASSERT_EQUAL_INT(1, depth(ctx->stacks.stack));
 	POP(ctx);
 
-	ctx->stacks.stack = alloc(ctx, T_ATOM, 13, alloc(ctx, T_ATOM, 7, NIL));
+	ctx->stacks.stack = cons(ctx, T_ATOM, 13, cons(ctx, T_ATOM, 7, NIL));
 	_lt(ctx);
 	TEST_ASSERT_EQUAL_INT(TOS(ctx), 1);
 	TEST_ASSERT_EQUAL_INT(1, depth(ctx->stacks.stack));
 	POP(ctx);
 
-	ctx->stacks.stack = alloc(ctx, T_ATOM, 7, alloc(ctx, T_ATOM, 7, NIL));
+	ctx->stacks.stack = cons(ctx, T_ATOM, 7, cons(ctx, T_ATOM, 7, NIL));
 	_lt(ctx);
 	TEST_ASSERT_EQUAL_INT(TOS(ctx), 0);
 	TEST_ASSERT_EQUAL_INT(1, depth(ctx->stacks.stack));
 	POP(ctx);
 
-	ctx->stacks.stack = alloc(ctx, T_ATOM, 7, alloc(ctx, T_ATOM, 13, NIL));
+	ctx->stacks.stack = cons(ctx, T_ATOM, 7, cons(ctx, T_ATOM, 13, NIL));
 	_eq(ctx);
 	TEST_ASSERT_EQUAL_INT(TOS(ctx), 0);
 	TEST_ASSERT_EQUAL_INT(1, depth(ctx->stacks.stack));
 	POP(ctx);
 
-	ctx->stacks.stack = alloc(ctx, T_ATOM, 13, alloc(ctx, T_ATOM, 7, NIL));
+	ctx->stacks.stack = cons(ctx, T_ATOM, 13, cons(ctx, T_ATOM, 7, NIL));
 	_eq(ctx);
 	TEST_ASSERT_EQUAL_INT(TOS(ctx), 0);
 	TEST_ASSERT_EQUAL_INT(1, depth(ctx->stacks.stack));
 	POP(ctx);
 
-	ctx->stacks.stack = alloc(ctx, T_ATOM, 7, alloc(ctx, T_ATOM, 7, NIL));
+	ctx->stacks.stack = cons(ctx, T_ATOM, 7, cons(ctx, T_ATOM, 7, NIL));
 	_eq(ctx);
 	TEST_ASSERT_EQUAL_INT(TOS(ctx), 1);
 	TEST_ASSERT_EQUAL_INT(1, depth(ctx->stacks.stack));
 	POP(ctx);
 
-	ctx->stacks.stack = alloc(ctx, T_ATOM, 7, alloc(ctx, T_ATOM, 13, NIL));
+	ctx->stacks.stack = cons(ctx, T_ATOM, 7, cons(ctx, T_ATOM, 13, NIL));
 	_neq(ctx);
 	TEST_ASSERT_EQUAL_INT(TOS(ctx), 1);
 	TEST_ASSERT_EQUAL_INT(1, depth(ctx->stacks.stack));
 	POP(ctx);
 
-	ctx->stacks.stack = alloc(ctx, T_ATOM, 13, alloc(ctx, T_ATOM, 7, NIL));
+	ctx->stacks.stack = cons(ctx, T_ATOM, 13, cons(ctx, T_ATOM, 7, NIL));
 	_neq(ctx);
 	TEST_ASSERT_EQUAL_INT(TOS(ctx), 1);
 	TEST_ASSERT_EQUAL_INT(1, depth(ctx->stacks.stack));
 	POP(ctx);
 
-	ctx->stacks.stack = alloc(ctx, T_ATOM, 7, alloc(ctx, T_ATOM, 7, NIL));
+	ctx->stacks.stack = cons(ctx, T_ATOM, 7, cons(ctx, T_ATOM, 7, NIL));
 	_neq(ctx);
 	TEST_ASSERT_EQUAL_INT(TOS(ctx), 0);
 	TEST_ASSERT_EQUAL_INT(1, depth(ctx->stacks.stack));
 	POP(ctx);
 
-	ctx->stacks.stack = alloc(ctx, T_ATOM, 0, alloc(ctx, T_ATOM, 0, NIL));
+	ctx->stacks.stack = cons(ctx, T_ATOM, 0, cons(ctx, T_ATOM, 0, NIL));
 	_and(ctx);
 	TEST_ASSERT_EQUAL_INT(TOS(ctx), 0);
 	TEST_ASSERT_EQUAL_INT(1, depth(ctx->stacks.stack));
 	POP(ctx);
 
-	ctx->stacks.stack = alloc(ctx, T_ATOM, 1, alloc(ctx, T_ATOM, 0, NIL));
+	ctx->stacks.stack = cons(ctx, T_ATOM, 1, cons(ctx, T_ATOM, 0, NIL));
 	_and(ctx);
 	TEST_ASSERT_EQUAL_INT(TOS(ctx), 0);
 	TEST_ASSERT_EQUAL_INT(1, depth(ctx->stacks.stack));
 	POP(ctx);
 
-	ctx->stacks.stack = alloc(ctx, T_ATOM, 0, alloc(ctx, T_ATOM, 1, NIL));
+	ctx->stacks.stack = cons(ctx, T_ATOM, 0, cons(ctx, T_ATOM, 1, NIL));
 	_and(ctx);
 	TEST_ASSERT_EQUAL_INT(TOS(ctx), 0);
 	TEST_ASSERT_EQUAL_INT(1, depth(ctx->stacks.stack));
 	POP(ctx);
 
-	ctx->stacks.stack = alloc(ctx, T_ATOM, 1, alloc(ctx, T_ATOM, 1, NIL));
+	ctx->stacks.stack = cons(ctx, T_ATOM, 1, cons(ctx, T_ATOM, 1, NIL));
 	_and(ctx);
 	TEST_ASSERT_EQUAL_INT(TOS(ctx), 1);
 	TEST_ASSERT_EQUAL_INT(1, depth(ctx->stacks.stack));
 	POP(ctx);
 
-	ctx->stacks.stack = alloc(ctx, T_ATOM, 0, alloc(ctx, T_ATOM, 0, NIL));
+	ctx->stacks.stack = cons(ctx, T_ATOM, 0, cons(ctx, T_ATOM, 0, NIL));
 	_or(ctx);
 	TEST_ASSERT_EQUAL_INT(TOS(ctx), 0);
 	TEST_ASSERT_EQUAL_INT(1, depth(ctx->stacks.stack));
 	POP(ctx);
 
-	ctx->stacks.stack = alloc(ctx, T_ATOM, 1, alloc(ctx, T_ATOM, 0, NIL));
+	ctx->stacks.stack = cons(ctx, T_ATOM, 1, cons(ctx, T_ATOM, 0, NIL));
 	_or(ctx);
 	TEST_ASSERT_EQUAL_INT(TOS(ctx), 1);
 	TEST_ASSERT_EQUAL_INT(1, depth(ctx->stacks.stack));
 	POP(ctx);
 
-	ctx->stacks.stack = alloc(ctx, T_ATOM, 0, alloc(ctx, T_ATOM, 1, NIL));
+	ctx->stacks.stack = cons(ctx, T_ATOM, 0, cons(ctx, T_ATOM, 1, NIL));
 	_or(ctx);
 	TEST_ASSERT_EQUAL_INT(TOS(ctx), 1);
 	TEST_ASSERT_EQUAL_INT(1, depth(ctx->stacks.stack));
 	POP(ctx);
 
-	ctx->stacks.stack = alloc(ctx, T_ATOM, 1, alloc(ctx, T_ATOM, 1, NIL));
+	ctx->stacks.stack = cons(ctx, T_ATOM, 1, cons(ctx, T_ATOM, 1, NIL));
 	_or(ctx);
 	TEST_ASSERT_EQUAL_INT(TOS(ctx), 1);
 	TEST_ASSERT_EQUAL_INT(1, depth(ctx->stacks.stack));
@@ -419,7 +419,7 @@ void test_dup() {
 	BYTE block[size];
 	CTX* ctx = init(block, size);
 
-	ctx->stacks.stack = alloc(ctx, T_ATOM, 7, NIL);
+	ctx->stacks.stack = cons(ctx, T_ATOM, 7, NIL);
 	_dup(ctx);
 	TEST_ASSERT_EQUAL_INT(2, depth(ctx->stacks.stack));
 	TEST_ASSERT_EQUAL_INT(7, TOS(ctx));
@@ -433,7 +433,7 @@ void test_dup_list() {
 
 	CELL free_nodes = (size - sizeof(CTX)) / sizeof(PAIR);
 
-	PUSH(ctx, T_LIST, (CELL)alloc(ctx, T_ATOM, 7, alloc(ctx, T_ATOM, 13, NIL)));
+	PUSH(ctx, T_LIST, (CELL)cons(ctx, T_ATOM, 7, cons(ctx, T_ATOM, 13, NIL)));
 
 	TEST_ASSERT_EQUAL_INT(2, depth((PAIR*)ctx->stacks.stack->value));
 	TEST_ASSERT_EQUAL_INT(free_nodes - 3, depth(ctx->free));
@@ -456,7 +456,7 @@ void test_swap() {
 	BYTE block[size];
 	CTX* ctx = init(block, size);
 
-	ctx->stacks.stack = alloc(ctx, T_ATOM, 7, alloc(ctx, T_ATOM, 13, NIL));
+	ctx->stacks.stack = cons(ctx, T_ATOM, 7, cons(ctx, T_ATOM, 13, NIL));
 	TEST_ASSERT_EQUAL_INT(2, depth(ctx->stacks.stack));
 	TEST_ASSERT_EQUAL_INT(7, TOS(ctx));
 	TEST_ASSERT_EQUAL_INT(13, SOS(ctx));
@@ -466,50 +466,50 @@ void test_swap() {
 	TEST_ASSERT_EQUAL_INT(7, SOS(ctx));
 }
 
-//void test_header_body_reveal() {
-//	CELL size = 2048;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//
-//	BYTE* here = ctx->here;
-//	PAIR* w = header(ctx, "test", 4, T_WORD);
-//	TEST_ASSERT_EQUAL_INT(0, ctx->err);
-//	TEST_ASSERT_EQUAL_PTR(ctx->here, ALIGN(here, sizeof(CELL)) + sizeof(CELL) + 4 + 1);
-//	TEST_ASSERT_EQUAL_INT(T_WORD, TYPE(w));
-//	TEST_ASSERT_EQUAL_INT(4, *((CELL*)(NFA(w)->value)));
-//	TEST_ASSERT_EQUAL_STRING("test", ((BYTE*)NFA(w)->value) + sizeof(CELL));
-//	TEST_ASSERT_EQUAL_INT(((BYTE*)NFA(w)->value) + sizeof(CELL) + 5, DFA(w)->value);
-//	TEST_ASSERT_EQUAL_INT(NIL, CFA(w));
-//
-//	TEST_ASSERT_NULL(ctx->dict);
-//
-//	PAIR* cfa = nalloc(ctx, 7, nalloc(ctx, 13, NIL));
-//	body(ctx, w, cfa);
-//
-//	TEST_ASSERT_EQUAL_INT(cfa, CFA(w));
-//	TEST_ASSERT_EQUAL_INT(7, CFA(w)->value);
-//	TEST_ASSERT_EQUAL_INT(13, NEXT(CFA(w))->value);
-//
-//	reveal(ctx, w);
-//
-//	TEST_ASSERT_EQUAL_PTR(w, ctx->dict);
-//	TEST_ASSERT_NULL(ctx->dict->next);
-//
-//	TEST_ASSERT_FALSE(IS_IMMEDIATE(w));
-//
-//	_immediate(ctx);
-//
-//	TEST_ASSERT_TRUE(IS_IMMEDIATE(w));
-//}
-//
+void test_header_body_reveal() {
+	CELL size = 2048;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	BYTE* here = ctx->here;
+	PAIR* w = header(ctx, "test", 4);
+	TEST_ASSERT_EQUAL_INT(0, ctx->err);
+	TEST_ASSERT_EQUAL_PTR(ctx->here, ALIGN(here, sizeof(CELL)) + sizeof(CELL) + 4 + 1);
+	TEST_ASSERT(IS(T_ATOM, w));
+	TEST_ASSERT_EQUAL_INT(4, COUNT(NFA(w)));
+	TEST_ASSERT_EQUAL_STRING("test", NFA(w));
+	TEST_ASSERT_EQUAL_INT(((BYTE*)REF(REF(w))) + 4, DFA(w));
+	TEST_ASSERT_EQUAL_INT(NIL, CFA(w));
+
+	TEST_ASSERT_NULL(ctx->dict);
+
+	PAIR* cfa = cons(ctx, T_ATOM, 7, cons(ctx, T_ATOM, 13, NIL));
+	body(ctx, w, cfa);
+
+	TEST_ASSERT_EQUAL_INT(cfa, CFA(w));
+	TEST_ASSERT_EQUAL_INT(7, CFA(w)->value);
+	TEST_ASSERT_EQUAL_INT(13, NEXT(CFA(w))->value);
+
+	reveal(ctx, w);
+
+	TEST_ASSERT_EQUAL_PTR(w, ctx->dict);
+	TEST_ASSERT_NULL(NEXT(ctx->dict));
+
+	TEST_ASSERT_FALSE(IS_IMMEDIATE(w));
+
+	_immediate(ctx);
+
+	TEST_ASSERT_TRUE(IS_IMMEDIATE(w));
+}
+
 //void test_find() {
 //	CELL size = 512;
 //	BYTE block[size];
 //	CTX* ctx = init(block, size);
 //
-//	PAIR* dup = reveal(ctx, header(ctx, "dup", 3, T_PRIM));
-//	PAIR* swap = reveal(ctx, header(ctx, "swap", 4, T_PRIM));
-//	PAIR* test = reveal(ctx, header(ctx, "test", 4, T_WORD));
+//	PAIR* dup = reveal(ctx, header(ctx, "dup", 3));
+//	PAIR* swap = reveal(ctx, header(ctx, "swap", 4));
+//	PAIR* test = reveal(ctx, header(ctx, "test", 4));
 //
 //	TEST_ASSERT_EQUAL_PTR(dup, find(ctx, "dup", 3));
 //	TEST_ASSERT_EQUAL_PTR(swap, find(ctx, "swap", 4));
@@ -538,24 +538,24 @@ void test_swap() {
 //	// : fib dup 1 > if 1- dup 1- recurse swap recurse + then ;
 //
 //	ctx->ip =
-//		alloc(ctx, (CELL)&_dup, T_PRIM,
-//		alloc(ctx, 1, T_ATOM,
-//		alloc(ctx, (CELL)&_gt, T_PRIM,
-//		alloc(ctx,
+//		cons(ctx, (CELL)&_dup, T_PRIM,
+//		cons(ctx, 1, T_ATOM,
+//		cons(ctx, (CELL)&_gt, T_PRIM,
+//		cons(ctx,
 //			NIL,
 //			T_BRANCH,
-//			alloc(ctx, 1, T_ATOM,
-//			alloc(ctx, (CELL)&_sub, T_PRIM,
-//			alloc(ctx, (CELL)&_dup, T_PRIM,
-//			alloc(ctx, 1, T_ATOM,
-//			alloc(ctx, (CELL)&_sub, T_PRIM,
-//			alloc(ctx, (CELL)&_rec, T_PRIM,
-//			alloc(ctx, (CELL)&_swap, T_PRIM,
-//			alloc(ctx, (CELL)&_rec, T_PRIM,	
-//			alloc(ctx, (CELL)&_add, T_PRIM, NIL)))))))))))));
+//			cons(ctx, 1, T_ATOM,
+//			cons(ctx, (CELL)&_sub, T_PRIM,
+//			cons(ctx, (CELL)&_dup, T_PRIM,
+//			cons(ctx, 1, T_ATOM,
+//			cons(ctx, (CELL)&_sub, T_PRIM,
+//			cons(ctx, (CELL)&_rec, T_PRIM,
+//			cons(ctx, (CELL)&_swap, T_PRIM,
+//			cons(ctx, (CELL)&_rec, T_PRIM,	
+//			cons(ctx, (CELL)&_add, T_PRIM, NIL)))))))))))));
 //
-//		ctx->stacks.stack = alloc(ctx, 6, T_ATOM, NIL);
-//		ctx->rstack = alloc(ctx, (CELL)ctx->ip, T_WORD, NIL);
+//		ctx->stacks.stack = cons(ctx, 6, T_ATOM, NIL);
+//		ctx->rstack = cons(ctx, (CELL)ctx->ip, T_WORD, NIL);
 //
 //		inner(ctx);
 //
@@ -572,7 +572,7 @@ int main() {
 
 	RUN_TEST(test_allot);
 	RUN_TEST(test_align);
-	RUN_TEST(test_alloc);
+	RUN_TEST(test_cons);
 	RUN_TEST(test_reclaim);
 	
 	//RUN_TEST(test_inner_interpreter_atom_primitive_and_branch);
@@ -587,7 +587,7 @@ int main() {
 	RUN_TEST(test_dup_list);
 	RUN_TEST(test_swap);
 
-	//RUN_TEST(test_header_body_reveal);
+	RUN_TEST(test_header_body_reveal);
 	//RUN_TEST(test_find);
 
 	//RUN_TEST(test_dodo_initialization);

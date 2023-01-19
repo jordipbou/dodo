@@ -3,7 +3,6 @@
 #define NIL				0
 
 typedef int8_t		BYTE;
-typedef int16_t		WORD;
 typedef intptr_t	CELL;		// 16, 32 or 64 bits depending on system
 typedef CELL			tCELL;	// tagged cell
 
@@ -70,7 +69,7 @@ CTX* init(BYTE* block, CELL size) {
 	return ctx;
 }
 
-PAIR* alloc(CTX* ctx, CELL type, CELL value, PAIR* next) {
+PAIR* cons(CTX* ctx, CELL type, CELL value, PAIR* next) {
 	if (ctx->free == NIL) { ctx->err = ERR_NOT_ENOUGH_MEMORY;	return NIL;	}
 	PAIR* p = ctx->free;
 	ctx->free = NEXT(p);
@@ -94,15 +93,16 @@ PAIR* clone(CTX* ctx, PAIR* list) {
 	if (list == NIL) { 
 		return NIL; 
 	} else if (IS(T_ATOM, list)) { 
-		return alloc(ctx, T_ATOM, list->value, clone(ctx, NEXT(list))); 
+		return cons(ctx, T_ATOM, list->value, clone(ctx, NEXT(list))); 
 	}	else { 
-		return alloc(ctx, T_LIST, (CELL)clone(ctx, REF(list)), clone(ctx, NEXT(list)));
+		return cons(ctx, T_LIST, (CELL)clone(ctx, REF(list)), clone(ctx, NEXT(list)));
 	}
 }
 
-void allot(CTX* ctx, CELL bytes) {
+BYTE* allot(CTX* ctx, CELL bytes) {
+	BYTE* here = ctx->here;
 	if (bytes == 0) { 
-		return;
+		return here;
 	} else if (bytes < 0) {
 		if ((ctx->here + bytes) > BOTTOM(ctx)) ctx->here += bytes;
 		else ctx->here = BOTTOM(ctx);
@@ -116,20 +116,22 @@ void allot(CTX* ctx, CELL bytes) {
 				ctx->there++;
 			} else {
 				ctx->err = ERR_NOT_ENOUGH_MEMORY;
-				return;
+				return here;
 			}
 		}
 		if (RESERVED(ctx) >= bytes)	ctx->here += bytes;
 		else ctx->err = ERR_NOT_ENOUGH_MEMORY;
 	}
+	return here;
 }
 
 void align(CTX* ctx) { allot(ctx, ALIGN(ctx->here, sizeof(CELL)) - ((CELL)ctx->here)); }
 
-#define TOS(ctx)				(ctx->stacks.stack->value)
-#define SOS(ctx)				(NEXT(ctx->stacks.stack)->value)
-#define POP(ctx)				(ctx->stacks.stack = reclaim(ctx, ctx->stacks.stack))
-#define PUSH(ctx, t, v)	(ctx->stacks.stack = alloc(ctx, t, v, ctx->stacks.stack))
+#define DSTACK(ctx)			(ctx->stacks.stack)
+#define TOS(ctx)				(DSTACK(ctx)->value)
+#define SOS(ctx)				(NEXT(DSTACK(ctx))->value)
+#define POP(ctx)				(DSTACK(ctx) = reclaim(ctx, DSTACK(ctx)))
+#define PUSH(ctx, t, v)	(DSTACK(ctx) = cons(ctx, t, v, DSTACK(ctx)))
 
 void inner(CTX* ctx, PAIR* xlist) {
 	PAIR* ip = xlist;
@@ -164,20 +166,94 @@ void _or(CTX* ctx) { SOS(ctx) = SOS(ctx) || TOS(ctx); POP(ctx); }
 void _not(CTX* ctx) { TOS(ctx) = !TOS(ctx); }
 
 void _dup(CTX* ctx) { 
-	if (IS(T_LIST, ctx->stacks.stack)) {
-		PUSH(ctx, T_LIST, (CELL)clone(ctx, REF(ctx->stacks.stack)));
+	if (IS(T_LIST, DSTACK(ctx))) {
+		PUSH(ctx, T_LIST, (CELL)clone(ctx, REF(DSTACK(ctx))));
 	} else {
-		PUSH(ctx, TYPE(ctx->stacks.stack->next), TOS(ctx));
+		PUSH(ctx, TYPE(DSTACK(ctx)->next), TOS(ctx));
 	}
 }
 
 void _swap(CTX* ctx) {
-	PAIR* fos = ctx->stacks.stack;
-	PAIR* sos = NEXT(ctx->stacks.stack);
-	PAIR* tos = NEXT(NEXT(ctx->stacks.stack));
-	ctx->stacks.stack = sos;
-	ctx->stacks.stack->next = AS(TYPE(sos->next), fos);
-	NEXT(ctx->stacks.stack)->next = AS(TYPE(fos->next), tos);
+	PAIR* fos = DSTACK(ctx);
+	PAIR* sos = NEXT(DSTACK(ctx));
+	PAIR* tos = NEXT(NEXT(DSTACK(ctx)));
+	DSTACK(ctx) = sos;
+	DSTACK(ctx)->next = AS(TYPE(sos->next), fos);
+	NEXT(DSTACK(ctx))->next = AS(TYPE(fos->next), tos);
+}
+
+#define NFA(w)		(REF(REF(w)))
+#define DFA(w)		(REF(NEXT(REF(w))))
+#define CFA(w)		(NEXT(NEXT(REF(w))))
+#define COUNT(s)	(*((CELL*)(((BYTE*)s) - sizeof(CELL))))
+
+BYTE* compile_str(CTX* ctx, BYTE* str, CELL len) {
+	align(ctx);
+	BYTE* cstr = allot(ctx, sizeof(CELL) + len + 1);
+	*((CELL*)cstr) = len;
+	for (CELL i = 0; i < len; i++) {
+		cstr[sizeof(CELL) + i] = str[i];
+	}
+	cstr[sizeof(CELL) + len] = 0;
+	return cstr + sizeof(CELL);
+}
+
+PAIR* header(CTX* ctx, BYTE* name, CELL nlen) {
+	BYTE* str = compile_str(ctx, name, nlen);
+
+	return 
+		cons(ctx, T_ATOM, 
+			(CELL)cons(ctx, T_ATOM, (CELL)str,
+						cons(ctx, T_ATOM, (CELL)ctx->here, NIL)), 
+			NIL);
+}
+
+PAIR* body(CTX* ctx, PAIR* word, PAIR* cfa) {
+	PAIR* old_cfa = CFA(word);
+	NEXT(REF(word))->next = AS(T_ATOM, cfa);
+	while (old_cfa != NIL) { old_cfa = reclaim(ctx, old_cfa); }
+	return word;
+}
+
+PAIR* reveal(CTX* ctx, PAIR* header) {
+	header->next = AS(T_ATOM, ctx->dict);
+	ctx->dict = header;
+	return header;
+}
+
+#define IS_IMMEDIATE(w)		(TYPE(w->ref) & 1)
+
+void _immediate(CTX* ctx) {
+	ctx->dict->ref = AS(1, REF(ctx->dict));
+}
+
+//PAIR* find(CTX* ctx, BYTE* name, CELL nlen) {
+//	// TODO
+//}
+
+CTX* dodo(CTX* x) {
+	reveal(x, body(x, header(x, "+", 1), cons(x, T_PRIMITIVE, (CELL)&_add, NIL)));
+	reveal(x, body(x, header(x, "-", 1), cons(x, T_PRIMITIVE, (CELL)&_sub, NIL)));
+	reveal(x, body(x, header(x, "*", 1), cons(x, T_PRIMITIVE, (CELL)&_mul, NIL)));
+	reveal(x, body(x, header(x, "/", 1), cons(x, T_PRIMITIVE, (CELL)&_div, NIL)));
+	reveal(x, body(x, header(x, "mod", 3), cons(x, T_PRIMITIVE, (CELL)&_mod, NIL)));
+
+	reveal(x, body(x, header(x, ">", 1), cons(x, T_PRIMITIVE, (CELL)&_gt, NIL)));
+	reveal(x, body(x, header(x, "<", 1), cons(x, T_PRIMITIVE, (CELL)&_lt, NIL)));
+	reveal(x, body(x, header(x, "=", 1), cons(x, T_PRIMITIVE, (CELL)&_eq, NIL)));
+	reveal(x, body(x, header(x, "<>", 2), cons(x, T_PRIMITIVE, (CELL)&_neq, NIL)));
+
+	reveal(x, body(x, header(x, "and", 3), cons(x, T_PRIMITIVE, (CELL)&_and, NIL)));
+	reveal(x, body(x, header(x, "or", 2), cons(x, T_PRIMITIVE, (CELL)&_or, NIL)));
+	reveal(x, body(x, header(x, "invert", 3), cons(x, T_PRIMITIVE, (CELL)&_not, NIL)));
+
+	reveal(x, body(x, header(x, "dup", 3), cons(x, T_PRIMITIVE, (CELL)&_dup, NIL)));
+	reveal(x, body(x, header(x, "swap", 4), cons(x, T_PRIMITIVE, (CELL)&_swap, NIL)));
+
+	//reveal(x, body(x, header(ctx, "key", 3), cons(x, T_PRIMITIVE, (CELL)&_key, NIL)));
+	//reveal(x, body(x, header(ctx, "emit", 4), cons(x, T_PRIMITIVE, (CELL)&_emit, NIL)));
+
+	return x;
 }
 
 // ----------------------------------------------------------------------------
@@ -188,53 +264,6 @@ void _swap(CTX* ctx) {
 //	#include <unistd.h>
 //	#include <termios.h>
 //#endif
-//
-//#define NFA(word)						((PAIR*)(word->value))
-//#define DFA(word)						(NEXT(NFA(word)))
-//#define CFA(word)						(NEXT(DFA(word)))
-//
-//PAIR* header(CTX* ctx, BYTE* name, CELL nlen, CELL type) {
-//	align(ctx); 
-//	BYTE* str = ctx->here;
-//	allot(ctx, sizeof(CELL) + nlen + 1);
-//	*((CELL*)str) = nlen;
-//
-//	for (CELL i = 0; i < nlen; i++) {
-//		str[sizeof(CELL) + i] = name[i];	
-//	}
-//	str[sizeof(CELL) + nlen] = 0;
-//
-//	return walloc(ctx, (CELL)nalloc(ctx, (CELL)str, nalloc(ctx, (CELL)ctx->here, NIL)), NIL);
-//}
-//
-//PAIR* body(CTX* ctx, PAIR* word, PAIR* cfa) {
-//	PAIR* old_cfa = CFA(word);
-//	DFA(word)->next = (PAIR*)(((CELL)cfa) | T_ATOM);
-//	while (old_cfa != NIL) { old_cfa = reclaim(ctx, old_cfa); }
-//	return word;
-//}
-//
-//PAIR* reveal(CTX* ctx, PAIR* header) {
-//	header->next = ctx->dict;
-//	ctx->dict = header;
-//	return header;
-//}
-//
-//#define T_IMMEDIATE							1
-//#define IS_IMMEDIATE(word)			(TYPE(word) & T_IMMEDIATE)
-//
-//void _immediate(CTX* ctx) {
-//	ctx->dict->next = (PAIR*)(((CELL)ctx->dict->next) | T_IMMEDIATE);
-//}
-//
-//PAIR* find(CTX* ctx, BYTE* name, CELL nlen) {
-//	PAIR* word = ctx->dict;
-//	// TODO: Change strcmp here to custom string comparison (starting on name length)
-//	while (word != NIL && strcmp(name, ((BYTE*)(NFA(word)->value) + sizeof(CELL)))) {
-//		word = NEXT(word);
-//	}
-//	return word;
-//}
 //
 //// Source code for getch is taken from:
 //// Crossline readline (https://github.com/jcwangxp/Crossline).
@@ -260,7 +289,7 @@ void _swap(CTX* ctx) {
 //}
 //#endif
 //
-//void _key(CTX* ctx) { ctx->dstack = nalloc(ctx, dodo_getch(), ctx->dstack); }
+//void _key(CTX* ctx) { ctx->dstack = ncons(ctx, dodo_getch(), ctx->dstack); }
 //void _emit(CTX* ctx) { 
 //	CELL K = TOS(ctx); 
 //	POP(ctx); 
@@ -268,27 +297,4 @@ void _swap(CTX* ctx) {
 //	else { printf ("%c", (char)K); }
 //}
 //
-//CTX* dodo(CTX* ctx) {
-//	reveal(ctx, body(ctx, header(ctx, "+", 1, T_PRIM), palloc(ctx, &_add, NIL)));
-//	reveal(ctx, body(ctx, header(ctx, "-", 1, T_PRIM), palloc(ctx, &_sub, NIL)));
-//	reveal(ctx, body(ctx, header(ctx, "*", 1, T_PRIM), palloc(ctx, &_mul, NIL)));
-//	reveal(ctx, body(ctx, header(ctx, "/", 1, T_PRIM), palloc(ctx, &_div, NIL)));
-//	reveal(ctx, body(ctx, header(ctx, "mod", 3, T_PRIM), palloc(ctx, &_mod, NIL)));
-//
-//	reveal(ctx, body(ctx, header(ctx, ">", 1, T_PRIM), palloc(ctx, &_gt, NIL)));
-//	reveal(ctx, body(ctx, header(ctx, "<", 1, T_PRIM), palloc(ctx, &_lt, NIL)));
-//	reveal(ctx, body(ctx, header(ctx, "=", 1, T_PRIM), palloc(ctx, &_eq, NIL)));
-//	reveal(ctx, body(ctx, header(ctx, "<>", 2, T_PRIM), palloc(ctx, &_neq, NIL)));
-//
-//	reveal(ctx, body(ctx, header(ctx, "and", 3, T_PRIM), palloc(ctx, &_and, NIL)));
-//	reveal(ctx, body(ctx, header(ctx, "or", 2, T_PRIM), palloc(ctx, &_or, NIL)));
-//	reveal(ctx, body(ctx, header(ctx, "invert", 3, T_PRIM), palloc(ctx, &_not, NIL)));
-//
-//	reveal(ctx, body(ctx, header(ctx, "dup", 3, T_PRIM), palloc(ctx, &_dup, NIL)));
-//	reveal(ctx, body(ctx, header(ctx, "swap", 4, T_PRIM), palloc(ctx, &_swap, NIL)));
-//
-//	reveal(ctx, body(ctx, header(ctx, "key", 3, T_PRIM), palloc(ctx, &_key, NIL)));
-//	reveal(ctx, body(ctx, header(ctx, "emit", 4, T_PRIM), palloc(ctx, &_emit, NIL)));
-//
-//	return ctx;
-//}
+
