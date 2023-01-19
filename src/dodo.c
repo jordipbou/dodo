@@ -1,36 +1,34 @@
 #include<stdio.h>
 #include "dodo.h"
 
-//void fib(CTX* ctx) {
-//	_dup(ctx);
-//	ctx->dstack = nalloc(ctx, 1, ctx->dstack);
-//	_gt(ctx);
-//	if (TOS(ctx)) {
-//		POP(ctx);
-//		ctx->dstack = nalloc(ctx, 1, ctx->dstack);
-//		_sub(ctx);
-//		_dup(ctx);
-//		ctx->dstack = nalloc(ctx, 1, ctx->dstack);
-//		_sub(ctx);
-//		fib(ctx);
-//		_swap(ctx);
-//		fib(ctx);
-//		_add(ctx);
-//	} else {
-//		POP(ctx);
-//	}
-//}
-
 void main() {
-	//CELL size = 8192;
-	//BYTE block[size];
-	//CTX* ctx = dodo(init(block, size));
+	CELL size = 8192;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
 
-	//ctx->dstack = nalloc(ctx, 36, ctx->dstack);
+	ctx->dstack = alloc(ctx, T_ATOM, 36, ctx->dstack);
 
-	//fib(ctx);
+	PAIR* xlist = 
+		alloc(ctx, T_PRIMITIVE, (CELL)&_dup,
+		alloc(ctx, T_ATOM, 1,
+		alloc(ctx, T_PRIMITIVE, (CELL)&_gt,
+		alloc(ctx, T_LIST, 
+			// False
+			AS(ST_BRANCH, NIL),
+			// True
+			alloc(ctx, T_ATOM, 1,
+			alloc(ctx, T_PRIMITIVE, (CELL)&_sub,
+			alloc(ctx, T_PRIMITIVE, (CELL)&_dup,
+			alloc(ctx, T_ATOM, 1,
+			alloc(ctx, T_PRIMITIVE, (CELL)&_sub,
+			alloc(ctx, T_LIST, AS(ST_RECURSION, NIL),
+			alloc(ctx, T_PRIMITIVE, (CELL)&_swap,
+			alloc(ctx, T_LIST, AS(ST_RECURSION, NIL),
+			alloc(ctx, T_PRIMITIVE, (CELL)&_add, NIL)))))))))))));
+	
+	//ctx->rstack = alloc(ctx, T_LIST, (CELL)AS(ST_WORD, ctx->ip), ctx->rstack);
 
-	//printf("%ld\n", TOS(ctx));
+	inner(ctx, xlist);
 
-	// loop(print(eval(read)))
+	printf("%ld\n", TOS(ctx));
 }

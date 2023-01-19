@@ -39,33 +39,34 @@ CELL depth(PAIR* p) {	CELL c = 0; while (p != NIL) { c++; p = NEXT(p); } return 
 
 typedef struct {
 	CELL err;
-	BYTE* bottom, * here;
+	BYTE* here;
 	PAIR* there, * top;
-	PAIR* dstack, * free, * rstack;
+	PAIR* dstack, * free;
 	PAIR* dict;
-	PAIR* ip;
 } CTX;
 
+#define BOTTOM(ctx)		(((BYTE*)ctx) + sizeof(CTX))
 
 typedef void (*FUNC)(CTX*);
 
 #define ALIGN(addr, bound)	(((CELL)addr + ((CELL)bound-1)) & ~((CELL)bound-1))
+#define PALIGN(addr)				((PAIR*)(ALIGN(addr, sizeof(PAIR))))
 #define RESERVED(ctx)				(((CELL)ctx->there) - ((CELL)ctx->here))
 
 #define ERR_NOT_ENOUGH_MEMORY		-1
 
 CTX* init(BYTE* block, CELL size) {
 	CTX* ctx = (CTX*)block;	
-	ctx->bottom = ctx->here = ((BYTE*)ctx) + sizeof(CTX);
-	ctx->there = (PAIR*)ALIGN(ctx->here, sizeof(PAIR));
-	ctx->free = ctx->top = (PAIR*)ALIGN(block + size - sizeof(PAIR) - 1, sizeof(PAIR));
+	ctx->here = BOTTOM(ctx);
+	ctx->there = PALIGN(BOTTOM(ctx));
+	ctx->free = ctx->top = PALIGN(block + size - sizeof(PAIR) - 1);
 
 	for (PAIR* p = ctx->there; p <= ctx->top; p++) {
 		p->prev = p == ctx->top ? NIL : p + 1;
 		p->next = AS(T_FREE, p == ctx->there ? NIL : p - 1);
 	}
 
-	ctx->ip = ctx->dict = ctx->rstack = ctx->dstack = NIL;
+	ctx->dict = ctx->dstack = NIL;
 	ctx->err = NIL;
 
 	return ctx;
@@ -75,9 +76,9 @@ void allot(CTX* ctx, CELL bytes) {
 	if (bytes == 0) { 
 		return;
 	} else if (bytes < 0) {
-		if ((ctx->here + bytes) > ctx->bottom) ctx->here += bytes;
-		else ctx->here = ctx->bottom;
-		while ((ctx->there - 1) >= (PAIR*)ALIGN(ctx->here, sizeof(PAIR))) {
+		if ((ctx->here + bytes) > BOTTOM(ctx)) ctx->here += bytes;
+		else ctx->here = BOTTOM(ctx);
+		while ((ctx->there - 1) >= PALIGN(ctx->here)) {
 			ctx->free->prev = --ctx->there;
 			ctx->there->next = AS(T_FREE, ctx->free);
 			ctx->there->prev = NIL;
@@ -129,52 +130,37 @@ PAIR* reclaim(CTX* ctx, PAIR* p) {
 	return tail;
 }
 
-void inner(CTX* ctx) {
-	while(ctx->err == NIL) {
-		if (ctx->ip == NIL) {
-			if (ctx->rstack == NIL) return;
-			else {
-				ctx->ip = NEXT(REF(ctx->rstack));
-				ctx->rstack = reclaim(ctx, ctx->rstack);
-			}
-		} else {
-			switch (TYPE(ctx->ip->next)) {
-				case T_ATOM: 
-					ctx->dstack = alloc(ctx, T_ATOM, ctx->ip->value, ctx->dstack);
-					ctx->ip = NEXT(ctx->ip);
-					break;
-				case T_PRIMITIVE:
-					((FUNC)ctx->ip->value)(ctx);
-					ctx->ip = NEXT(ctx->ip);
-					break;
-				case T_LIST:
-					switch (TYPE(ctx->ip->ref)) {
-						case ST_BRANCH:
-							if (ctx->dstack->value != 0) {
-								ctx->ip = NEXT(ctx->ip);
-							} else {
-								ctx->ip = REF(ctx->ip);
-							}
-							ctx->dstack = reclaim(ctx, ctx->dstack);
-							break;
-						case ST_RECURSION: {
-							// TODO: Check if NEXT is NIL to add tail recursion optimization
-							PAIR* p = ctx->rstack;
-							while (IS(T_LIST, p) && TYPE(p->ref) != ST_WORD && p != NIL) {
-								p = NEXT(p);
-							}
-							ctx->rstack = alloc(ctx, T_LIST, (CELL)AS(ST_WORD, REF(p)), ctx->rstack);
-							ctx->ip = REF(p);
-							break; }
-						case ST_WORD:
-							ctx->rstack = alloc(ctx, T_LIST, (CELL)AS(ST_WORD, ctx->ip), ctx->rstack);
-							ctx->ip = REF(ctx->ip);
-							break;
-						case ST_QUOTATION:
-							// TODO
-							break;
-					}
-			}
+void inner(CTX* ctx, PAIR* xlist) {
+	PAIR* ip = xlist;
+	while(ctx->err == NIL && ip != NIL) {
+		switch(TYPE(ip->next)) {
+			case T_ATOM:
+				ctx->dstack = alloc(ctx, T_ATOM, ip->value, ctx->dstack);
+				ip = NEXT(ip);
+				break;
+			case T_PRIMITIVE:
+				((FUNC)ip->value)(ctx);
+				ip = NEXT(ip);
+				break;
+			case T_LIST:
+				switch(TYPE(ip->ref)) {
+					case ST_BRANCH:
+						if (ctx->dstack->value != 0) { ip = NEXT(ip); }
+						else { ip = REF(ip); }
+						ctx->dstack = reclaim(ctx, ctx->dstack);
+						break;
+					case ST_RECURSION:
+						inner(ctx, xlist);
+						ip = NEXT(ip);
+						break;
+					case ST_WORD:
+						inner(ctx, REF(ip));
+						ip = NEXT(ip);
+						break;
+					case ST_QUOTATION:
+						// TODO
+						break;
+				}
 		}
 	}
 }
@@ -198,84 +184,32 @@ void _and(CTX* ctx) { SOS(ctx) = SOS(ctx) && TOS(ctx); POP(ctx); }
 void _or(CTX* ctx) { SOS(ctx) = SOS(ctx) || TOS(ctx); POP(ctx); }
 void _not(CTX* ctx) { TOS(ctx) = !TOS(ctx); }
 
-//#define UNTYPED(c)				(((CELL)c) & -4)
-//
-//#define CAR(p)						((PAIR*)UNTYPED((CELL)p->value))
-//#define CDR(p)						(p->next)
+void _dup(CTX* ctx) { 
+	if (IS(T_LIST, ctx->dstack)) {
+		// TODO
+		//ctx->dstack = alloc(ctx, (CELL)copy(ctx, (PAIR*)TOS(ctx)), T_LIST, ctx->dstack);
+	} else {
+		ctx->dstack = alloc(ctx, TYPE(ctx->dstack->next), TOS(ctx), ctx->dstack);
+	}
+}
 
-//#define CAAR(p)						CAR(CAR(p))
-//#define CADR(p)						CAR(UNTYPED(CDR(p)))
-//#define CDAR(p)						CDR(CAR(p))
-//#define CDDR(p)						CDR(UNTYPED(CDR(p)))
-//
-//#define TYPE(p)						((CELL)CAR(p) & 3)
-//#define SUBTYPE(p)				(CDR(p) & 3)
-//
-//#define FREE(p, next, prev)	{ p->value = (PAIR*)(UNTYPED((next))); p->next = (CELL)(prev); }
-//#define ATOM(p, atom, next)	{ p->value = (PAIR*)(UNTYPED((next)) | 1); p->next = atom; }
-//#define LIST(p, ptr, next)	{ p->value = (PAIR*)(UNTYPED((next)) | 3); p->next = (CELL)(ptr); }
-//
-//#define IS_FREE(p)				(TYPE(p) == 0)
-//
-//#define IS_ATOM(p)				(TYPE(p) == 1)
-//#define IS_PRIMITIVE(p)		(TYPE(p) == 2)
-//#define IS_LIST(p)				(TYPE(p) == 3)
-//
-//#define IS_BRANCH(p)			(IS_PRIMITIVE(p) && CDR(p) == 0)
-//#define IS_RECURSION(p)		(IS_PRIMITIVE(p) && CDR(p) == 1)
-//#define IS_WORD(p)				(IS_LIST(p) && SUBTYPE(p) == 1)
-//#define IS_QUOTATION(p)		(IS_LIST(p) && SUBTYPE(p) == 3)
-
-//#define PAIR_ALIGN(addr)		(PAIR*)(ALIGN(addr, sizeof(PAIR)))
-
-
+void _swap(CTX* ctx) {
+	PAIR* fos = ctx->dstack;
+	PAIR* sos = NEXT(ctx->dstack);
+	PAIR* tos = NEXT(NEXT(ctx->dstack));
+	ctx->dstack = sos;
+	ctx->dstack->next = AS(TYPE(sos->next), fos);
+	NEXT(ctx->dstack)->next = AS(TYPE(fos->next), tos);
+}
 
 // ----------------------------------------------------------------------------
 
-//#include<stdint.h>
-//#include<string.h>
-//#include<stdio.h>
-//
 //#ifdef _WIN32
 //  #include <conio.h>
 //#else
 //	#include <unistd.h>
 //	#include <termios.h>
 //#endif
-//
-//typedef int8_t		BYTE;
-//typedef intptr_t	CELL;
-//
-//#define NIL									0						// Absence of value and truth
-//	
-//typedef struct _PAIR {
-//	struct _PAIR* next;
-//	CELL value;	
-//} PAIR;
-//
-//#define UNTYPED(ptr)				((PAIR*)(((CELL)ptr) & -8))
-//#define TYPED(ptr, type)		((PAIR*)((CELL)ptr | type))
-//
-//#define TYPE(pair)					(pair == NIL ? NIL : ((CELL)pair->next) & 7)
-//#define NEXT(pair)					(UNTYPED(pair->next))
-//
-//#define T_FREE							0
-//#define T_ATOM							1
-//#define T_PRIM							2
-//#define T_PRIM_IMM					3
-//#define T_WORD							4
-//#define T_WORD_IMM					5
-//#define T_BRANCH						6
-//#define T_LIST							7
-//
-//typedef struct {
-//	CELL err;
-//	BYTE* bottom, * here;
-//	PAIR* there, * top;
-//	PAIR* dstack, * free, * rstack;
-//	PAIR* dict;
-//	PAIR* ip;
-//} CTX;
 //
 //typedef void (*FUNC)(CTX*);
 //
@@ -444,13 +378,6 @@ void _not(CTX* ctx) { TOS(ctx) = !TOS(ctx); }
 //	} else {
 //		ctx->dstack = alloc(ctx, TOS(ctx), TYPE(ctx->dstack), ctx->dstack);
 //	}
-//}
-//
-//void _swap(CTX* ctx) {
-//	PAIR* sos = NEXT(ctx->dstack);
-//	ctx->dstack->next = (PAIR*)(((CELL)NEXT(sos)) | TYPE(ctx->dstack));
-//	sos->next = (PAIR*)(((CELL)ctx->dstack) | TYPE(sos));
-//	ctx->dstack = sos;
 //}
 //
 //void _rec(CTX* ctx) {
