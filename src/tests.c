@@ -425,6 +425,31 @@ void test_dup() {
 	TEST_ASSERT_EQUAL_INT(7, SOS(ctx));
 }
 
+void test_dup_list() {
+	CELL size = 256;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	CELL free_nodes = (size - sizeof(CTX)) / sizeof(PAIR);
+
+	PUSH(ctx, T_LIST, (CELL)alloc(ctx, T_ATOM, 7, alloc(ctx, T_ATOM, 13, NIL)));
+
+	TEST_ASSERT_EQUAL_INT(2, depth((PAIR*)ctx->dstack->value));
+	TEST_ASSERT_EQUAL_INT(free_nodes - 3, depth(ctx->free));
+
+	_dup(ctx);
+
+	TEST_ASSERT_EQUAL_INT(free_nodes - 6, depth(ctx->free));
+	TEST_ASSERT_EQUAL_INT(2, depth(ctx->dstack));
+	TEST_ASSERT_EQUAL_INT(2, depth((PAIR*)ctx->dstack->value));
+	TEST_ASSERT_EQUAL_INT(2, depth((PAIR*)NEXT(ctx->dstack)->value));
+	TEST_ASSERT_NOT_EQUAL_INT(ctx->dstack, NEXT(ctx->dstack));
+	TEST_ASSERT_NOT_EQUAL_INT(ctx->dstack->value, NEXT(ctx->dstack)->value);
+	TEST_ASSERT_NOT_EQUAL_INT(
+		NEXT(((PAIR*)ctx->dstack->value)), 
+		NEXT(((PAIR*)(NEXT(ctx->dstack)->value))));
+}
+
 void test_swap() {
 	CELL size = 256;
 	BYTE block[size];
@@ -440,31 +465,6 @@ void test_swap() {
 	TEST_ASSERT_EQUAL_INT(7, SOS(ctx));
 }
 
-//void test_dup_list() {
-//	CELL size = 256;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//
-//	CELL free_nodes = (size - sizeof(CTX)) / sizeof(PAIR);
-//
-//	ctx->dstack = lalloc(ctx, nalloc(ctx, 7, nalloc(ctx, 13, NIL)), NIL);
-//
-//	TEST_ASSERT_EQUAL_INT(2, depth((PAIR*)ctx->dstack->value));
-//	TEST_ASSERT_EQUAL_INT(free_nodes - 3, depth(ctx->free));
-//
-//	_dup(ctx);
-//
-//	TEST_ASSERT_EQUAL_INT(free_nodes - 6, depth(ctx->free));
-//	TEST_ASSERT_EQUAL_INT(2, depth(ctx->dstack));
-//	TEST_ASSERT_EQUAL_INT(2, depth((PAIR*)ctx->dstack->value));
-//	TEST_ASSERT_EQUAL_INT(2, depth((PAIR*)NEXT(ctx->dstack)->value));
-//	TEST_ASSERT_NOT_EQUAL_INT(ctx->dstack, NEXT(ctx->dstack));
-//	TEST_ASSERT_NOT_EQUAL_INT(ctx->dstack->value, NEXT(ctx->dstack)->value);
-//	TEST_ASSERT_NOT_EQUAL_INT(
-//		NEXT(((PAIR*)ctx->dstack->value)), 
-//		NEXT(((PAIR*)(NEXT(ctx->dstack)->value))));
-//}
-//
 //void test_header_body_reveal() {
 //	CELL size = 2048;
 //	BYTE block[size];
@@ -583,7 +583,7 @@ int main() {
 
 	RUN_TEST(test_binops);
 	RUN_TEST(test_dup);
-	//RUN_TEST(test_dup_list);
+	RUN_TEST(test_dup_list);
 	RUN_TEST(test_swap);
 
 	//RUN_TEST(test_header_body_reveal);
