@@ -6,29 +6,27 @@ void main() {
 	BYTE block[size];
 	CTX* ctx = init(block, size);
 
-	ctx->stacks.stack = cons(ctx, T_ATOM, 36, ctx->stacks.stack);
+	PUSH(ctx, AS(ATOM, 36));
 
-	PAIR* xlist = 
-		cons(ctx, T_PRIMITIVE, (CELL)&_dup,
-		cons(ctx, T_ATOM, 1,
-		cons(ctx, T_PRIMITIVE, (CELL)&_gt,
-		cons(ctx, T_LIST, 
+	CELL xlist = 
+		PRIM(ctx, &_dup, 
+		cons(ctx, AS(ATOM, 1),
+		PRIM(ctx, &_gt,
+		COND(ctx,
+			// True branch
+			cons(ctx, AS(ATOM, 1),
+			PRIM(ctx, &_sub,
+			PRIM(ctx, &_dup,
+			cons(ctx, AS(ATOM, 1),
+			PRIM(ctx, &_sub,
+			REC(ctx, 
+			PRIM(ctx, &_swap,
+			REC(ctx, 
+			PRIM(ctx, &_add, NIL))))))))),
 			// False
-			AS(ST_BRANCH, NIL),
-			// True
-			cons(ctx, T_ATOM, 1,
-			cons(ctx, T_PRIMITIVE, (CELL)&_sub,
-			cons(ctx, T_PRIMITIVE, (CELL)&_dup,
-			cons(ctx, T_ATOM, 1,
-			cons(ctx, T_PRIMITIVE, (CELL)&_sub,
-			cons(ctx, T_LIST, AS(ST_RECURSION, NIL),
-			cons(ctx, T_PRIMITIVE, (CELL)&_swap,
-			cons(ctx, T_LIST, AS(ST_RECURSION, NIL),
-			cons(ctx, T_PRIMITIVE, (CELL)&_add, NIL)))))))))))));
+			NIL))));
 	
-	//ctx->rstack = cons(ctx, T_LIST, (CELL)AS(ST_WORD, ctx->ip), ctx->rstack);
-
 	inner(ctx, xlist);
 
-	printf("%ld\n", TOS(ctx));
+	printf("%ld\n", VALUE(TOS(ctx)));
 }
