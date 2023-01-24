@@ -9,7 +9,6 @@ typedef intptr_t	CELL;		// 16, 32 or 64 bits depending on system
 #define CDR(pair)					(*(((CELL*)pair) + 1))
 #define TYPE(pair)				((CDR(pair)) & 3)
 #define NEXT(pair)				((CDR(pair)) & -4)
-#define TAG(type, cell)		((cell) | type)
 
 #define ATOM				0
 #define PRIMITIVE		1
@@ -19,16 +18,13 @@ typedef intptr_t	CELL;		// 16, 32 or 64 bits depending on system
 #define RECURSION		0
 
 typedef struct {
-	CELL err;
 	BYTE* bottom, * here;
-	CELL there, top, nodes, rstack;
-	CELL dict;
+	CELL there, top, nodes, rstack, dict, err;
 } CTX;
 
 typedef void (*FUNC)(CTX*);
 
 #define ALIGN(addr, bound)	((((CELL)addr) + (bound - 1)) & ~(bound - 1))
-#define RESERVED(ctx)				((ctx->there) - ((CELL)ctx->here))
 
 #define ERR_NOT_ENOUGH_MEMORY		-1
 #define ERR_STACK_OVERFLOW			-2
@@ -39,7 +35,6 @@ CELL depth(CELL p) { CELL c = 0; while (p != NIL) { c++; p = CDR(p); } return c;
 
 CTX* init(BYTE* block, CELL size) {
 	CTX* ctx = (CTX*)block;	
-	ctx->err = NIL;
 	ctx->bottom = ctx->here = ((BYTE*)ctx) + sizeof(CTX);
 	ctx->there = ALIGN((CELL)ctx->bottom, 2*sizeof(CELL));
 	ctx->nodes = ctx->top = ALIGN((block + size - 2*sizeof(CELL) - 1), 2*sizeof(CELL));
@@ -49,7 +44,7 @@ CTX* init(BYTE* block, CELL size) {
 		CDR(p) = p == ctx->top ? NIL : p + 2*sizeof(CELL);
 	}
 
-	ctx->dict = ctx->rstack = NIL;
+	ctx->err = ctx->dict = ctx->rstack = NIL;
 
 	return ctx;
 }
@@ -85,25 +80,23 @@ CELL cons(CTX* ctx, CELL car, CELL cdr) {
 void _dup(CTX* ctx) { push(ctx, TOS(ctx)); }
 void _swap(CTX* ctx) { CELL t = TOS(ctx); TOS(ctx) = SOS(ctx); SOS(ctx) = t; }
 
-#define BINOP(op)		CELL t = pop(ctx); TOS(ctx) = TOS(ctx) op t;
+void _add(CTX* ctx) { CELL t = pop(ctx); TOS(ctx) += t; }
+void _sub(CTX* ctx) { CELL t = pop(ctx); TOS(ctx) -= t; }
+void _mul(CTX* ctx) { CELL t = pop(ctx); TOS(ctx) *= t; }
+void _div(CTX* ctx) { CELL t = pop(ctx); TOS(ctx) /= t; }
+void _mod(CTX* ctx) { CELL t = pop(ctx); TOS(ctx) %= t; }
 
-void _add(CTX* ctx) { BINOP(+); }
-void _sub(CTX* ctx) { BINOP(-); }
-void _mul(CTX* ctx) { BINOP(*); }
-void _div(CTX* ctx) { BINOP(/); }
-void _mod(CTX* ctx) { BINOP(%); }
+void _gt(CTX* ctx) { CELL t = pop(ctx); TOS(ctx) = TOS(ctx) > t; }
+void _lt(CTX* ctx) { CELL t = pop(ctx); TOS(ctx) = TOS(ctx) < t; }
+void _eq(CTX* ctx) { CELL t = pop(ctx); TOS(ctx) = TOS(ctx) == t; }
+void _neq(CTX* ctx) { CELL t = pop(ctx); TOS(ctx) = TOS(ctx) != t; }
 
-void _gt(CTX* ctx) { BINOP(>); }
-void _lt(CTX* ctx) { BINOP(<); }
-void _eq(CTX* ctx) { BINOP(==); }
-void _neq(CTX* ctx) { BINOP(!=); }
-
-void _and(CTX* ctx) { BINOP(&&); }
-void _or(CTX* ctx) { BINOP(||); }
+void _and(CTX* ctx) { CELL t = pop(ctx); TOS(ctx) = TOS(ctx) && t; }
+void _or(CTX* ctx) { CELL t = pop(ctx); TOS(ctx) = TOS(ctx) || t; }
 void _not(CTX* ctx) { TOS(ctx) = !TOS(ctx); }
 
-#define PRIM(ctx, p, cdr)		cons(ctx, (CELL)p, TAG(PRIMITIVE, cdr))
-#define COND(ctx, t, f)			cons(ctx, t, TAG(BRANCH, f))
+#define PRIM(ctx, p, cdr)		cons(ctx, (CELL)p, ((cdr) | PRIMITIVE))
+#define COND(ctx, t, f)			cons(ctx, t, ((f) | BRANCH))
 
 void inner(CTX* ctx, CELL xlist) {
 	CELL ip = xlist;
@@ -160,15 +153,6 @@ void inner(CTX* ctx, CELL xlist) {
 ////	else { printf ("%c", (char)K); }
 ////}
 //
-////void _loop(CTX* ctx) {
-////}
-////
-////void _print(CTX* ctx) {
-////}
-////
-////void _eval(CTX* ctx) {
-////}
-//
 //void push_stack(CTX* ctx) {
 //	ctx->stacks.next = cons(ctx, T_LIST, (CELL)AS(T_LIST, REF((&ctx->stacks))), NEXT((&ctx->stacks)));
 //	ctx->stacks.stack = NIL;
@@ -180,18 +164,7 @@ void inner(CTX* ctx, CELL xlist) {
 //	ctx->stacks.ref = (CELL)cons(ctx, T_LIST, (CELL)list, REF((&ctx->stacks)));
 //}
 //
-////void _read(CTX* ctx) {
-////	BYTE K;
-////	push_stack(ctx);
-////	do {
-////		K = dodo_getch();
-////		if (K == 10 || K == 13) {
-////			stack_to_list(ctx);
-////		} else {
-////			PUSH(ctx, K);
-////		}
-////	} while (1);
-////}
+//#define RESERVED(ctx)				((ctx->there) - ((CELL)ctx->here))
 //
 //BYTE* allot(CTX* ctx, CELL bytes) {
 //	BYTE* here = ctx->here;

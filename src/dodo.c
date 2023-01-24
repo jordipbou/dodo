@@ -6,7 +6,7 @@ void main() {
 	BYTE block[size];
 	CTX* ctx = init(block, size);
 
-	push(ctx, 40);
+	push(ctx, 36);
 
 	CELL xlist = 
 		PRIM(ctx, &_dup, 
