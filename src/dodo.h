@@ -7,37 +7,34 @@ typedef intptr_t	CELL;		// 16, 32 or 64 bits depending on system
 
 #define CAR(pair)					(*((CELL*)pair))
 #define CDR(pair)					(*(((CELL*)pair) + 1))
-#define VALUE(cell)				((cell) >> 2)
-#define TYPE(cell)				((cell) & 3)
-#define AS(type, cell)		(((cell) << 2) | type)
-#define IS(type, cell)		(TYPE(cell) == type)
+#define TYPE(pair)				((CDR(pair)) & 3)
+#define NEXT(pair)				((CDR(pair)) & -4)
+#define TAG(type, cell)		((cell) | type)
+
+#define ATOM				0
+#define PRIMITIVE		1
+#define BRANCH			2
+#define WORD				3
+
+#define RECURSION		0
 
 typedef struct {
 	CELL err;
 	BYTE* bottom, * here;
-	CELL there, top, dstack, free, rstack;
+	CELL there, top, nodes, rstack;
 	CELL dict;
 } CTX;
 
 typedef void (*FUNC)(CTX*);
 
-#define FREE								0
-#define ATOM								1
-#define PRIMITIVE						2
-#define LIST								3
-
-#define BRANCH							0
-#define RECURSION						1
-#define WORD								2
-#define QUOTATION						3
-
 #define ALIGN(addr, bound)	((((CELL)addr) + (bound - 1)) & ~(bound - 1))
 #define RESERVED(ctx)				((ctx->there) - ((CELL)ctx->here))
 
 #define ERR_NOT_ENOUGH_MEMORY		-1
-#define ERR_STACK_OVERFLOW				-2
+#define ERR_STACK_OVERFLOW			-2
 #define ERR_STACK_UNDERFLOW			-3
 
+CELL height(CELL p) { CELL c = 0; while (p != NIL) { c++; p = CAR(p); } return c; }
 CELL depth(CELL p) { CELL c = 0; while (p != NIL) { c++; p = CDR(p); } return c; }
 
 CTX* init(BYTE* block, CELL size) {
@@ -45,79 +42,50 @@ CTX* init(BYTE* block, CELL size) {
 	ctx->err = NIL;
 	ctx->bottom = ctx->here = ((BYTE*)ctx) + sizeof(CTX);
 	ctx->there = ALIGN((CELL)ctx->bottom, 2*sizeof(CELL));
-	ctx->free = ctx->top = ALIGN((CELL)(block + size - 2*sizeof(CELL) - 1), 2*sizeof(CELL));
+	ctx->nodes = ctx->top = ALIGN((block + size - 2*sizeof(CELL) - 1), 2*sizeof(CELL));
 
 	for (CELL p = ctx->there; p <= ctx->top; p += 2*sizeof(CELL)) {
-		CDR(p) = p == ctx->there ? NIL : p - 2*sizeof(CELL);
-		CAR(p) = p == ctx->top ? NIL : p + 2*sizeof(CELL);
+		CAR(p) = p == ctx->there ? NIL : p - 2*sizeof(CELL);
+		CDR(p) = p == ctx->top ? NIL : p + 2*sizeof(CELL);
 	}
 
-	ctx->dict = ctx->dstack = ctx->rstack = NIL;
+	ctx->dict = ctx->rstack = NIL;
 
 	return ctx;
 }
 
+void push(CTX* ctx, CELL value) {
+	if (CAR(ctx->nodes) == NIL) { ctx->err = ERR_STACK_OVERFLOW; return; }
+	ctx->nodes = CAR(ctx->nodes);
+	CAR(CDR(ctx->nodes)) = value;
+}
+
+CELL pop(CTX* ctx) {
+	if (CDR(ctx->nodes) == NIL) { ctx->err = ERR_STACK_UNDERFLOW; return NIL; }
+	CELL value = CAR(CDR(ctx->nodes));
+	CAR(CDR(ctx->nodes)) = ctx->nodes;
+	ctx->nodes = CDR(ctx->nodes);
+	return value;
+}
+
 CELL cons(CTX* ctx, CELL car, CELL cdr) {
-	if (ctx->free == NIL) { ctx->err = ERR_STACK_OVERFLOW; return NIL; }
-	CELL c = ctx->free;
-	ctx->free = CDR(ctx->free);
-	CAR(c) = car;
-	CDR(c) = cdr;
-	return c;
+	if (CAR(ctx->nodes) == NIL) { ctx->err = ERR_STACK_OVERFLOW; return NIL; }
+	CELL p = CAR(ctx->nodes);
+	CAR(ctx->nodes) = CAR(CAR(ctx->nodes));
+	if (CAR(ctx->nodes) != NIL) CDR(CAR(ctx->nodes)) = ctx->nodes;
+	CAR(p) = car;
+	CDR(p) = cdr;
+	return p;
 }
 
-CELL clone(CTX* ctx, CELL pair) {
-	if (pair == NIL) { 
-		return NIL;
-	} else if (IS(ATOM, CAR(pair))) { 
-		return cons(ctx, CAR(pair), clone(ctx, CDR(pair)));
-	} else { 
-		return cons(ctx, AS(LIST, clone(ctx, VALUE(CAR(pair)))), clone(ctx, CDR(pair))); 
-	}
-}
+#define DSTACK(ctx)			CDR(ctx->nodes)
+#define TOS(ctx)				CAR(DSTACK(ctx))
+#define SOS(ctx)				CAR(CDR(DSTACK(ctx)))
 
-CELL eq(CTX* ctx, CELL p1, CELL p2) {
-	if (TYPE(CAR(p1)) != TYPE(CAR(p2))) return 0;
-	if (IS(ATOM, CAR(p1))) return VALUE(CAR(p1)) == VALUE(CAR(p2));
-	else {
-		CELL e1 = VALUE(CAR(p1));
-		CELL e2 = VALUE(CAR(p2));
-		while (e1 != NIL) {
-			if (e2 == NIL || eq(ctx, e1, e2) != 1) return 0;
-			e1 = CDR(e1);
-			e2 = CDR(e2);
-		}
-		return 1;
-	}
-}
+void _dup(CTX* ctx) { push(ctx, TOS(ctx)); }
+void _swap(CTX* ctx) { CELL t = TOS(ctx); TOS(ctx) = SOS(ctx); SOS(ctx) = t; }
 
-CELL reclaim(CTX* ctx, CELL pair) {
-	if (pair == NIL) return NIL;
-	if (IS(LIST, CAR(pair))) { 
-		CELL p = VALUE(CAR(pair)); while ((p = reclaim(ctx, p)) != NIL) {}
-	}
-	CELL tail = CDR(pair);
-	CAR(ctx->free) = pair;
-	CDR(pair) = ctx->free;
-	CAR(pair) = NIL;
-	ctx->free = pair;
-	return tail;
-}
-
-#define PUSH(ctx, v)		ctx->dstack = cons(ctx, v, ctx->dstack);
-#define TOS(ctx)				CAR(ctx->dstack)
-#define SOS(ctx)				CAR(CDR(ctx->dstack))
-#define POP(ctx, v)			CELL v = TOS(ctx); ctx->dstack = reclaim(ctx, ctx->dstack);
-
-void _dup(CTX* ctx) {
-	if (ctx->dstack == NIL) { ctx->err = ERR_STACK_UNDERFLOW; return; }
-	if (IS(ATOM, CAR(ctx->dstack))) { PUSH(ctx, CAR(ctx->dstack)); }
-	else { PUSH(ctx, AS(LIST, clone(ctx, VALUE(CAR(ctx->dstack))))); }
-}
-
-void _swap(CTX* ctx) { POP(ctx, t); POP(ctx, s); PUSH(ctx, t); PUSH(ctx, s); }
-
-#define BINOP(op)		POP(ctx, t); POP(ctx, s); PUSH(ctx, AS(ATOM, VALUE(s) op VALUE(t)));
+#define BINOP(op)		CELL t = pop(ctx); TOS(ctx) = TOS(ctx) op t;
 
 void _add(CTX* ctx) { BINOP(+); }
 void _sub(CTX* ctx) { BINOP(-); }
@@ -127,33 +95,28 @@ void _mod(CTX* ctx) { BINOP(%); }
 
 void _gt(CTX* ctx) { BINOP(>); }
 void _lt(CTX* ctx) { BINOP(<); }
-void _eq(CTX* ctx) { POP(ctx, t); POP(ctx, s); PUSH(ctx, eq(ctx, s, t)); }
-void _neq(CTX* ctx) { POP(ctx, t); POP(ctx, s); PUSH(ctx, !eq(ctx, s, t)); }
+void _eq(CTX* ctx) { BINOP(==); }
+void _neq(CTX* ctx) { BINOP(!=); }
 
 void _and(CTX* ctx) { BINOP(&&); }
 void _or(CTX* ctx) { BINOP(||); }
-void _not(CTX* ctx) { TOS(ctx) = AS(ATOM, !VALUE(TOS(ctx))); }
+void _not(CTX* ctx) { TOS(ctx) = !TOS(ctx); }
 
-#define PRIM(ctx, prim, cdr)			cons(ctx, AS(PRIMITIVE, cdr), (CELL)prim)
-#define COND(ctx, true, false)		cons(ctx, AS(LIST, true), AS(BRANCH, false))
-#define REC(ctx, cdr)							cons(ctx, AS(LIST, NIL), AS(RECURSION, cdr))
+#define PRIM(ctx, p, cdr)		cons(ctx, (CELL)p, TAG(PRIMITIVE, cdr))
+#define COND(ctx, t, f)			cons(ctx, t, TAG(BRANCH, f))
 
 void inner(CTX* ctx, CELL xlist) {
 	CELL ip = xlist;
 	while(ctx->err == NIL && ip != NIL) {
-		switch(TYPE(CAR(ip))) {
-			case ATOM: PUSH(ctx, CAR(ip)); ip = CDR(ip); break;
-			case PRIMITIVE:	((FUNC)(CDR(ip)))(ctx);	ip = VALUE(CAR(ip)); break;
-			case LIST:
-				switch(TYPE(CDR(ip))) {
-					case BRANCH: 
-						ip = VALUE(TOS(ctx)) ? VALUE(CAR(ip)) : VALUE(CDR(ip));
-						ctx->dstack = reclaim(ctx, ctx->dstack);
-						break;
-					case RECURSION: inner(ctx, xlist);	ip = VALUE(CDR(ip)); break;
-					case WORD: inner(ctx, VALUE(CAR(ip))); ip = VALUE(CDR(ip));	break;
-					case QUOTATION: /* TODO */	break;
-			}
+		switch(TYPE(ip)) {
+			case ATOM: push(ctx, CAR(ip)); ip = CDR(ip); break;
+			case PRIMITIVE:	
+				if (CAR(ip) == RECURSION) {	inner(ctx, xlist); }
+				else { ((FUNC)CAR(ip))(ctx); }
+				ip = NEXT(ip);
+				break;
+			case BRANCH: ip = pop(ctx) ? CAR(ip) : NEXT(ip); break;
+			case WORD: inner(ctx, CAR(ip)); break;
 		}
 	}
 }

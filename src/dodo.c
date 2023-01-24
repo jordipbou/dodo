@@ -6,27 +6,27 @@ void main() {
 	BYTE block[size];
 	CTX* ctx = init(block, size);
 
-	PUSH(ctx, AS(ATOM, 36));
+	push(ctx, 40);
 
 	CELL xlist = 
 		PRIM(ctx, &_dup, 
-		cons(ctx, AS(ATOM, 1),
+		cons(ctx, 1, 
 		PRIM(ctx, &_gt,
-		COND(ctx,
+		COND(ctx, 
 			// True branch
-			cons(ctx, AS(ATOM, 1),
+			cons(ctx, 1,
 			PRIM(ctx, &_sub,
 			PRIM(ctx, &_dup,
-			cons(ctx, AS(ATOM, 1),
+			cons(ctx, 1,
 			PRIM(ctx, &_sub,
-			REC(ctx, 
+			PRIM(ctx, RECURSION, 
 			PRIM(ctx, &_swap,
-			REC(ctx, 
+			PRIM(ctx, RECURSION,
 			PRIM(ctx, &_add, NIL))))))))),
 			// False
 			NIL))));
 	
 	inner(ctx, xlist);
 
-	printf("%ld\n", VALUE(TOS(ctx)));
+	printf("%ld\n", TOS(ctx));
 }
