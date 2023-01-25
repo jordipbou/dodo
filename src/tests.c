@@ -144,159 +144,182 @@ void test_swap() {
 void test_binops() {
 	C size = 256;
 	B block[size];
-	X* ctx = init(block, size);
+	X* x = init(block, size);
 
-	push(ctx, 7);
-	push(ctx, 13);
-	_add(ctx);
-	TEST_ASSERT_EQUAL_INT(1, depth(K(ctx)));
-	TEST_ASSERT_EQUAL_INT(20, T(ctx));
-	pop(ctx);
+	push(x, 7);
+	push(x, 13);
+	_add(x);
+	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+	TEST_ASSERT_EQUAL_INT(20, T(x));
+	pop(x);
 
-	push(ctx, 13);
-	push(ctx, 7);
-	_sub(ctx);
-	TEST_ASSERT_EQUAL_INT(6, T(ctx));
-	TEST_ASSERT_EQUAL_INT(1, depth(K(ctx)));
-	pop(ctx);
+	push(x, 13);
+	push(x, 7);
+	_sub(x);
+	TEST_ASSERT_EQUAL_INT(6, T(x));
+	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+	pop(x);
 
-//	//ctx->dstack = cons(ctx, AS(ATOM, 7), cons(ctx, AS(ATOM, 13), 0));
-//	//_mul(ctx);
-//	//TEST_ASSERT_EQUAL_INT(91, T(ctx));
-//	//TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-//	//POP(ctx);
-//
-//	//ctx->dstack = cons(ctx, AS(ATOM, 5), cons(ctx, AS(ATOM, 30), 0));
-//	//_div(ctx);
-//	//TEST_ASSERT_EQUAL_INT(6, T(ctx));
-//	//TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-//	//POP(ctx);
-//
-//	//ctx->dstack = cons(ctx, ATOM, 2, cons(ctx, ATOM, 9, 0));
-//	//_mod(ctx);
-//	//TEST_ASSERT_EQUAL_INT(T(ctx), 1);
-//	//TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-//	//POP(ctx);
-//
-//	ctx->dstack = cons(ctx, AS(ATOM, 7), cons(ctx, AS(ATOM, 13), 0));
-//	_gt(ctx);
-//	TEST_ASSERT_EQUAL_INT(1, VALUE(T(ctx)));
-//	TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-//	ctx->dstack = reclaim(ctx, ctx->dstack);
-//
-//	//ctx->dstack = cons(ctx, ATOM, 13, cons(ctx, ATOM, 7, 0));
-//	//_gt(ctx);
-//	//TEST_ASSERT_EQUAL_INT(T(ctx), 0);
-//	//TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-//	//POP(ctx);
-//
-//	//ctx->dstack = cons(ctx, ATOM, 7, cons(ctx, ATOM, 7, 0));
-//	//_gt(ctx);
-//	//TEST_ASSERT_EQUAL_INT(T(ctx), 0);
-//	//TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-//	//POP(ctx);
-//
-//	//ctx->dstack = cons(ctx, ATOM, 7, cons(ctx, ATOM, 13, 0));
-//	//_lt(ctx);
-//	//TEST_ASSERT_EQUAL_INT(T(ctx), 0);
-//	//TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-//	//POP(ctx);
-//
-//	//ctx->dstack = cons(ctx, ATOM, 13, cons(ctx, ATOM, 7, 0));
-//	//_lt(ctx);
-//	//TEST_ASSERT_EQUAL_INT(T(ctx), 1);
-//	//TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-//	//POP(ctx);
-//
-//	//ctx->dstack = cons(ctx, ATOM, 7, cons(ctx, ATOM, 7, 0));
-//	//_lt(ctx);
-//	//TEST_ASSERT_EQUAL_INT(T(ctx), 0);
-//	//TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-//	//POP(ctx);
-//
-//	//ctx->dstack = cons(ctx, ATOM, 7, cons(ctx, ATOM, 13, 0));
-//	//_eq(ctx);
-//	//TEST_ASSERT_EQUAL_INT(T(ctx), 0);
-//	//TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-//	//POP(ctx);
-//
-//	//ctx->dstack = cons(ctx, ATOM, 13, cons(ctx, ATOM, 7, 0));
-//	//_eq(ctx);
-//	//TEST_ASSERT_EQUAL_INT(T(ctx), 0);
-//	//TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-//	//POP(ctx);
-//
-//	//ctx->dstack = cons(ctx, ATOM, 7, cons(ctx, ATOM, 7, 0));
-//	//_eq(ctx);
-//	//TEST_ASSERT_EQUAL_INT(T(ctx), 1);
-//	//TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-//	//POP(ctx);
-//
-//	//ctx->dstack = cons(ctx, ATOM, 7, cons(ctx, ATOM, 13, 0));
-//	//_neq(ctx);
-//	//TEST_ASSERT_EQUAL_INT(T(ctx), 1);
-//	//TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-//	//POP(ctx);
-//
-//	//ctx->dstack = cons(ctx, ATOM, 13, cons(ctx, ATOM, 7, 0));
-//	//_neq(ctx);
-//	//TEST_ASSERT_EQUAL_INT(T(ctx), 1);
-//	//TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-//	//POP(ctx);
-//
-//	//ctx->dstack = cons(ctx, ATOM, 7, cons(ctx, ATOM, 7, 0));
-//	//_neq(ctx);
-//	//TEST_ASSERT_EQUAL_INT(T(ctx), 0);
-//	//TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-//	//POP(ctx);
-//
-//	//ctx->dstack = cons(ctx, ATOM, 0, cons(ctx, ATOM, 0, 0));
-//	//_and(ctx);
-//	//TEST_ASSERT_EQUAL_INT(T(ctx), 0);
-//	//TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-//	//POP(ctx);
-//
-//	//ctx->dstack = cons(ctx, ATOM, 1, cons(ctx, ATOM, 0, 0));
-//	//_and(ctx);
-//	//TEST_ASSERT_EQUAL_INT(T(ctx), 0);
-//	//TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-//	//POP(ctx);
-//
-//	//ctx->dstack = cons(ctx, ATOM, 0, cons(ctx, ATOM, 1, 0));
-//	//_and(ctx);
-//	//TEST_ASSERT_EQUAL_INT(T(ctx), 0);
-//	//TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-//	//POP(ctx);
-//
-//	//ctx->dstack = cons(ctx, ATOM, 1, cons(ctx, ATOM, 1, 0));
-//	//_and(ctx);
-//	//TEST_ASSERT_EQUAL_INT(T(ctx), 1);
-//	//TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-//	//POP(ctx);
-//
-//	//ctx->dstack = cons(ctx, ATOM, 0, cons(ctx, ATOM, 0, 0));
-//	//_or(ctx);
-//	//TEST_ASSERT_EQUAL_INT(T(ctx), 0);
-//	//TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-//	//POP(ctx);
-//
-//	//ctx->dstack = cons(ctx, ATOM, 1, cons(ctx, ATOM, 0, 0));
-//	//_or(ctx);
-//	//TEST_ASSERT_EQUAL_INT(T(ctx), 1);
-//	//TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-//	//POP(ctx);
-//
-//	//ctx->dstack = cons(ctx, ATOM, 0, cons(ctx, ATOM, 1, 0));
-//	//_or(ctx);
-//	//TEST_ASSERT_EQUAL_INT(T(ctx), 1);
-//	//TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-//	//POP(ctx);
-//
-//	//ctx->dstack = cons(ctx, ATOM, 1, cons(ctx, ATOM, 1, 0));
-//	//_or(ctx);
-//	//TEST_ASSERT_EQUAL_INT(T(ctx), 1);
-//	//TEST_ASSERT_EQUAL_INT(1, depth(ctx->dstack));
-//	//POP(ctx);
+	push(x, 13);
+	push(x, 7);
+	_mul(x);
+	TEST_ASSERT_EQUAL_INT(91, T(x));
+	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+	pop(x);
+
+	push(x, 30);
+	push(x, 5);
+	_div(x);
+	TEST_ASSERT_EQUAL_INT(6, T(x));
+	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+	pop(x);
+
+	push(x, 9);
+	push(x, 2);
+	_mod(x);
+	TEST_ASSERT_EQUAL_INT(T(x), 1);
+	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+	pop(x);
+
+	push(x, 13);
+	push(x, 7);
+	_gt(x);
+	TEST_ASSERT_EQUAL_INT(1, T(x));
+	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+	pop(x);
+
+	push(x, 7);
+	push(x, 13);
+	_gt(x);
+	TEST_ASSERT_EQUAL_INT(T(x), 0);
+	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+	pop(x);
+
+	push(x, 7);
+	push(x, 7);
+	_gt(x);
+	TEST_ASSERT_EQUAL_INT(T(x), 0);
+	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+	pop(x);
+
+	push(x, 13);
+	push(x, 7);
+	_lt(x);
+	TEST_ASSERT_EQUAL_INT(T(x), 0);
+	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+	pop(x);
+
+	push(x, 7);
+	push(x, 13);
+	_lt(x);
+	TEST_ASSERT_EQUAL_INT(T(x), 1);
+	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+	pop(x);
+
+	push(x, 7);
+	push(x, 7);
+	_lt(x);
+	TEST_ASSERT_EQUAL_INT(T(x), 0);
+	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+	pop(x);
+
+	push(x, 13),
+	push(x, 7);
+	_eq(x);
+	TEST_ASSERT_EQUAL_INT(T(x), 0);
+	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+	pop(x);
+
+	push(x, 7);
+	push(x, 13);
+	_eq(x);
+	TEST_ASSERT_EQUAL_INT(T(x), 0);
+	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+	pop(x);
+
+	push(x, 7);
+	push(x, 7);
+	_eq(x);
+	TEST_ASSERT_EQUAL_INT(T(x), 1);
+	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+	pop(x);
+
+	push(x, 13);
+	push(x, 7);
+	_neq(x);
+	TEST_ASSERT_EQUAL_INT(T(x), 1);
+	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+	pop(x);
+
+	push(x, 7);
+	push(x, 13);
+	_neq(x);
+	TEST_ASSERT_EQUAL_INT(T(x), 1);
+	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+	pop(x);
+
+	push(x, 7);
+	push(x, 7);
+	_neq(x);
+	TEST_ASSERT_EQUAL_INT(T(x), 0);
+	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+	pop(x);
+
+	push(x, 0);
+	push(x, 0);
+	_and(x);
+	TEST_ASSERT_EQUAL_INT(T(x), 0);
+	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+	pop(x);
+
+	push(x, 0);
+	push(x, 1);
+	_and(x);
+	TEST_ASSERT_EQUAL_INT(T(x), 0);
+	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+	pop(x);
+
+	push(x, 1);
+	push(x, 0);
+	_and(x);
+	TEST_ASSERT_EQUAL_INT(T(x), 0);
+	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+	pop(x);
+
+	push(x, 1);
+	push(x, 1);
+	_and(x);
+	TEST_ASSERT_EQUAL_INT(T(x), 1);
+	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+	pop(x);
+
+	push(x, 0);
+	push(x, 0);
+	_or(x);
+	TEST_ASSERT_EQUAL_INT(T(x), 0);
+	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+	pop(x);
+
+	push(x, 0);
+	push(x, 1);
+	_or(x);
+	TEST_ASSERT_EQUAL_INT(T(x), 1);
+	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+	pop(x);
+
+	push(x, 1);
+	push(x, 0);
+	_or(x);
+	TEST_ASSERT_EQUAL_INT(T(x), 1);
+	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+	pop(x);
+
+	push(x, 1);
+	push(x, 1);
+	_or(x);
+	TEST_ASSERT_EQUAL_INT(T(x), 1);
+	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+	pop(x);
 }
 
 //////void test_allot() {
