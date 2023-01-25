@@ -2,31 +2,33 @@
 #include "dodo.h"
 
 void main() {
-	CELL size = 8192;
-	BYTE block[size];
-	CTX* ctx = init(block, size);
+	C size = 8192;
+	B block[size];
+	X* x = init(block, size);
 
-	push(ctx, 36);
+	push(x, 36);
 
-	CELL xlist = 
-		PRIM(ctx, &_dup, 
-		cons(ctx, 1, 
-		PRIM(ctx, &_gt,
-		COND(ctx, 
+	C xlist = 
+		cons(x, cons(x, PRIMITIVE, (C)&_dup),
+		cons(x, cons(x, ATOM, 1),
+		cons(x, cons(x, PRIMITIVE, (C)&_gt),
+		cons(x, cons(x, BRANCH, 
 			// True branch
-			cons(ctx, 1,
-			PRIM(ctx, &_sub,
-			PRIM(ctx, &_dup,
-			cons(ctx, 1,
-			PRIM(ctx, &_sub,
-			PRIM(ctx, RECURSION, 
-			PRIM(ctx, &_swap,
-			PRIM(ctx, RECURSION,
-			PRIM(ctx, &_add, NIL))))))))),
-			// False
-			NIL))));
+			cons(x,
+				cons(x, cons(x, ATOM, 1),
+				cons(x, cons(x, PRIMITIVE, (C)&_sub),
+				cons(x, cons(x, PRIMITIVE, (C)&_dup),
+				cons(x, cons(x, ATOM, 1),
+				cons(x, cons(x, PRIMITIVE, (C)&_sub),
+				cons(x, cons(x, RECURSION, 0),
+				cons(x, cons(x, PRIMITIVE, (C)&_swap),
+				cons(x, cons(x, RECURSION, 0),
+				cons(x, cons(x, PRIMITIVE, (C)&_add), 0))))))))),
+			// False branch
+			cons(x, 0, 0))), 
+		0))));
 	
-	inner(ctx, xlist);
+	inner(x, xlist);
 
-	printf("%ld\n", TOS(ctx));
+	printf("%ld\n", T(x));
 }

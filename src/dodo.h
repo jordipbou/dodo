@@ -1,115 +1,89 @@
 #include<stdint.h>
 
-#define NIL				0
+typedef int8_t		B;
+typedef intptr_t	C;		// 16, 32 or 64 bits depending on system
 
-typedef int8_t		BYTE;
-typedef intptr_t	CELL;		// 16, 32 or 64 bits depending on system
-
-#define CAR(pair)					(*((CELL*)pair))
-#define CDR(pair)					(*(((CELL*)pair) + 1))
-#define TYPE(pair)				((CDR(pair)) & 3)
-#define NEXT(pair)				((CDR(pair)) & -4)
+#define A(pair)					(*((C*)pair))
+#define D(pair)					(*(((C*)pair) + 1))
 
 #define ATOM				0
 #define PRIMITIVE		1
 #define BRANCH			2
 #define WORD				3
-
-#define RECURSION		0
+#define RECURSION		4
 
 typedef struct {
-	BYTE* bottom, * here;
-	CELL there, top, nodes, rstack, dict, err;
-} CTX;
+	B* bottom, * here;
+	C there, top, nodes, rstack, dict, err;
+} X;
 
-typedef void (*FUNC)(CTX*);
+#define N(x)					x->nodes
+#define K(x)					D(N(x))
+#define F(x)					A(N(x))
+#define T(x)					A(K(x))
+#define S(x)					A(D(K(x)))
 
-#define ALIGN(addr, bound)	((((CELL)addr) + (bound - 1)) & ~(bound - 1))
+typedef void (*FUNC)(X*);
+
+#define ALIGN(addr, bound)	((((C)addr) + (bound - 1)) & ~(bound - 1))
 
 #define ERR_NOT_ENOUGH_MEMORY		-1
-#define ERR_STACK_OVERFLOW			-2
-#define ERR_STACK_UNDERFLOW			-3
+#define ERR_OVERFLOW						-2
+#define ERR_UNDERFLOW						-3
 
-CELL height(CELL p) { CELL c = 0; while (p != NIL) { c++; p = CAR(p); } return c; }
-CELL depth(CELL p) { CELL c = 0; while (p != NIL) { c++; p = CDR(p); } return c; }
+C height(C p) { C c = 0; while (p != 0) { c++; p = A(p); } return c; }
+C depth(C p) { C c = 0; while (p != 0) { c++; p = D(p); } return c; }
 
-CTX* init(BYTE* block, CELL size) {
-	CTX* ctx = (CTX*)block;	
-	ctx->bottom = ctx->here = ((BYTE*)ctx) + sizeof(CTX);
-	ctx->there = ALIGN((CELL)ctx->bottom, 2*sizeof(CELL));
-	ctx->nodes = ctx->top = ALIGN((block + size - 2*sizeof(CELL) - 1), 2*sizeof(CELL));
+X* init(B* block, C size) {
+	X* x = (X*)block;	
+	x->bottom = x->here = ((B*)x) + sizeof(X);
+	x->there = ALIGN((C)x->bottom, 2*sizeof(C));
+	x->nodes = x->top = ALIGN((block + size - 2*sizeof(C) - 1), 2*sizeof(C));
 
-	for (CELL p = ctx->there; p <= ctx->top; p += 2*sizeof(CELL)) {
-		CAR(p) = p == ctx->there ? NIL : p - 2*sizeof(CELL);
-		CDR(p) = p == ctx->top ? NIL : p + 2*sizeof(CELL);
+	for (C p = x->there; p <= x->top; p += 2*sizeof(C)) {
+		A(p) = p == x->there ? 0 : p - 2*sizeof(C);
+		D(p) = p == x->top ? 0 : p + 2*sizeof(C);
 	}
 
-	ctx->err = ctx->dict = ctx->rstack = NIL;
+	x->err = x->dict = x->rstack = 0;
 
-	return ctx;
+	return x;
 }
 
-void push(CTX* ctx, CELL value) {
-	if (CAR(ctx->nodes) == NIL) { ctx->err = ERR_STACK_OVERFLOW; return; }
-	ctx->nodes = CAR(ctx->nodes);
-	CAR(CDR(ctx->nodes)) = value;
-}
+#define OF(x)		if (F(x) == 0) { x->err = ERR_OVERFLOW; return; }
+#define UF(x)		if (K(x) == 0) { x->err = ERR_UNDERFLOW; return 0; }
 
-CELL pop(CTX* ctx) {
-	if (CDR(ctx->nodes) == NIL) { ctx->err = ERR_STACK_UNDERFLOW; return NIL; }
-	CELL value = CAR(CDR(ctx->nodes));
-	CAR(CDR(ctx->nodes)) = ctx->nodes;
-	ctx->nodes = CDR(ctx->nodes);
-	return value;
-}
+void push(X* x, C v) { OF(x); N(x) = F(x); T(x) = v; }
+C pop(X* x) { UF(x); C t = T(x); T(x) = N(x); N(x) = K(x); return t; }
+C cons(X* x, C a, C d) { C p = N(x); push(x, a); K(x) = D(K(x)); D(p) = d; return p; }
 
-CELL cons(CTX* ctx, CELL car, CELL cdr) {
-	if (CAR(ctx->nodes) == NIL) { ctx->err = ERR_STACK_OVERFLOW; return NIL; }
-	CELL p = CAR(ctx->nodes);
-	CAR(ctx->nodes) = CAR(CAR(ctx->nodes));
-	if (CAR(ctx->nodes) != NIL) CDR(CAR(ctx->nodes)) = ctx->nodes;
-	CAR(p) = car;
-	CDR(p) = cdr;
-	return p;
-}
+void _dup(X* x) { push(x, T(x)); }
+void _swap(X* x) { C t = T(x); T(x) = S(x); S(x) = t; }
 
-#define DSTACK(ctx)			CDR(ctx->nodes)
-#define TOS(ctx)				CAR(DSTACK(ctx))
-#define SOS(ctx)				CAR(CDR(DSTACK(ctx)))
+void _add(X* x) { C t = pop(x); T(x) += t; }
+void _sub(X* x) { C t = pop(x); T(x) -= t; }
+void _mul(X* x) { C t = pop(x); T(x) *= t; }
+void _div(X* x) { C t = pop(x); T(x) /= t; }
+void _mod(X* x) { C t = pop(x); T(x) %= t; }
 
-void _dup(CTX* ctx) { push(ctx, TOS(ctx)); }
-void _swap(CTX* ctx) { CELL t = TOS(ctx); TOS(ctx) = SOS(ctx); SOS(ctx) = t; }
+void _gt(X* x) { C t = pop(x); T(x) = T(x) > t; }
+void _lt(X* x) { C t = pop(x); T(x) = T(x) < t; }
+void _eq(X* x) { C t = pop(x); T(x) = T(x) == t; }
+void _neq(X* x) { C t = pop(x); T(x) = T(x) != t; }
 
-void _add(CTX* ctx) { CELL t = pop(ctx); TOS(ctx) += t; }
-void _sub(CTX* ctx) { CELL t = pop(ctx); TOS(ctx) -= t; }
-void _mul(CTX* ctx) { CELL t = pop(ctx); TOS(ctx) *= t; }
-void _div(CTX* ctx) { CELL t = pop(ctx); TOS(ctx) /= t; }
-void _mod(CTX* ctx) { CELL t = pop(ctx); TOS(ctx) %= t; }
+void _and(X* x) { C t = pop(x); T(x) = T(x) && t; }
+void _or(X* x) { C t = pop(x); T(x) = T(x) || t; }
+void _not(X* x) { T(x) = !T(x); }
 
-void _gt(CTX* ctx) { CELL t = pop(ctx); TOS(ctx) = TOS(ctx) > t; }
-void _lt(CTX* ctx) { CELL t = pop(ctx); TOS(ctx) = TOS(ctx) < t; }
-void _eq(CTX* ctx) { CELL t = pop(ctx); TOS(ctx) = TOS(ctx) == t; }
-void _neq(CTX* ctx) { CELL t = pop(ctx); TOS(ctx) = TOS(ctx) != t; }
-
-void _and(CTX* ctx) { CELL t = pop(ctx); TOS(ctx) = TOS(ctx) && t; }
-void _or(CTX* ctx) { CELL t = pop(ctx); TOS(ctx) = TOS(ctx) || t; }
-void _not(CTX* ctx) { TOS(ctx) = !TOS(ctx); }
-
-#define PRIM(ctx, p, cdr)		cons(ctx, (CELL)p, ((cdr) | PRIMITIVE))
-#define COND(ctx, t, f)			cons(ctx, t, ((f) | BRANCH))
-
-void inner(CTX* ctx, CELL xlist) {
-	CELL ip = xlist;
-	while(ctx->err == NIL && ip != NIL) {
-		switch(TYPE(ip)) {
-			case ATOM: push(ctx, CAR(ip)); ip = CDR(ip); break;
-			case PRIMITIVE:	
-				if (CAR(ip) == RECURSION) {	inner(ctx, xlist); }
-				else { ((FUNC)CAR(ip))(ctx); }
-				ip = NEXT(ip);
-				break;
-			case BRANCH: ip = pop(ctx) ? CAR(ip) : NEXT(ip); break;
-			case WORD: inner(ctx, CAR(ip)); break;
+void inner(X* x, C xlist) {
+	C ip = xlist;
+	while(x->err == 0 && ip != 0) {
+		switch(A(A(ip))) {
+			case ATOM: push(x, D(A(ip))); ip = D(ip); break;
+			case PRIMITIVE:	((FUNC)D(A(ip)))(x); ip = D(ip); break;
+			case RECURSION: inner(x, xlist); ip = D(ip); break;
+			case BRANCH: ip = pop(x) ? A(D(A(ip))) : A(D(D(A(ip)))); break;
+			case WORD: inner(x, A(ip)); break;
 		}
 	}
 }
@@ -145,125 +119,125 @@ void inner(CTX* ctx, CELL xlist) {
 ////}
 ////#endif
 ////
-////void _key(CTX* ctx) { PUSH(ctx, dodo_getch()); }
-////void _emit(CTX* ctx) { 
-////	CELL K = TOS(ctx); 
-////	POP(ctx); 
+////void _key(X* x) { PUSH(x, dodo_getch()); }
+////void _emit(X* x) { 
+////	C K = T(x); 
+////	POP(x); 
 ////	if (K == 127) { printf ("\b \b"); } 
 ////	else { printf ("%c", (char)K); }
 ////}
 //
-//void push_stack(CTX* ctx) {
-//	ctx->stacks.next = cons(ctx, T_LIST, (CELL)AS(T_LIST, REF((&ctx->stacks))), NEXT((&ctx->stacks)));
-//	ctx->stacks.stack = NIL;
+//void push_stack(X* x) {
+//	x->stacks.next = cons(x, T_LIST, (C)AS(T_LIST, REF((&x->stacks))), NEXT((&x->stacks)));
+//	x->stacks.stack = 0;
 //}
 //
-//void stack_to_list(CTX* ctx) {
-//	PAIR* list = REF((&ctx->stacks));
-//	ctx->stacks = *(NEXT((&ctx->stacks)));
-//	ctx->stacks.ref = (CELL)cons(ctx, T_LIST, (CELL)list, REF((&ctx->stacks)));
+//void stack_to_list(X* x) {
+//	PAIR* list = REF((&x->stacks));
+//	x->stacks = *(NEXT((&x->stacks)));
+//	x->stacks.ref = (C)cons(x, T_LIST, (C)list, REF((&x->stacks)));
 //}
 //
-//#define RESERVED(ctx)				((ctx->there) - ((CELL)ctx->here))
+//#define RESERVED(x)				((x->there) - ((C)x->here))
 //
-//BYTE* allot(CTX* ctx, CELL bytes) {
-//	BYTE* here = ctx->here;
+//B* allot(X* x, C bytes) {
+//	B* here = x->here;
 //	if (bytes == 0) { 
 //		return here;
 //	} else if (bytes < 0) {
-//		if ((ctx->here + bytes) > BOTTOM(ctx)) ctx->here += bytes;
-//		else ctx->here = BOTTOM(ctx);
-//		while ((ctx->there - 1) >= PALIGN(ctx->here)) { reclaim(ctx, --ctx->there); }
+//		if ((x->here + bytes) > BOTTOM(x)) x->here += bytes;
+//		else x->here = BOTTOM(x);
+//		while ((x->there - 1) >= PALIGN(x->here)) { reclaim(x, --x->there); }
 //	} else /* bytes > 0 */ {
-//		while (RESERVED(ctx) < bytes && ctx->there < ctx->top) {
-//			if (IS(T_FREE, ctx->there)) {
-//				if (ctx->there->prev != NIL) {
-//					ctx->there->prev->next = AS(T_FREE, NEXT(ctx->there));
+//		while (RESERVED(x) < bytes && x->there < x->top) {
+//			if (IS(T_F, x->there)) {
+//				if (x->there->prev != 0) {
+//					x->there->prev->next = AS(T_F, NEXT(x->there));
 //				}
-//				ctx->there++;
+//				x->there++;
 //			} else {
-//				ctx->err = ERR_NOT_ENOUGH_MEMORY;
+//				x->err = ERR_NOT_ENOUGH_MEMORY;
 //				return here;
 //			}
 //		}
-//		if (RESERVED(ctx) >= bytes)	ctx->here += bytes;
-//		else ctx->err = ERR_NOT_ENOUGH_MEMORY;
+//		if (RESERVED(x) >= bytes)	x->here += bytes;
+//		else x->err = ERR_NOT_ENOUGH_MEMORY;
 //	}
 //	return here;
 //}
 //
-//void align(CTX* ctx) { allot(ctx, ALIGN(ctx->here, sizeof(CELL)) - ((CELL)ctx->here)); }
+//void align(X* x) { allot(x, ALIGN(x->here, sizeof(C)) - ((C)x->here)); }
 //
 //#define NFA(w)		(REF(REF(w)))
 //#define DFA(w)		(REF(NEXT(REF(w))))
 //#define CFA(w)		(NEXT(NEXT(REF(w))))
-//#define COUNT(s)	(*((CELL*)(((BYTE*)s) - sizeof(CELL))))
+//#define COUNT(s)	(*((C*)(((B*)s) - sizeof(C))))
 //
-//BYTE* compile_str(CTX* ctx, BYTE* str, CELL len) {
-//	align(ctx);
-//	BYTE* cstr = allot(ctx, sizeof(CELL) + len + 1);
-//	*((CELL*)cstr) = len;
-//	for (CELL i = 0; i < len; i++) {
-//		cstr[sizeof(CELL) + i] = str[i];
+//B* compile_str(X* x, B* str, C len) {
+//	align(x);
+//	B* cstr = allot(x, sizeof(C) + len + 1);
+//	*((C*)cstr) = len;
+//	for (C i = 0; i < len; i++) {
+//		cstr[sizeof(C) + i] = str[i];
 //	}
-//	cstr[sizeof(CELL) + len] = 0;
-//	return cstr + sizeof(CELL);
+//	cstr[sizeof(C) + len] = 0;
+//	return cstr + sizeof(C);
 //}
 //
-//PAIR* header(CTX* ctx, BYTE* name, CELL nlen) {
-//	BYTE* str = compile_str(ctx, name, nlen);
+//PAIR* header(X* x, B* name, C nlen) {
+//	B* str = compile_str(x, name, nlen);
 //
 //	return 
-//		cons(ctx, T_ATOM, 
-//			(CELL)cons(ctx, T_ATOM, (CELL)str,
-//						cons(ctx, T_ATOM, (CELL)ctx->here, NIL)), 
-//			NIL);
+//		cons(x, T_ATOM, 
+//			(C)cons(x, T_ATOM, (C)str,
+//						cons(x, T_ATOM, (C)x->here, 0)), 
+//			0);
 //}
 //
-//PAIR* body(CTX* ctx, PAIR* word, PAIR* cfa) {
+//PAIR* body(X* x, PAIR* word, PAIR* cfa) {
 //	PAIR* old_cfa = CFA(word);
 //	NEXT(REF(word))->next = AS(T_ATOM, cfa);
-//	while (old_cfa != NIL) { old_cfa = reclaim(ctx, old_cfa); }
+//	while (old_cfa != 0) { old_cfa = reclaim(x, old_cfa); }
 //	return word;
 //}
 //
-//PAIR* reveal(CTX* ctx, PAIR* header) {
-//	header->next = AS(T_ATOM, ctx->dict);
-//	ctx->dict = header;
+//PAIR* reveal(X* x, PAIR* header) {
+//	header->next = AS(T_ATOM, x->dict);
+//	x->dict = header;
 //	return header;
 //}
 //
 //#define IS_IMMEDIATE(w)		(TYPE(w->ref) & 1)
 //
-//void _immediate(CTX* ctx) {
-//	ctx->dict->ref = AS(1, REF(ctx->dict));
+//void _immediate(X* x) {
+//	x->dict->ref = AS(1, REF(x->dict));
 //}
 //
-////PAIR* find(CTX* ctx, BYTE* name, CELL nlen) {
+////PAIR* find(X* x, B* name, C nlen) {
 ////	// TODO
 ////}
 //
-//CTX* dodo(CTX* x) {
-//	reveal(x, body(x, header(x, "+", 1), cons(x, T_PRIMITIVE, (CELL)&_add, NIL)));
-//	reveal(x, body(x, header(x, "-", 1), cons(x, T_PRIMITIVE, (CELL)&_sub, NIL)));
-//	reveal(x, body(x, header(x, "*", 1), cons(x, T_PRIMITIVE, (CELL)&_mul, NIL)));
-//	reveal(x, body(x, header(x, "/", 1), cons(x, T_PRIMITIVE, (CELL)&_div, NIL)));
-//	reveal(x, body(x, header(x, "mod", 3), cons(x, T_PRIMITIVE, (CELL)&_mod, NIL)));
+//X* dodo(X* x) {
+//	reveal(x, body(x, header(x, "+", 1), cons(x, T_PRIMITIVE, (C)&_add, 0)));
+//	reveal(x, body(x, header(x, "-", 1), cons(x, T_PRIMITIVE, (C)&_sub, 0)));
+//	reveal(x, body(x, header(x, "*", 1), cons(x, T_PRIMITIVE, (C)&_mul, 0)));
+//	reveal(x, body(x, header(x, "/", 1), cons(x, T_PRIMITIVE, (C)&_div, 0)));
+//	reveal(x, body(x, header(x, "mod", 3), cons(x, T_PRIMITIVE, (C)&_mod, 0)));
 //
-//	reveal(x, body(x, header(x, ">", 1), cons(x, T_PRIMITIVE, (CELL)&_gt, NIL)));
-//	reveal(x, body(x, header(x, "<", 1), cons(x, T_PRIMITIVE, (CELL)&_lt, NIL)));
-//	reveal(x, body(x, header(x, "=", 1), cons(x, T_PRIMITIVE, (CELL)&_eq, NIL)));
-//	reveal(x, body(x, header(x, "<>", 2), cons(x, T_PRIMITIVE, (CELL)&_neq, NIL)));
+//	reveal(x, body(x, header(x, ">", 1), cons(x, T_PRIMITIVE, (C)&_gt, 0)));
+//	reveal(x, body(x, header(x, "<", 1), cons(x, T_PRIMITIVE, (C)&_lt, 0)));
+//	reveal(x, body(x, header(x, "=", 1), cons(x, T_PRIMITIVE, (C)&_eq, 0)));
+//	reveal(x, body(x, header(x, "<>", 2), cons(x, T_PRIMITIVE, (C)&_neq, 0)));
 //
-//	reveal(x, body(x, header(x, "and", 3), cons(x, T_PRIMITIVE, (CELL)&_and, NIL)));
-//	reveal(x, body(x, header(x, "or", 2), cons(x, T_PRIMITIVE, (CELL)&_or, NIL)));
-//	reveal(x, body(x, header(x, "invert", 3), cons(x, T_PRIMITIVE, (CELL)&_not, NIL)));
+//	reveal(x, body(x, header(x, "and", 3), cons(x, T_PRIMITIVE, (C)&_and, 0)));
+//	reveal(x, body(x, header(x, "or", 2), cons(x, T_PRIMITIVE, (C)&_or, 0)));
+//	reveal(x, body(x, header(x, "invert", 3), cons(x, T_PRIMITIVE, (C)&_not, 0)));
 //
-//	reveal(x, body(x, header(x, "dup", 3), cons(x, T_PRIMITIVE, (CELL)&_dup, NIL)));
-//	reveal(x, body(x, header(x, "swap", 4), cons(x, T_PRIMITIVE, (CELL)&_swap, NIL)));
+//	reveal(x, body(x, header(x, "dup", 3), cons(x, T_PRIMITIVE, (C)&_dup, 0)));
+//	reveal(x, body(x, header(x, "swap", 4), cons(x, T_PRIMITIVE, (C)&_swap, 0)));
 //
-//	//reveal(x, body(x, header(ctx, "key", 3), cons(x, T_PRIMITIVE, (CELL)&_key, NIL)));
-//	//reveal(x, body(x, header(ctx, "emit", 4), cons(x, T_PRIMITIVE, (CELL)&_emit, NIL)));
+//	//reveal(x, body(x, header(x, "key", 3), cons(x, T_PRIMITIVE, (C)&_key, 0)));
+//	//reveal(x, body(x, header(x, "emit", 4), cons(x, T_PRIMITIVE, (C)&_emit, 0)));
 //
 //	return x;
 //}
