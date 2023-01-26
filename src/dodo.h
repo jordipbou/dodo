@@ -6,11 +6,11 @@ typedef intptr_t	C;		// 16, 32 or 64 bits depending on system
 #define A(pair)					(*((C*)pair))
 #define D(pair)					(*(((C*)pair) + 1))
 
-#define ATOM				0
-#define PRIMITIVE		1
-#define BRANCH			2
-#define WORD				3
-#define RECURSION		4
+#define T_ATOM				0
+#define T_PRIMITIVE		1
+#define T_BRANCH			2
+#define T_WORD				3
+#define T_RECURSION		4
 
 typedef struct {
 	B* bottom, * here;
@@ -55,7 +55,7 @@ X* init(B* block, C size) {
 
 void push(X* x, C v) { OF(x); N(x) = F(x); T(x) = v; }
 C pop(X* x) { UF(x); C t = T(x); T(x) = N(x); N(x) = K(x); return t; }
-C cons(X* x, C a, C d) { C p = N(x); push(x, a); K(x) = D(K(x)); D(p) = d; return p; }
+C cons(X* x, C a, C d) { C p = N(x); push(x, a); K(x) = K(x) ? D(K(x)) : 0; D(p) = d; return p; }
 
 void _dup(X* x) { push(x, T(x)); }
 void _swap(X* x) { C t = T(x); T(x) = S(x); S(x) = t; }
@@ -75,15 +75,25 @@ void _and(X* x) { C t = pop(x); T(x) = T(x) && t; }
 void _or(X* x) { C t = pop(x); T(x) = T(x) || t; }
 void _not(X* x) { T(x) = !T(x); }
 
+#define ATOM(x, n, d)					cons(x, cons(x, T_ATOM, n), d)
+#define PRIMITIVE(x, p, d)		cons(x, cons(x, T_PRIMITIVE, (C)p), d)
+#define RECURSION(x, d)				cons(x, cons(x, T_RECURSION, 0), d)
+C BRANCH(X* x, C t, C f, C d) {
+	if (t) { C lt = t; while(D(lt)) lt = D(lt); D(lt) = d; } else { t = d; }
+	if (f) { C lf = f; while(D(lf)) lf = D(lf); D(lf) = d; } else { f = d; }
+	return cons(x, cons(x, T_BRANCH, cons(x, t, cons(x, f, 0))), d);
+}
+#define WORD(x, c, d)					cons(x, cons(x, T_WORD, c), d)
+
 void inner(X* x, C xlist) {
 	C ip = xlist;
 	while(x->err == 0 && ip != 0) {
 		switch(A(A(ip))) {
-			case ATOM: push(x, D(A(ip))); ip = D(ip); break;
-			case PRIMITIVE:	((FUNC)D(A(ip)))(x); ip = D(ip); break;
-			case RECURSION: inner(x, xlist); ip = D(ip); break;
-			case BRANCH: ip = pop(x) ? A(D(A(ip))) : A(D(D(A(ip)))); break;
-			case WORD: inner(x, A(ip)); break;
+			case T_ATOM: push(x, D(A(ip))); ip = D(ip); break;
+			case T_PRIMITIVE:	((FUNC)D(A(ip)))(x); ip = D(ip); break;
+			case T_RECURSION: ip = D(ip) ? (inner(x, xlist), D(ip)) : xlist; break;
+			case T_BRANCH: ip = pop(x) ? A(D(A(ip))) : A(D(D(A(ip)))); break;
+			case T_WORD: ip = D(ip) ? (inner(x, D(A(ip))), D(ip)) : D(A(ip)); break;
 		}
 	}
 }

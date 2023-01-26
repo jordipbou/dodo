@@ -8,26 +8,26 @@ void main() {
 
 	push(x, 36);
 
-	C xlist = 
-		cons(x, cons(x, PRIMITIVE, (C)&_dup),
-		cons(x, cons(x, ATOM, 1),
-		cons(x, cons(x, PRIMITIVE, (C)&_gt),
-		cons(x, cons(x, BRANCH, 
-			// True branch
-			cons(x,
-				cons(x, cons(x, ATOM, 1),
-				cons(x, cons(x, PRIMITIVE, (C)&_sub),
-				cons(x, cons(x, PRIMITIVE, (C)&_dup),
-				cons(x, cons(x, ATOM, 1),
-				cons(x, cons(x, PRIMITIVE, (C)&_sub),
-				cons(x, cons(x, RECURSION, 0),
-				cons(x, cons(x, PRIMITIVE, (C)&_swap),
-				cons(x, cons(x, RECURSION, 0),
-				cons(x, cons(x, PRIMITIVE, (C)&_add), 0))))))))),
-			// False branch
-			cons(x, 0, 0))), 
+	C xlist =
+		PRIMITIVE(x, &_dup,
+		ATOM(x, 1,
+		PRIMITIVE(x, &_gt,
+		BRANCH(x,
+			// True
+			ATOM(x, 1,
+			PRIMITIVE(x, &_sub,
+			PRIMITIVE(x, &_dup,
+			ATOM(x, 1,
+			PRIMITIVE(x, &_sub,
+			RECURSION(x,
+			PRIMITIVE(x, &_swap,
+			RECURSION(x,
+			PRIMITIVE(x, &_add, 0))))))))),
+			// False
+			0,
 		0))));
 	
+	//inner(x, xlist, xlist);
 	inner(x, xlist);
 
 	printf("%ld\n", T(x));
