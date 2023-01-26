@@ -59,6 +59,9 @@ C cons(X* x, C a, C d) { C p = N(x); push(x, a); K(x) = K(x) ? D(K(x)) : 0; D(p)
 
 void _dup(X* x) { push(x, T(x)); }
 void _swap(X* x) { C t = T(x); T(x) = S(x); S(x) = t; }
+void _over(X* x) { push(x, S(x)); }
+void _rot(X* x) { C t = A(D(D(K(x))));; A(D(D(K(x)))) = S(x); S(x) = T(x); T(x) = t; }
+void _drop(X* x) { pop(x); }
 
 void _add(X* x) { C t = pop(x); T(x) += t; }
 void _sub(X* x) { C t = pop(x); T(x) -= t; }

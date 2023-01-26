@@ -141,6 +141,67 @@ void test_swap() {
 	TEST_ASSERT_EQUAL_INT(7, S(ctx));
 }
 
+void test_over() {
+	C size = 256;
+	B block[size];
+	X* x = init(block, size);
+
+	push(x, 13);
+	push(x, 7);
+	TEST_ASSERT_EQUAL_INT(2, depth(K(x)));
+	TEST_ASSERT_EQUAL_INT(7, T(x));
+	TEST_ASSERT_EQUAL_INT(13, S(x));
+	_over(x);
+	TEST_ASSERT_EQUAL_INT(3, depth(K(x)));
+	TEST_ASSERT_EQUAL_INT(13, T(x));
+	TEST_ASSERT_EQUAL_INT(7, S(x));
+	TEST_ASSERT_EQUAL_INT(13, A(D(D(K(x)))));
+}
+
+void test_rot() {
+	C size = 256;
+	B block[size];
+	X* x = init(block, size);
+
+	push(x, 21);
+	push(x, 13);
+	push(x, 7);
+	TEST_ASSERT_EQUAL_INT(3, depth(K(x)));
+	TEST_ASSERT_EQUAL_INT(7, T(x));
+	TEST_ASSERT_EQUAL_INT(13, S(x));
+	TEST_ASSERT_EQUAL_INT(21, A(D(D(K(x)))));
+	_rot(x);
+	TEST_ASSERT_EQUAL_INT(3, depth(K(x)));
+	TEST_ASSERT_EQUAL_INT(21, T(x));
+	TEST_ASSERT_EQUAL_INT(7, S(x));
+	TEST_ASSERT_EQUAL_INT(13, A(D(D(K(x)))));
+}
+
+void test_drop() {
+	C size = 256;
+	B block[size];
+	X* x = init(block, size);
+
+	push(x, 21);
+	push(x, 13);
+	push(x, 7);
+	TEST_ASSERT_EQUAL_INT(3, depth(K(x)));
+	TEST_ASSERT_EQUAL_INT(7, T(x));
+	TEST_ASSERT_EQUAL_INT(13, S(x));
+	TEST_ASSERT_EQUAL_INT(21, A(D(D(K(x)))));
+	_drop(x);
+	TEST_ASSERT_EQUAL_INT(2, depth(K(x)));
+	TEST_ASSERT_EQUAL_INT(13, T(x));
+	TEST_ASSERT_EQUAL_INT(21, S(x));
+	_drop(x);
+	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+	TEST_ASSERT_EQUAL_INT(21, T(x));
+	_drop(x);
+	TEST_ASSERT_EQUAL_INT(0, depth(K(x)));
+	_drop(x);
+	TEST_ASSERT_EQUAL_INT(ERR_UNDERFLOW, x->err);
+}
+
 void test_binops() {
 	C size = 256;
 	B block[size];
@@ -640,6 +701,9 @@ int main() {
 
 	RUN_TEST(test_dup);
 	RUN_TEST(test_swap);
+	RUN_TEST(test_over);
+	RUN_TEST(test_rot);
+	RUN_TEST(test_drop);
 	RUN_TEST(test_binops);
 
 	RUN_TEST(test_interpreter_atom);
