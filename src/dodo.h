@@ -1,4 +1,12 @@
 #include<stdint.h>
+#include<stdio.h>
+
+#ifdef _WIN32
+  #include <conio.h>
+#else
+	#include <unistd.h>
+	#include <termios.h>
+#endif
 
 typedef int8_t		B;
 typedef intptr_t	C;		// 16, 32 or 64 bits depending on system
@@ -14,14 +22,16 @@ typedef intptr_t	C;		// 16, 32 or 64 bits depending on system
 
 typedef struct {
 	B* bottom, * here;
-	C there, top, nodes, rstack, dict, err;
+	C there, top, nodes, dict, ibuf, err;
 } X;
 
 #define N(x)					x->nodes
-#define K(x)					D(N(x))
-#define F(x)					A(N(x))
-#define T(x)					A(K(x))
-#define S(x)					A(D(K(x)))
+#define K(x)					D(N(x))						// Data stacK
+#define F(x)					A(N(x))						// Doubly linked list of Free nodes
+#define T(x)					A(K(x))						// Top of data stack
+#define S(x)					A(D(K(x)))				// Second of data stack
+#define P(x)					A(x->top)					// Pile of stacks
+#define R(x)					D(x->top)					// Return stack
 
 typedef void (*FUNC)(X*);
 
@@ -38,14 +48,16 @@ X* init(B* block, C size) {
 	X* x = (X*)block;	
 	x->bottom = x->here = ((B*)x) + sizeof(X);
 	x->there = ALIGN((C)x->bottom, 2*sizeof(C));
-	x->nodes = x->top = ALIGN((block + size - 2*sizeof(C) - 1), 2*sizeof(C));
+	x->top = ALIGN((block + size - 2*sizeof(C) - 1), 2*sizeof(C));
+	x->nodes = x->top - 4*sizeof(C);
+	P(x) = R(x) = x->top - 2*sizeof(C);
 
-	for (C p = x->there; p <= x->top; p += 2*sizeof(C)) {
+	for (C p = x->there; p <= x->nodes; p += 2*sizeof(C)) {
 		A(p) = p == x->there ? 0 : p - 2*sizeof(C);
-		D(p) = p == x->top ? 0 : p + 2*sizeof(C);
+		D(p) = p == x->nodes ? 0 : p + 2*sizeof(C);
 	}
 
-	x->err = x->dict = x->rstack = 0;
+	D(R(x)) = A(R(x)) = x->err = x->ibuf = x->dict = 0;
 
 	return x;
 }
@@ -57,11 +69,19 @@ void push(X* x, C v) { OF(x); N(x) = F(x); T(x) = v; }
 C pop(X* x) { UF(x); C t = T(x); T(x) = N(x); N(x) = K(x); return t; }
 C cons(X* x, C a, C d) { C p = N(x); push(x, a); K(x) = K(x) ? D(K(x)) : 0; D(p) = d; return p; }
 
+void _sclear(X* x) { while (K(x)) pop(x); }
+void _spush(X* x) { C t = P(x);	C n = F(x);	P(x) = N(x); A(N(x)) = t;	N(x) = n;	K(x) = 0; }
+void _sdrop(X* x) { 
+	_sclear(x); 
+	if (P(x) != R(x)) { C t = A(P(x)); A(P(x)) = N(x); K(x) = D(P(x)); N(x) = P(x); P(x) = t;	} 
+}
+
 void _dup(X* x) { push(x, T(x)); }
 void _swap(X* x) { C t = T(x); T(x) = S(x); S(x) = t; }
 void _over(X* x) { push(x, S(x)); }
-void _rot(X* x) { C t = A(D(D(K(x))));; A(D(D(K(x)))) = S(x); S(x) = T(x); T(x) = t; }
+void _rot(X* x) { C t = A(D(D(K(x)))); A(D(D(K(x)))) = S(x); S(x) = T(x); T(x) = t; }
 void _drop(X* x) { pop(x); }
+void _rev(X* x) {	C s = K(x);	K(x) = 0;	while (s) { C t = D(s); D(s) = K(x); K(x) = s; s = t; } }
 
 void _add(X* x) { C t = pop(x); T(x) += t; }
 void _sub(X* x) { C t = pop(x); T(x) -= t; }
@@ -101,44 +121,51 @@ void inner(X* x, C xlist) {
 	}
 }
 
-////#ifdef _WIN32
-////  #include <conio.h>
-////#else
-////	#include <unistd.h>
-////	#include <termios.h>
-////#endif
-//
-////// Source code for getch is taken from:
-////// Crossline readline (https://github.com/jcwangxp/Crossline).
-////// It's a fantastic readline cross-platform replacement, but only getch was
-////// needed and there's no need to include everything else.
-////#ifdef _WIN32	// Windows
-////int dodo_getch (void) {	fflush (stdout); return _getch(); }
-////#else
-////int dodo_getch ()
-////{
-////	char ch = 0;
-////	struct termios old_term, cur_term;
-////	fflush (stdout);
-////	if (tcgetattr(STDIN_FILENO, &old_term) < 0)	{ perror("tcsetattr"); }
-////	cur_term = old_term;
-////	cur_term.c_lflag &= ~(ICANON | ECHO | ISIG); // echoing off, canonical off, no signal chars
-////	cur_term.c_cc[VMIN] = 1;
-////	cur_term.c_cc[VTIME] = 0;
-////	if (tcsetattr(STDIN_FILENO, TCSANOW, &cur_term) < 0)	{ perror("tcsetattr"); }
-////	if (read(STDIN_FILENO, &ch, 1) < 0)	{ /* perror("read()"); */ } // signal will interrupt
-////	if (tcsetattr(STDIN_FILENO, TCSADRAIN, &old_term) < 0)	{ perror("tcsetattr"); }
-////	return ch;
-////}
-////#endif
-////
-////void _key(X* x) { PUSH(x, dodo_getch()); }
-////void _emit(X* x) { 
-////	C K = T(x); 
-////	POP(x); 
-////	if (K == 127) { printf ("\b \b"); } 
-////	else { printf ("%c", (char)K); }
-////}
+// Source code for getch is taken from:
+// Crossline readline (https://github.com/jcwangxp/Crossline).
+// It's a fantastic readline cross-platform replacement, but only getch was
+// needed and there's no need to include everything else.
+#ifdef _WIN32	// Windows
+int dodo_getch (void) {	fflush (stdout); return _getch(); }
+#else
+int dodo_getch ()
+{
+	char ch = 0;
+	struct termios old_term, cur_term;
+	fflush (stdout);
+	if (tcgetattr(STDIN_FILENO, &old_term) < 0)	{ perror("tcsetattr"); }
+	cur_term = old_term;
+	cur_term.c_lflag &= ~(ICANON | ECHO | ISIG); // echoing off, canonical off, no signal chars
+	cur_term.c_cc[VMIN] = 1;
+	cur_term.c_cc[VTIME] = 0;
+	if (tcsetattr(STDIN_FILENO, TCSANOW, &cur_term) < 0)	{ perror("tcsetattr"); }
+	if (read(STDIN_FILENO, &ch, 1) < 0)	{ /* perror("read()"); */ } // signal will interrupt
+	if (tcsetattr(STDIN_FILENO, TCSADRAIN, &old_term) < 0)	{ perror("tcsetattr"); }
+	return ch;
+}
+#endif
+
+void _key(X* x) { push(x, dodo_getch()); }
+void _emit(X* x) { C K = T(x); pop(x); K == 127 ? printf ("\b \b") : printf ("%c", (char)K); }
+
+void _stack_to_ibuf(X* x) {
+	C s = K(x);
+	K(x) = x->ibuf;
+	_sdrop(x);
+}
+
+void _quit(X* x) {
+	//while (!x->err) {
+		while (K(x) ? T(x) != 10 : 1) { _key(x); _dup(x); _emit(x); }
+		_rev(x);
+		_stack_to_ibuf(x);
+	//}
+}
+
+void _header(X* x) {
+	// Parses next word from input buffer
+	//
+}
 //
 //void push_stack(X* x) {
 //	x->stacks.next = cons(x, T_LIST, (C)AS(T_LIST, REF((&x->stacks))), NEXT((&x->stacks)));
