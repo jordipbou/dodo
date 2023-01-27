@@ -97,6 +97,12 @@ void _and(X* x) { C t = pop(x); T(x) = T(x) && t; }
 void _or(X* x) { C t = pop(x); T(x) = T(x) || t; }
 void _not(X* x) { T(x) = !T(x); }
 
+void _fetch(X* x) { push(x, *((C*)pop(x))); }
+void _store(X* x) { C v = pop(x); *((C*)pop(x)) = v; }
+
+void _sfetch(X* x) { C a = pop(x); _spush(x); K(x) = *((C*)a); *((C*)a) = 0; }
+void _sstore(X* x) { C a = pop(x); *((C*)a) = K(x); K(x) = 0; }
+
 #define ATOM(x, n, d)					cons(x, cons(x, T_ATOM, n), d)
 #define PRIMITIVE(x, p, d)		cons(x, cons(x, T_PRIMITIVE, (C)p), d)
 #define RECURSION(x, d)				cons(x, cons(x, T_RECURSION, 0), d)
@@ -157,7 +163,8 @@ void _quit(X* x) {
 	//while (!x->err) {
 		while (K(x) ? T(x) != 10 : 1) { _key(x); _dup(x); _emit(x); }
 		_rev(x);
-		_stack_to_ibuf(x);
+		push(x, (C)&x->ibuf);
+		_sstore(x);
 	//}
 }
 

@@ -567,6 +567,45 @@ void test_interpreter_atom() {
 	TEST_ASSERT_EQUAL_INT(13, S(x));
 }
 
+void test_fetch_store() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	push(x, (C)&size);
+	_fetch(x);
+	TEST_ASSERT_EQUAL_INT(size, pop(x));
+
+	push(x, (C)&size);
+	push(x, 13);
+	_store(x);
+	TEST_ASSERT_EQUAL_INT(13, size);
+}
+
+void test_sfetch_sstore() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	C s = 0;
+	push(x, 13);
+	push(x, 7);
+	TEST_ASSERT_EQUAL_INT(2, depth(K(x)));
+	push(x, (C)&s);
+	_sstore(x);
+	TEST_ASSERT_EQUAL_INT(0, depth(K(x)));
+	TEST_ASSERT_EQUAL_INT(2, depth(s));
+	TEST_ASSERT_EQUAL_INT(7, A(s));
+	TEST_ASSERT_EQUAL_INT(13, A(D(s)));
+	push(x, (C)&s);
+	_sfetch(x);
+	TEST_ASSERT_EQUAL_INT(2, depth(K(x)));
+	TEST_ASSERT_EQUAL_INT(7, T(x));
+	TEST_ASSERT_EQUAL_INT(13, S(x));
+	TEST_ASSERT_EQUAL_INT(0, depth(s));
+	TEST_ASSERT_EQUAL_INT(0, s);
+}
+
 void test_interpreter_primitive() {
 	C size = 512;
 	B block[size];
@@ -883,6 +922,8 @@ int main() {
 	RUN_TEST(test_drop);
 	RUN_TEST(test_rev);
 	RUN_TEST(test_binops);
+	RUN_TEST(test_fetch_store);
+	RUN_TEST(test_sfetch_sstore);
 
 	RUN_TEST(test_interpreter_atom);
 	RUN_TEST(test_interpreter_primitive);
