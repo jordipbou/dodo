@@ -30,8 +30,8 @@ typedef struct {
 #define F(x)					A(N(x))						// Doubly linked list of Free nodes
 #define T(x)					A(K(x))						// Top of data stack
 #define S(x)					A(D(K(x)))				// Second of data stack
-#define P(x)					A(x->top)					// Pile of stacks
-#define R(x)					D(x->top)					// Return stack
+#define P(x)					D(x->top)					// Pile of stacks
+#define R(x)					A(x->top)					// Return stack
 
 typedef void (*FUNC)(X*);
 
@@ -43,6 +43,7 @@ typedef void (*FUNC)(X*);
 
 C height(C p) { C c = 0; while (p != 0) { c++; p = A(p); } return c; }
 C depth(C p) { C c = 0; while (p != 0) { c++; p = D(p); } return c; }
+
 
 X* init(B* block, C size) {
 	X* x = (X*)block;	
@@ -68,13 +69,11 @@ X* init(B* block, C size) {
 void push(X* x, C v) { OF(x); N(x) = F(x); T(x) = v; }
 C pop(X* x) { UF(x); C t = T(x); T(x) = N(x); N(x) = K(x); return t; }
 C cons(X* x, C a, C d) { C p = N(x); push(x, a); K(x) = K(x) ? D(K(x)) : 0; D(p) = d; return p; }
+C re(X* x, C p) {C t; return p ? (t = D(p), D(p) = K(x), A(p) = N(x), K(x) = p, N(x) = p, t) : 0; }
 
 void _sclear(X* x) { while (K(x)) pop(x); }
-void _spush(X* x) { C t = P(x);	C n = F(x);	P(x) = N(x); A(N(x)) = t;	N(x) = n;	K(x) = 0; }
-void _sdrop(X* x) { 
-	_sclear(x); 
-	if (P(x) != R(x)) { C t = A(P(x)); A(P(x)) = N(x); K(x) = D(P(x)); N(x) = P(x); P(x) = t;	} 
-}
+void _spush(X* x) { P(x) = cons(x, K(x), P(x)); K(x) = 0; }
+void _sdrop(X* x) { _sclear(x); if (P(x) != R(x)) { K(x) = A(P(x)); P(x) = re(x, P(x)); } }
 
 void _dup(X* x) { push(x, T(x)); }
 void _swap(X* x) { C t = T(x); T(x) = S(x); S(x) = t; }

@@ -27,7 +27,7 @@ void test_block_initialization() {
 
 	TEST_ASSERT_EQUAL_INT(0, x->err);
 	TEST_ASSERT_EQUAL_INT(0, depth(K(x)));
-	TEST_ASSERT_EQUAL_INT(1, height(P(x)));
+	TEST_ASSERT_EQUAL_INT(1, depth(P(x)));
 
 	TEST_ASSERT_EQUAL_INT(x->bottom, ((B*)x) + sizeof(X));
 	TEST_ASSERT_EQUAL_INT(x->bottom, x->here);
@@ -96,21 +96,76 @@ void test_pop() {
 void test_cons() {
 	C size = 256;
 	B block[size];
-	X* ctx = init(block, size);
+	X* x = init(block, size);
 
 	C free_nodes = (size - sizeof(X)) / (2*sizeof(C)) - 3;
 
-	TEST_ASSERT_EQUAL_INT(free_nodes, height(F(ctx)));
+	TEST_ASSERT_EQUAL_INT(free_nodes, height(F(x)));
 
-	C p = cons(ctx, 13, 0);
-	TEST_ASSERT_EQUAL_INT(free_nodes - 1, height(F(ctx)));
+	C p = cons(x, 13, 0);
+	TEST_ASSERT_EQUAL_INT(free_nodes - 1, height(F(x)));
 	TEST_ASSERT_EQUAL_INT(13, A(p));
 	TEST_ASSERT_EQUAL_INT(0, D(p));
 	
-	while (height(F(ctx)) > 0) { cons(ctx, 1, 0); }
+	while (height(F(x)) > 0) { cons(x, 1, 0); }
 
-	C p3 = cons(ctx, 21, 0);
-	TEST_ASSERT_EQUAL_INT(ERR_OVERFLOW, ctx->err);
+	C p3 = cons(x, 21, 0);
+	TEST_ASSERT_EQUAL_INT(ERR_OVERFLOW, x->err);
+}
+
+void test_reclaim() {
+	C size = 256;
+	B block[size];
+	X* x = init(block, size);
+
+	C free_nodes = (size - sizeof(X)) / (2*sizeof(C)) - 3;
+
+	push(x, 13);
+	push(x, 7);
+
+	TEST_ASSERT_EQUAL_INT(free_nodes - 2, height(F(x)));
+	TEST_ASSERT_EQUAL_INT(2, depth(K(x)));
+	TEST_ASSERT_EQUAL_INT(7, T(x));
+	TEST_ASSERT_EQUAL_INT(13, S(x));
+
+	C c = re(x, 0);	
+
+	TEST_ASSERT_EQUAL_INT(0, c);
+	TEST_ASSERT_EQUAL_INT(free_nodes - 2, height(F(x)));
+	TEST_ASSERT_EQUAL_INT(2, depth(K(x)));
+	TEST_ASSERT_EQUAL_INT(7, T(x));
+	TEST_ASSERT_EQUAL_INT(13, S(x));
+
+	C d = cons(x, 21, 0);
+	
+	TEST_ASSERT_EQUAL_INT(free_nodes - 3, height(F(x)));
+	TEST_ASSERT_EQUAL_INT(2, depth(K(x)));
+	TEST_ASSERT_EQUAL_INT(7, T(x));
+	TEST_ASSERT_EQUAL_INT(13, S(x));
+
+	c = re(x, d);
+
+	TEST_ASSERT_EQUAL_INT(0, depth(c));
+	TEST_ASSERT_EQUAL_INT(free_nodes - 2, height(F(x)));
+	TEST_ASSERT_EQUAL_INT(2, depth(K(x)));
+	TEST_ASSERT_EQUAL_INT(7, T(x));
+	TEST_ASSERT_EQUAL_INT(13, S(x));
+
+	d = cons(x, 21, cons(x, 23, 0));
+
+	TEST_ASSERT_EQUAL_INT(2, depth(d));
+	TEST_ASSERT_EQUAL_INT(free_nodes - 4, height(F(x)));
+	TEST_ASSERT_EQUAL_INT(2, depth(K(x)));
+	TEST_ASSERT_EQUAL_INT(7, T(x));
+	TEST_ASSERT_EQUAL_INT(13, S(x));
+
+	c = re(x, d);
+
+	TEST_ASSERT_EQUAL_INT(1, depth(c));
+	TEST_ASSERT_EQUAL_INT(free_nodes - 3, height(F(x)));
+	TEST_ASSERT_EQUAL_INT(2, depth(K(x)));
+	TEST_ASSERT_EQUAL_INT(7, T(x));
+	TEST_ASSERT_EQUAL_INT(13, S(x));
 }
 
 void test_clear_stack() {
@@ -149,11 +204,18 @@ void test_push_stack() {
 
 	_spush(x);
 
+	//TEST_ASSERT_EQUAL_INT(free_nodes - 3, height(F(x)));
+	//TEST_ASSERT_EQUAL_INT(7, A(D(P(x))));
+	//TEST_ASSERT_EQUAL_INT(13, A(D(D(P(x)))));
+	//TEST_ASSERT_EQUAL_INT(2, height(P(x)));
+	//TEST_ASSERT_EQUAL_INT(R(x), A(P(x)));
+	//TEST_ASSERT_EQUAL_INT(0, depth(K(x)));
+
 	TEST_ASSERT_EQUAL_INT(free_nodes - 3, height(F(x)));
-	TEST_ASSERT_EQUAL_INT(7, A(D(P(x))));
-	TEST_ASSERT_EQUAL_INT(13, A(D(D(P(x)))));
-	TEST_ASSERT_EQUAL_INT(2, height(P(x)));
-	TEST_ASSERT_EQUAL_INT(R(x), A(P(x)));
+	TEST_ASSERT_EQUAL_INT(7, A(A(P(x))));
+	TEST_ASSERT_EQUAL_INT(13, A(D(A(P(x)))));
+	TEST_ASSERT_EQUAL_INT(2, depth(P(x)));
+	TEST_ASSERT_EQUAL_INT(R(x), D(P(x)));
 	TEST_ASSERT_EQUAL_INT(0, depth(K(x)));
 }
 
@@ -808,6 +870,7 @@ int main() {
 	RUN_TEST(test_push);
 	RUN_TEST(test_pop);
 	RUN_TEST(test_cons);
+	RUN_TEST(test_reclaim);
 
 	RUN_TEST(test_clear_stack);
 	RUN_TEST(test_push_stack);
