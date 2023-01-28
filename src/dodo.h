@@ -1,5 +1,8 @@
 #include<stdint.h>
 #include<stdio.h>
+#include<string.h>
+#include<errno.h>
+#include<inttypes.h>
 
 #ifdef _WIN32
   #include <conio.h>
@@ -153,18 +156,37 @@ int dodo_getch ()
 void _key(X* x) { push(x, dodo_getch()); }
 void _emit(X* x) { C K = T(x); pop(x); K == 127 ? printf ("\b \b") : printf ("%c", (char)K); }
 
-void _stack_to_ibuf(X* x) {
-	C s = K(x);
-	K(x) = x->ibuf;
-	_sdrop(x);
+void _dot_s(X* x) {	
+	C p = K(x);	
+	printf("<%ld> ", depth(K(x))); 
+	while (p) { printf("%ld ", A(p)); p = D(p); }
+	printf("\n");
+}
+
+void _interpret(X* x) {
+	// skip leading spaces
+	while (x->ibuf && (A(x->ibuf) == 32 || A(x->ibuf) == 10)) { x->ibuf = re(x, x->ibuf); }
+	C c = 0; C p = 0
+	while (x->ibuf && A(x->ibuf) != 32 && A(x->ibuf) != 10) { c++; 
+	// find word, if found...
+		// if interpreting...
+		// if compiling...
+	// ...if not found...
+		// transform word to number, if possible...
+			// ...if interpreting, push it to the stack
+			// ...if compiling, compile atom
+		// ...if can't be converted...
+			// ambiguous condition, do whatever you want here!
 }
 
 void _quit(X* x) {
 	//while (!x->err) {
-		while (K(x) ? T(x) != 10 : 1) { _key(x); _dup(x); _emit(x); }
+		while (K(x) ? T(x) != 10 : 1) { _key(x); _dup(x); _emit(x); } _drop(x);
 		_rev(x);
 		push(x, (C)&x->ibuf);
 		_sstore(x);
+		while (x->ibuf) { _interpret(x); }
+		
 	//}
 }
 
@@ -172,6 +194,39 @@ void _header(X* x) {
 	// Parses next word from input buffer
 	//
 }
+
+C find(X* x, B* t) {
+	return 0;	
+}
+
+void _include(X* x, B* fn) {
+	B buf[255];
+	B* token;
+	FILE* fptr = fopen(fn, "r");
+	if (fptr) {
+		while (fgets(buf, 255, fptr)) {
+			printf("LINE: %s", buf);
+			token = strtok(buf, " \n");
+			while (token) {
+				printf("TOKEN: %s\n", token);
+				token = strtok(NULL, " \n");
+				C xlist = find(x, token);
+				if (xlist) { }
+				else {
+					// Try to convert to number
+					char* endptr;
+					errno = 0;
+					C n = strtoimax(token, &endptr, 10);
+					printf("errno: %ld\n", errno);
+					if (!errno) { printf("ATOM: %ld\n", n); push(x, n); }	
+					else { printf("Unknown word\n"); }
+				}
+			}
+		}
+	}
+	_dot_s(x);
+}
+
 //
 //void push_stack(X* x) {
 //	x->stacks.next = cons(x, T_LIST, (C)AS(T_LIST, REF((&x->stacks))), NEXT((&x->stacks)));

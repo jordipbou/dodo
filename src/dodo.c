@@ -5,4 +5,6 @@ void main() {
 	C size = 8192;
 	B block[size];
 	X* x = init(block, size);
+
+	_include(x, "boot.dodo");	
 }
