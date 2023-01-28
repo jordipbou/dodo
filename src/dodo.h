@@ -5,23 +5,34 @@ typedef intptr_t	C;		// 16, 32 or 64 bits depending on system
 
 #define A(pair)					(*((C*)pair))
 #define D(pair)					(*(((C*)pair) + 1))
+#define t(addr, type)		((addr & -4) | type)
+#define T(pair)					((D(pair)) & 3)
+#define ST(pair)				((A(pair)) & 3)
+#define N(pair)					((D(pair)) & -4)
 
 #define T_ATOM				0
-#define T_PRIMITIVE		1
-#define T_BRANCH			2
+#define T_LIST				1
+#define T_PRIMITIVE		2
 #define T_WORD				3
-#define T_RECURSION		4
+#define T_BRANCH			4
+#define T_RECURSION		5
+#define T_FREE				6
 
 typedef struct {
-	B* bottom, * here;
-	C there, top, nodes, rstack, dict, err;
+	B* here;
+	C there, size, horizon, rstack, dict, err;
 } X;
 
-#define N(x)					x->nodes
-#define K(x)					D(N(x))
-#define F(x)					A(N(x))
-#define T(x)					A(K(x))
-#define S(x)					A(D(K(x)))
+#define BOTTOM(x)			(((B*)x) + sizeof(X))
+#define TOP(x)				(ALIGN(((B*)x) + x->size - 2*sizeof(C) - 1, 2*sizeof(C)))
+
+#define Z(x)					(x->horizon)
+#define K(x)					D(Z(x))
+#define F(x)					A(Z(x))
+#define H(x)					A(K(x))
+#define HR(x)					A(D(K(x)))
+#define G(x)					(x->dict)
+#define E(x)					(x->err)
 
 typedef void (*FUNC)(X*);
 
@@ -36,13 +47,14 @@ C depth(C p) { C c = 0; while (p != 0) { c++; p = D(p); } return c; }
 
 X* init(B* block, C size) {
 	X* x = (X*)block;	
-	x->bottom = x->here = ((B*)x) + sizeof(X);
-	x->there = ALIGN((C)x->bottom, 2*sizeof(C));
-	x->nodes = x->top = ALIGN((block + size - 2*sizeof(C) - 1), 2*sizeof(C));
+	x->size = size;
+	x->here = BOTTOM(x);
+	x->there = ALIGN(BOTTOM(x), 2*sizeof(C));
+	x->horizon = TOP(x);
 
-	for (C p = x->there; p <= x->top; p += 2*sizeof(C)) {
+	for (C p = x->there; p <= Z(x); p += 2*sizeof(C)) {
 		A(p) = p == x->there ? 0 : p - 2*sizeof(C);
-		D(p) = p == x->top ? 0 : p + 2*sizeof(C);
+		D(p) = p == Z(x) ? 0 : p + 2*sizeof(C);
 	}
 
 	x->err = x->dict = x->rstack = 0;
@@ -53,30 +65,30 @@ X* init(B* block, C size) {
 #define OF(x)		if (F(x) == 0) { x->err = ERR_OVERFLOW; return; }
 #define UF(x)		if (K(x) == 0) { x->err = ERR_UNDERFLOW; return 0; }
 
-void push(X* x, C v) { OF(x); N(x) = F(x); T(x) = v; }
-C pop(X* x) { UF(x); C t = T(x); T(x) = N(x); N(x) = K(x); return t; }
-C cons(X* x, C a, C d) { C p = N(x); push(x, a); K(x) = K(x) ? D(K(x)) : 0; D(p) = d; return p; }
+void push(X* x, C v) { OF(x); Z(x) = F(x); H(x) = v; }
+C pop(X* x) { UF(x); C t = H(x); H(x) = Z(x); Z(x) = K(x); return t; }
+C cons(X* x, C a, C d) { C p = Z(x); push(x, a); K(x) = K(x) ? D(K(x)) : 0; D(p) = d; return p; }
 
-void _dup(X* x) { push(x, T(x)); }
-void _swap(X* x) { C t = T(x); T(x) = S(x); S(x) = t; }
-void _over(X* x) { push(x, S(x)); }
-void _rot(X* x) { C t = A(D(D(K(x))));; A(D(D(K(x)))) = S(x); S(x) = T(x); T(x) = t; }
+void _dup(X* x) { push(x, H(x)); }
+void _swap(X* x) { C t = H(x); H(x) = HR(x); HR(x) = t; }
+void _over(X* x) { push(x, HR(x)); }
+void _rot(X* x) { C t = A(D(D(K(x))));; A(D(D(K(x)))) = HR(x); HR(x) = H(x); H(x) = t; }
 void _drop(X* x) { pop(x); }
 
-void _add(X* x) { C t = pop(x); T(x) += t; }
-void _sub(X* x) { C t = pop(x); T(x) -= t; }
-void _mul(X* x) { C t = pop(x); T(x) *= t; }
-void _div(X* x) { C t = pop(x); T(x) /= t; }
-void _mod(X* x) { C t = pop(x); T(x) %= t; }
+void _add(X* x) { C t = pop(x); H(x) += t; }
+void _sub(X* x) { C t = pop(x); H(x) -= t; }
+void _mul(X* x) { C t = pop(x); H(x) *= t; }
+void _div(X* x) { C t = pop(x); H(x) /= t; }
+void _mod(X* x) { C t = pop(x); H(x) %= t; }
 
-void _gt(X* x) { C t = pop(x); T(x) = T(x) > t; }
-void _lt(X* x) { C t = pop(x); T(x) = T(x) < t; }
-void _eq(X* x) { C t = pop(x); T(x) = T(x) == t; }
-void _neq(X* x) { C t = pop(x); T(x) = T(x) != t; }
+void _gt(X* x) { C t = pop(x); H(x) = H(x) > t; }
+void _lt(X* x) { C t = pop(x); H(x) = H(x) < t; }
+void _eq(X* x) { C t = pop(x); H(x) = H(x) == t; }
+void _neq(X* x) { C t = pop(x); H(x) = H(x) != t; }
 
-void _and(X* x) { C t = pop(x); T(x) = T(x) && t; }
-void _or(X* x) { C t = pop(x); T(x) = T(x) || t; }
-void _not(X* x) { T(x) = !T(x); }
+void _and(X* x) { C t = pop(x); H(x) = H(x) && t; }
+void _or(X* x) { C t = pop(x); H(x) = H(x) || t; }
+void _not(X* x) { H(x) = !H(x); }
 
 #define ATOM(x, n, d)					cons(x, cons(x, T_ATOM, n), d)
 #define PRIMITIVE(x, p, d)		cons(x, cons(x, T_PRIMITIVE, (C)p), d)
@@ -134,7 +146,7 @@ void inner(X* x, C xlist) {
 ////
 ////void _key(X* x) { PUSH(x, dodo_getch()); }
 ////void _emit(X* x) { 
-////	C K = T(x); 
+////	C K = H(x); 
 ////	POP(x); 
 ////	if (K == 127) { printf ("\b \b"); } 
 ////	else { printf ("%c", (char)K); }
