@@ -5,18 +5,16 @@ typedef intptr_t	C;		// 16, 32 or 64 bits depending on system
 
 #define A(pair)					(*((C*)pair))
 #define D(pair)					(*(((C*)pair) + 1))
-#define t(addr, type)		((addr & -4) | type)
+#define t(type, addr)		((addr & -4) | type)
 #define T(pair)					((D(pair)) & 3)
 #define ST(pair)				((A(pair)) & 3)
 #define N(pair)					((D(pair)) & -4)
+#define R(pair)					((A(pair)) & -4)
 
-#define T_ATOM				0
-#define T_LIST				1
-#define T_PRIMITIVE		2
-#define T_WORD				3
-#define T_BRANCH			4
-#define T_RECURSION		5
-#define T_FREE				6
+#define T_FREE				0
+#define T_ATOM				1
+#define T_LIST				2
+#define T_PRIMITIVE		3
 
 typedef struct {
 	B* here;
@@ -65,6 +63,7 @@ X* init(B* block, C size) {
 #define OF(x)		if (F(x) == 0) { x->err = ERR_OVERFLOW; return; }
 #define UF(x)		if (K(x) == 0) { x->err = ERR_UNDERFLOW; return 0; }
 
+// TODO: Pair creation and stack manipulation are not accounting for types !!
 void push(X* x, C v) { OF(x); Z(x) = F(x); H(x) = v; }
 C pop(X* x) { UF(x); C t = H(x); H(x) = Z(x); Z(x) = K(x); return t; }
 C cons(X* x, C a, C d) { C p = Z(x); push(x, a); K(x) = K(x) ? D(K(x)) : 0; D(p) = d; return p; }
@@ -90,25 +89,30 @@ void _and(X* x) { C t = pop(x); H(x) = H(x) && t; }
 void _or(X* x) { C t = pop(x); H(x) = H(x) || t; }
 void _not(X* x) { H(x) = !H(x); }
 
-#define ATOM(x, n, d)					cons(x, cons(x, T_ATOM, n), d)
-#define PRIMITIVE(x, p, d)		cons(x, cons(x, T_PRIMITIVE, (C)p), d)
-#define RECURSION(x, d)				cons(x, cons(x, T_RECURSION, 0), d)
-C BRANCH(X* x, C t, C f, C d) {
-	if (t) { C lt = t; while(D(lt)) lt = D(lt); D(lt) = d; } else { t = d; }
-	if (f) { C lf = f; while(D(lf)) lf = D(lf); D(lf) = d; } else { f = d; }
-	return cons(x, cons(x, T_BRANCH, cons(x, t, cons(x, f, 0))), d);
+#define ATOM(x, n, cdr)				cons(x, n, t(T_ATOM, cdr))
+#define PRIMITIVE(x, p, cdr)	cons(x, (C)p, t(T_PRIMITIVE, cdr))
+#define RECURSION(x, cdr)			cons(x, 0, t(T_PRIMITIVE, cdr))
+C BRANCH(X* x, C tb, C fb, C cdr) {
+	if (tb) { C lt = tb; while(N(lt)) lt = N(lt); D(lt) = t(T(lt), cdr); } else { tb = cdr; }
+	if (fb) { C lf = fb; while(N(lf)) lf = N(lf); D(lf) = t(T(lf), cdr); } else { fb = cdr; }
+	return cons(x, t(T_ATOM, cons(x, tb, fb)), t(T_LIST, cdr));
 }
-#define WORD(x, c, d)					cons(x, cons(x, T_WORD, c), d)
+#define WORD(x, xt, cdr)			cons(x, t(T_LIST, xt), t(T_LIST, cdr))
 
 void inner(X* x, C xlist) {
 	C ip = xlist;
 	while(x->err == 0 && ip != 0) {
-		switch(A(A(ip))) {
-			case T_ATOM: push(x, D(A(ip))); ip = D(ip); break;
-			case T_PRIMITIVE:	((FUNC)D(A(ip)))(x); ip = D(ip); break;
-			case T_RECURSION: ip = D(ip) ? (inner(x, xlist), D(ip)) : xlist; break;
-			case T_BRANCH: ip = pop(x) ? A(D(A(ip))) : A(D(D(A(ip)))); break;
-			case T_WORD: ip = D(ip) ? (inner(x, D(A(ip))), D(ip)) : D(A(ip)); break;
+		switch(T(ip)) {
+			case T_ATOM: push(x, A(ip)); ip = N(ip); break;
+			case T_PRIMITIVE:	
+/* RECURSION */	if (A(ip) == 0) { ip = N(ip) ? (inner(x, xlist), N(ip)) : xlist; }
+/* PRIMITIVE */	else { ((FUNC)A(ip))(x); ip = N(ip); }
+				break;
+			case T_LIST:
+				switch(ST(ip)) {
+/* BRANCH */	case T_ATOM: ip = pop(x) ? A(R(ip)) : D(R(ip)); break;
+/* WORD   */	case T_LIST: ip = N(ip) ? (inner(x, R(ip)), N(ip)) : R(ip); break;
+				}
 		}
 	}
 }
