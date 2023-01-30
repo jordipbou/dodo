@@ -11,7 +11,7 @@ typedef intptr_t	C;		// 16, 32 or 64 bits depending on system
 #define _D(p)					(D(p) & 3)				// type tag part of cDr
 #define T(t, v)				((v & -4) | t)		// Tag a value with a type
 
-#define T_FREE				0
+#define T_STACK				0
 #define T_ATOM				1
 #define T_LIST				2
 #define T_PRIMITIVE		3
@@ -69,7 +69,20 @@ void push(X* x, C t, C v) { OF(x); Z(x) = F(x);	A(S(x)) = v; D(S(x)) = T(t, D_(S
 void lit(X* x, C v) { push(x, T_ATOM, v); }
 C pop(X* x) { UF(x, 0); C v = A(S(x)); A(S(x)) = Z(x); D(S(x)) = D_(S(x)); Z(x) = S(x); return v; }
 
-void _cons(X* x) { UF2(x); C t = S(x); S(x) = D_(D_(S(x))); push(x, T_LIST, t); }
+void _cons(X* x) { 
+	UF2(x); 
+	if (IS_ATOM(D_(S(x)))) { 
+		C t = S(x); 
+		S(x) = D_(D_(S(x))); 
+		D(D_(t)) = T(T_ATOM, 0); 
+		push(x, T_LIST, t);
+	} else if (IS_LIST(D_(S(x)))) {
+		C t = S(x);
+		S(x) = D_(S(x));
+		D(t) = T(_D(t), A(S(x)));
+		A(S(x)) = t;
+	}
+}
 
 void _carcdr(X* x) {
 	UF(x,);

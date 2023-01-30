@@ -126,17 +126,43 @@ void test_cons_atom_atom() {
 	C free_nodes = (size - sizeof(X)) / (2*sizeof(C)) - 1;
 
 	TEST_ASSERT_EQUAL_INT(free_nodes, height(F(x)));
+	lit(x, 17);
 	lit(x, 13);
 	lit(x, 7);
-	TEST_ASSERT_EQUAL_INT(free_nodes - 2, height(F(x)));
-	TEST_ASSERT_EQUAL_INT(2, depth(S(x)));
-	_cons(x);
 	TEST_ASSERT_EQUAL_INT(free_nodes - 3, height(F(x)));
-	TEST_ASSERT_EQUAL_INT(1, depth(S(x)));
-	TEST_ASSERT_EQUAL_INT(2, depth(A(S(x))));
+	TEST_ASSERT_EQUAL_INT(3, depth(S(x)));
+	_cons(x);
+	TEST_ASSERT_EQUAL_INT(free_nodes - 4, height(F(x)));
+	TEST_ASSERT_EQUAL_INT(2, depth(S(x)));
 	TEST_ASSERT(IS_LIST(S(x)));
+	TEST_ASSERT_EQUAL_INT(2, depth(A(S(x))));
 	TEST_ASSERT_EQUAL_INT(7, A(A(S(x))));
 	TEST_ASSERT_EQUAL_INT(13, A(D_(A(S(x)))));
+}
+
+void test_cons_list_atom() {
+	C size = 256;
+	B block[size];
+	X* x = init(block, size);
+
+	C free_nodes = (size - sizeof(X)) / (2*sizeof(C)) - 1;
+
+	lit(x, 23);
+
+	lit(x, 7);
+
+	lit(x, 17);
+	lit(x, 13);
+	_cons(x);
+	_cons(x);
+
+	TEST_ASSERT_EQUAL_INT(free_nodes - 6, height(F(x)));
+	TEST_ASSERT_EQUAL_INT(23, A(D_(S(x))));
+	TEST_ASSERT_EQUAL_INT(2, depth(A(S(x))));
+	TEST_ASSERT_EQUAL_INT(2, depth(A(A(S(x)))));
+	TEST_ASSERT_EQUAL_INT(13, A(A(A(S(x)))));
+	TEST_ASSERT_EQUAL_INT(17, A(D_(A(A(S(x))))));
+	TEST_ASSERT_EQUAL_INT(7, A(D_(A(S(x)))));
 }
 
 void test_cons_atom_list() {
@@ -146,20 +172,24 @@ void test_cons_atom_list() {
 
 	C free_nodes = (size - sizeof(X)) / (2*sizeof(C)) - 1;
 
-	lit(x, 21);
+	lit(x, 23);
+
+	lit(x, 17);
 	lit(x, 13);
 	_cons(x);
 	lit(x, 7);
+	TEST_ASSERT_EQUAL_INT(free_nodes - 5, height(F(x)));
 	_cons(x);
 	TEST_ASSERT_EQUAL_INT(free_nodes - 5, height(F(x)));
-	TEST_ASSERT_EQUAL_INT(1, depth(S(x)));
-	TEST_ASSERT_EQUAL_INT(2, depth(A(S(x))));
-	TEST_ASSERT_EQUAL_INT(2, depth(A(D_(A(S(x))))));
+	TEST_ASSERT_EQUAL_INT(2, depth(S(x)));
+	TEST_ASSERT_EQUAL_INT(23, A(D_(S(x))));
+	TEST_ASSERT_EQUAL_INT(3, depth(A(S(x))));
 	TEST_ASSERT(IS_ATOM(A(S(x))));
 	TEST_ASSERT_EQUAL_INT(7, A(A(S(x))));
-	TEST_ASSERT(IS_LIST(D_(A(S(x)))));
-	TEST_ASSERT_EQUAL_INT(13, A(A(D_(A(S(x))))));
-	TEST_ASSERT_EQUAL_INT(21, A(D_(A(D_(A(S(x)))))));
+	TEST_ASSERT(IS_ATOM(D_(A(S(x)))));
+	TEST_ASSERT_EQUAL_INT(13, A(D_(A(S(x)))));
+	TEST_ASSERT(IS_ATOM(D_(D_(A(S(x))))));
+	TEST_ASSERT_EQUAL_INT(17, A(D_(D_(A(S(x))))));
 }
 
 void test_cons_list_list() {
@@ -169,9 +199,12 @@ void test_cons_list_list() {
 
 	C free_nodes = (size - sizeof(X)) / (2*sizeof(C)) - 1;
 
-	lit(x, 21);
+	lit(x, 23);
+
+	lit(x, 19);
 	lit(x, 17);
 	_cons(x);
+
 	lit(x, 13);
 	lit(x, 7);
 	_cons(x);
@@ -179,14 +212,14 @@ void test_cons_list_list() {
 	_cons(x);
 
 	TEST_ASSERT_EQUAL_INT(free_nodes - 7, height(F(x)));
-	TEST_ASSERT_EQUAL_INT(1, depth(S(x)));
-	TEST_ASSERT_EQUAL_INT(2, depth(A(S(x))));
-	TEST_ASSERT_EQUAL_INT(2, depth(A(D_(A(S(x))))));
+	TEST_ASSERT_EQUAL_INT(2, depth(S(x)));
+	TEST_ASSERT_EQUAL_INT(23, A(D_(S(x))));
+	TEST_ASSERT_EQUAL_INT(3, depth(A(S(x))));
+	TEST_ASSERT_EQUAL_INT(2, depth(A(A(S(x)))));
 	TEST_ASSERT_EQUAL_INT(7, A(A(A(S(x)))));
 	TEST_ASSERT_EQUAL_INT(13, A(D_(A(A(S(x))))));
-	TEST_ASSERT_EQUAL_INT(2, depth(A(D_(A(S(x))))));
-	TEST_ASSERT_EQUAL_INT(17, A(A(D_(A(S(x))))));
-	TEST_ASSERT_EQUAL_INT(21, A(D_(A(D_(A(S(x)))))));
+	TEST_ASSERT_EQUAL_INT(17, A(D_(A(S(x)))));
+	TEST_ASSERT_EQUAL_INT(19, A(D_(D_(A(S(x))))));
 }
 
 void test_carcdr() {
@@ -204,7 +237,7 @@ void test_carcdr() {
 
 	_carcdr(x);
 	TEST_ASSERT_EQUAL_INT(0, x->err);
-	TEST_ASSERT_EQUAL_INT(free_nodes - 6, height(F(x)));
+	TEST_ASSERT_EQUAL_INT(free_nodes - 4, height(F(x)));
 	TEST_ASSERT_EQUAL_INT(2, depth(S(x)));
 	TEST_ASSERT(IS_ATOM(S(x)));
 	TEST_ASSERT_EQUAL_INT(7, A(S(x)));
@@ -832,6 +865,7 @@ int main() {
 	RUN_TEST(test_lit);
 	RUN_TEST(test_pop);
 	RUN_TEST(test_cons_atom_atom);
+	RUN_TEST(test_cons_list_atom);
 	RUN_TEST(test_cons_atom_list);
 	RUN_TEST(test_cons_list_list);
 	RUN_TEST(test_carcdr);
