@@ -222,6 +222,40 @@ void test_cons_list_list() {
 	TEST_ASSERT_EQUAL_INT(19, A(D_(D_(A(S(x))))));
 }
 
+void test_empty() {
+	C size = 256;
+	B block[size];
+	X* x = init(block, size);
+
+	C free_nodes = (size - sizeof(X)) / (2*sizeof(C)) - 1;
+
+	_empty(x);
+
+	TEST_ASSERT_EQUAL_INT(free_nodes - 1, height(F(x)));
+	TEST_ASSERT_EQUAL_INT(1, depth(S(x)));
+	TEST_ASSERT(IS_LIST(S(x)));
+	TEST_ASSERT_EQUAL_INT(0, depth(A(S(x))));
+
+	_empty(x);
+	lit(x, 5);
+	_cons(x);
+
+	TEST_ASSERT_EQUAL_INT(free_nodes - 3, height(F(x)));
+	TEST_ASSERT_EQUAL_INT(2, depth(S(x)));
+	TEST_ASSERT(IS_LIST(S(x)));
+	TEST_ASSERT_EQUAL_INT(1, depth(A(S(x))));
+	TEST_ASSERT_EQUAL_INT(5, A(A(S(x))));
+
+	// TODO: It's not working because the CDR of empty list points to
+	// [ 5 ], and it should be the CAR that points to it !!!
+	_cons(x);
+
+	TEST_ASSERT_EQUAL_INT(free_nodes - 3, height(F(x)));
+	TEST_ASSERT_EQUAL_INT(1, depth(S(x)));
+	TEST_ASSERT(IS_LIST(A(S(x))));
+	TEST_ASSERT(IS_LIST(A(A(S(x)))));
+}
+
 void test_carcdr() {
 	C size = 256;
 	B block[size];
@@ -868,6 +902,7 @@ int main() {
 	RUN_TEST(test_cons_list_atom);
 	RUN_TEST(test_cons_atom_list);
 	RUN_TEST(test_cons_list_list);
+	RUN_TEST(test_empty);
 	RUN_TEST(test_carcdr);
 	RUN_TEST(test_drop);
 

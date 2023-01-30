@@ -84,6 +84,10 @@ void _cons(X* x) {
 	}
 }
 
+void _empty(X* x) {
+	push(x, T_LIST, 0);
+}
+
 void _carcdr(X* x) {
 	UF(x,);
 	if (!IS_LIST(S(x))) { x->err = ERR_NOT_A_LIST; return; }
