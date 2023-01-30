@@ -1,0 +1,6 @@
+## TYPES
+
+ATOM	CDR(0)	CAR(x)
+LIST	CDR(1)	PAIR CAR(0)		->	PAIR ATOM ATOM	CDR(0)
+														->  PAIR LIST ATOM	CDR(1)
+
