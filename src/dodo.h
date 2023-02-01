@@ -24,11 +24,9 @@ typedef intptr_t	C;		// 16, 32 or 64 bits depending on system
 #define REF(p)							(_D(p) & 1)
 #define VAL(p)							(!REF(p))
 
-#define IT(cond, inc, r)		C c = 0; while(cond) { c += inc; p = D_(p); } return c r;
-
-C length(C p){ C c = 0; while (p) { c++; p = D_(p); } return c; }
+C length(C p) { C c = 0; while (p) { c++; p = D_(p); } return c; }
 C depth(C p) { C c = 0; while (p) { c += REF(p) ? depth(A(p)) + 1 : 1; p = D_(p); } return c; }
-C has(C p, C n){ C c = 0; while (p && c < n) { c++; p = D_(p); } return c == n; }
+C min_length(C p, C n) { C c = 0; while (p && c < n) { c++; p = D_(p); } return c == n; }
 C last(C p) { if (!p) return 0; while (D_(p)) { p = D_(p); } return p; }
 
 typedef struct {
@@ -65,26 +63,18 @@ X* init(B* block, C size) {
 }
 
 #define OF(x, r)				if (x->f == 0) { x->err = ERR_OVERFLOW; return r; }
+#define OFn(x, l, r)		if (!min_length(x->f, depth(l))) { x->err = ERR_OVERFLOW; return r; }
 #define UF(x, r)				if (x->s == 0) { x->err = ERR_UNDERFLOW; return r; }
 #define UF2(x, r)				if (x->s == 0 || D_(x->s) == 0) { x->err = ERR_UNDERFLOW; return r; }
 
 C cons(X* x, C a, C d) { C p; return x->f ? (p = x->f, x->f = D(x->f), A(p) = a, D(p) = d, p) : 0; }
-C reclaim(X* x, C l) { C r; return l = 0 ? 0 : (r = D_(l), D(l) = x->f, A(l) = 0, x->f = l, r); }
+C reclaim(X* x, C l) { C r; return l ? (r = D_(l), D(l) = x->f, A(l) = 0, x->f = l, r) : 0; }
 C clone(X* x, C l) { 
-	// TODO: Errors, must know total length of list for cloning !!! 
-	// TODO: It would be usefule to add an atleast function that checks if length is atleast
-	// what is requested.
-	if (!l) { return 0; } else
-	if (IS(ATM, l)) { cons(x, A(l), T(ATM, clone(x, D_(l)))); } else
-	if (IS(LST, l)) { cons(x, clone(x, A(l)), T(LST, clone(x, D_(l)))); } else
-	if (IS(BRN, l)) { /* TODO */ } else
-	if (IS(PRM, l)) { cons(x, A(l), T(PRM, clone(x, D_(l)))); }
+	return l ? cons(x, REF(l) ? clone(x, A(l)) : A(l), T(_D(l), clone(x, D_(l)))) : 0;
 }
 
-// TODO: Remove OF(x,) from push, every word must have its own error checking, as we
-// don't know how many cells are required in advance.
-void push(X* x, C t, C v) { OF(x,); C p = cons(x, v, T(t, x->s)); if (p) x->s = p; }
-C pop(X* x) { UF(x, 0); C v = A(x->s); x->s = reclaim(x, x->s); return v; }
+void push(X* x, C t, C v) { C p = cons(x, v, T(t, x->s)); if (p) x->s = p; }
+C pop(X* x) { C v = A(x->s); x->s = reclaim(x, x->s); return v; }
 
 void _empty(X* x) { push(x, LST, 0); }
 
@@ -97,16 +87,25 @@ void _join(X* x) {
 	0 ;
 }
 
-void _quote(X* x) { UF(x,); 
-	C t = x->s; x->s = D_(x->s); R(t, 0); push(x, LST, t); 
+void _quote(X* x) { UF(x,); C t = x->s; x->s = D_(x->s); R(t, 0); push(x, LST, t); }
+
+void _dup(X* x) { UF(x,); 
+	if (VAL(x->s)) { OF(x,); push(x, _D(x->s), A(x->s)); }
+	else { OFn(x, A(x->s),); push(x, _D(x->s), clone(x, A(x->s))); }
 }
 
-void _dup(X* x) { UF(x,);
-	if (IS(ATM, x->s)) { push(x, ATM, A(x->s)); } else
-	if (IS(LST, x->s)) { /* check total length!! */ push(x, LST, clone(x, A(x->s))); }
-}
+void _swap(X* x) { UF2(x,); C t = D_(x->s); R(x->s, D_(D_(x->s))); R(t, x->s); x->s = t; }
 
+void _add(X* x) { UF2(x,); A(D_(x->s)) = A(D_(x->s)) + A(x->s); pop(x); }
+void _sub(X* x) { UF2(x,); A(D_(x->s)) = A(D_(x->s)) - A(x->s); pop(x); }
+void _mul(X* x) { UF2(x,); A(D_(x->s)) = A(D_(x->s)) * A(x->s); pop(x); }
+void _div(X* x) { UF2(x,); A(D_(x->s)) = A(D_(x->s)) / A(x->s); pop(x); }
+void _mod(X* x) { UF2(x,); A(D_(x->s)) = A(D_(x->s)) % A(x->s); pop(x); }
 
+void _gt(X* x) { UF2(x,); A(D_(x->s)) = A(D_(x->s)) > A(x->s); pop(x); }
+void _lt(X* x) { UF2(x,); A(D_(x->s)) = A(D_(x->s)) < A(x->s); pop(x); }
+void _eq(X* x) { UF2(x,); A(D_(x->s)) = A(D_(x->s)) == A(x->s); pop(x); }
+void _neq(X* x) { UF2(x,); A(D_(x->s)) = A(D_(x->s)) != A(x->s); pop(x); }
 
 
 
@@ -138,7 +137,6 @@ void _dup(X* x) { UF(x,);
 //		//}
 //	}
 //}
-//void _swap(X* x) { UF2(x); C t = D_(x->s); R(x->s, D_(D_(x->s))); R(t, x->s); x->s = t; }
 //void _join(X* x) {
 //	UF2(x);
 //	if (ARE(x, ATM, ATM)) { _quote(x); _swap(x); _quote(x); _swap(x); _join(x); return; }

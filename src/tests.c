@@ -86,7 +86,7 @@ void test_depth() {
 	TEST_ASSERT_EQUAL_INT(0, depth(0));
 }
 
-void test_has() {
+void test_min_length() {
 	C p1 = (C)malloc(sizeof(C) * 2);
 	C p2 = (C)malloc(sizeof(C) * 2);
 	C p3 = (C)malloc(sizeof(C) * 2);
@@ -95,18 +95,18 @@ void test_has() {
 	D(p2) = p3;
 	D(p3) = 0;
 
-	TEST_ASSERT(has(p1, 3));
-	TEST_ASSERT(has(p1, 2));
-	TEST_ASSERT(has(p1, 1));
-	TEST_ASSERT(has(p1, 0));
-	TEST_ASSERT(!has(p2, 3));
-	TEST_ASSERT(has(p2, 2));
-	TEST_ASSERT(has(p2, 1));
-	TEST_ASSERT(has(p2, 0));
-	TEST_ASSERT(!has(p3, 3));
-	TEST_ASSERT(!has(p3, 2));
-	TEST_ASSERT(has(p3, 1));
-	TEST_ASSERT(has(p3, 0));
+	TEST_ASSERT(min_length(p1, 3));
+	TEST_ASSERT(min_length(p1, 2));
+	TEST_ASSERT(min_length(p1, 1));
+	TEST_ASSERT(min_length(p1, 0));
+	TEST_ASSERT(!min_length(p2, 3));
+	TEST_ASSERT(min_length(p2, 2));
+	TEST_ASSERT(min_length(p2, 1));
+	TEST_ASSERT(min_length(p2, 0));
+	TEST_ASSERT(!min_length(p3, 3));
+	TEST_ASSERT(!min_length(p3, 2));
+	TEST_ASSERT(min_length(p3, 1));
+	TEST_ASSERT(min_length(p3, 0));
 }
 
 void test_last() {
@@ -258,13 +258,13 @@ void test_push() {
 	TEST_ASSERT(IS(ATM, D_(x->s)));
 	TEST_ASSERT_EQUAL_INT(11, A(D_(x->s)));
 
-	while (length(x->f) > 0) { push(x, ATM, 7); }
+	//while (length(x->f) > 0) { push(x, ATM, 7); }
 
-	TEST_ASSERT_EQUAL_INT(free_nodes(x), length(x->s));
-	TEST_ASSERT_EQUAL_INT(0, x->err);
-	push(x, ATM, 13);
-	TEST_ASSERT_EQUAL_INT(ERR_OVERFLOW, x->err);
-	TEST_ASSERT_EQUAL_INT(7, A(x->s));
+	//TEST_ASSERT_EQUAL_INT(free_nodes(x), length(x->s));
+	//TEST_ASSERT_EQUAL_INT(0, x->err);
+	//push(x, ATM, 13);
+	//TEST_ASSERT_EQUAL_INT(ERR_OVERFLOW, x->err);
+	//TEST_ASSERT_EQUAL_INT(7, A(x->s));
 }
 
 void test_pop() {
@@ -272,18 +272,18 @@ void test_pop() {
 	B block[size];
 	X* x = init(block, size);
 
-	TEST_ASSERT_EQUAL_INT(0, x->err);
-	C v = pop(x);
-	TEST_ASSERT_EQUAL_INT(0, v);
-	TEST_ASSERT_EQUAL_INT(ERR_UNDERFLOW, x->err);
+	//TEST_ASSERT_EQUAL_INT(0, x->err);
+	//C v = pop(x);
+	//TEST_ASSERT_EQUAL_INT(0, v);
+	//TEST_ASSERT_EQUAL_INT(ERR_UNDERFLOW, x->err);
 
-	x->err = 0;
+	//x->err = 0;
 
 	push(x, ATM, 11);
 	push(x, ATM, 7);
 
 	TEST_ASSERT_EQUAL_INT(2, length(x->s));
-	v = pop(x);
+	C v = pop(x);
 	TEST_ASSERT_EQUAL_INT(1, length(x->s));
 	TEST_ASSERT_EQUAL_INT(7, v);
 	v = pop(x);
@@ -701,7 +701,212 @@ void test_dup_list() {
 	TEST_ASSERT_NOT_EQUAL_INT(D_(A(D_(D_(A(x->s))))), D_(A(D_(D_(A(D_(x->s)))))));
 }
 
-//void test_drop() {
+void test_swap_1() {
+	C size = 256;
+	B block[size];
+	X* x = init(block, size);
+
+	push(x, ATM, 11);
+	push(x, ATM, 7);
+	_quote(x);
+	_swap(x);
+	TEST_ASSERT_EQUAL_INT(2, length(x->s));
+	TEST_ASSERT(IS(ATM, x->s));
+	TEST_ASSERT_EQUAL_INT(11, A(x->s));
+	TEST_ASSERT(IS(LST, D_(x->s)));
+	TEST_ASSERT_EQUAL_INT(1, length(A(D_(x->s))));
+	TEST_ASSERT_EQUAL_INT(7, A(A(D_(x->s))));
+}
+
+void test_swap_2() {
+	C size = 256;
+	B block[size];
+	X* x = init(block, size);
+
+	push(x, ATM, 13);
+	push(x, ATM, 11);
+	push(x, ATM, 7);
+	_quote(x);
+	_swap(x);
+	TEST_ASSERT_EQUAL_INT(3, length(x->s));
+	TEST_ASSERT(IS(ATM, x->s));
+	TEST_ASSERT_EQUAL_INT(11, A(x->s));
+	TEST_ASSERT(IS(LST, D_(x->s)));
+	TEST_ASSERT_EQUAL_INT(1, length(A(D_(x->s))));
+	TEST_ASSERT_EQUAL_INT(7, A(A(D_(x->s))));
+	TEST_ASSERT(IS(ATM, D_(D_(x->s))));
+	TEST_ASSERT_EQUAL_INT(13, A(D_(D_(x->s))));
+}
+
+void test_add() {
+	C size = 256;
+	B block[size];
+	X* x = init(block, size);
+
+	push(x, ATM, 7);
+	push(x, ATM, 11);
+	_add(x);
+	TEST_ASSERT_EQUAL_INT(1, length(x->s));
+	TEST_ASSERT_EQUAL_INT(18, A(x->s));
+}
+
+void test_sub() {
+	C size = 256;
+	B block[size];
+	X* x = init(block, size);
+
+	push(x, ATM, 11);
+	push(x, ATM, 7);
+	_sub(x);
+	TEST_ASSERT_EQUAL_INT(1, length(x->s));
+	TEST_ASSERT_EQUAL_INT(4, A(x->s));
+}
+
+void test_mul() {
+	C size = 256;
+	B block[size];
+	X* x = init(block, size);
+
+	push(x, ATM, 11);
+	push(x, ATM, 7);
+	_mul(x);
+	TEST_ASSERT_EQUAL_INT(1, length(x->s));
+	TEST_ASSERT_EQUAL_INT(77, A(x->s));
+}
+
+void test_div() {
+	C size = 256;
+	B block[size];
+	X* x = init(block, size);
+
+	push(x, ATM, 77);
+	push(x, ATM, 11);
+	_div(x);
+	TEST_ASSERT_EQUAL_INT(1, length(x->s));
+	TEST_ASSERT_EQUAL_INT(7, A(x->s));
+}
+
+void test_mod() {
+	C size = 256;
+	B block[size];
+	X* x = init(block, size);
+
+	push(x, ATM, 11);
+	push(x, ATM, 7);
+	_mod(x);
+	TEST_ASSERT_EQUAL_INT(1, length(x->s));
+	TEST_ASSERT_EQUAL_INT(4, A(x->s));
+}
+
+void test_gt() {
+	C size = 256;
+	B block[size];
+	X* x = init(block, size);
+
+	push(x, ATM, 13);
+	push(x, ATM, 7);
+	_gt(x);
+	TEST_ASSERT_EQUAL_INT(1, A(x->s));
+	TEST_ASSERT_EQUAL_INT(1, length(x->s));
+	pop(x);
+
+	push(x, ATM, 7);
+	push(x, ATM, 13);
+	_gt(x);
+	TEST_ASSERT_EQUAL_INT(0, A(x->s));
+	TEST_ASSERT_EQUAL_INT(1, length(x->s));
+	pop(x);
+
+	push(x, ATM, 7);
+	push(x, ATM, 7);
+	_gt(x);
+	TEST_ASSERT_EQUAL_INT(0, A(x->s));
+	TEST_ASSERT_EQUAL_INT(1, length(x->s));
+	pop(x);
+}
+
+void test_lt() {
+	C size = 256;
+	B block[size];
+	X* x = init(block, size);
+
+	push(x, ATM, 13);
+	push(x, ATM, 7);
+	_lt(x);
+	TEST_ASSERT_EQUAL_INT(0, A(x->s));
+	TEST_ASSERT_EQUAL_INT(1, length(x->s));
+	pop(x);
+
+	push(x, ATM, 7);
+	push(x, ATM, 13);
+	_lt(x);
+	TEST_ASSERT_EQUAL_INT(1, A(x->s));
+	TEST_ASSERT_EQUAL_INT(1, length(x->s));
+	pop(x);
+
+	push(x, ATM, 7);
+	push(x, ATM, 7);
+	_lt(x);
+	TEST_ASSERT_EQUAL_INT(0, A(x->s));
+	TEST_ASSERT_EQUAL_INT(1, length(x->s));
+	pop(x);
+}
+
+void test_eq() {
+	C size = 256;
+	B block[size];
+	X* x = init(block, size);
+
+	push(x, ATM, 13),
+	push(x, ATM, 7);
+	_eq(x);
+	TEST_ASSERT_EQUAL_INT(0, A(x->s));
+	TEST_ASSERT_EQUAL_INT(1, length(x->s));
+	pop(x);
+
+	push(x, ATM, 7);
+	push(x, ATM, 13);
+	_eq(x);
+	TEST_ASSERT_EQUAL_INT(0, A(x->s));
+	TEST_ASSERT_EQUAL_INT(1, length(x->s));
+	pop(x);
+
+	push(x, ATM, 7);
+	push(x, ATM, 7);
+	_eq(x);
+	TEST_ASSERT_EQUAL_INT(1, A(x->s));
+	TEST_ASSERT_EQUAL_INT(1, length(x->s));
+	pop(x);
+}
+
+void test_neq() {
+	C size = 256;
+	B block[size];
+	X* x = init(block, size);
+
+	push(x, ATM, 13);
+	push(x, ATM, 7);
+	_neq(x);
+	TEST_ASSERT_EQUAL_INT(1, A(x->s));
+	TEST_ASSERT_EQUAL_INT(1, length(x->s));
+	pop(x);
+
+	push(x, ATM, 7);
+	push(x, ATM, 13);
+	_neq(x);
+	TEST_ASSERT_EQUAL_INT(1, A(x->s));
+	TEST_ASSERT_EQUAL_INT(1, length(x->s));
+	pop(x);
+
+	push(x, ATM, 7);
+	push(x, ATM, 7);
+	_neq(x);
+	TEST_ASSERT_EQUAL_INT(0, A(x->s));
+	TEST_ASSERT_EQUAL_INT(1, length(x->s));
+	pop(x);
+}
+
+///void test_drop() {
 //	C size = 256;
 //	B block[size];
 //	X* x = init(block, size);
@@ -718,43 +923,6 @@ void test_dup_list() {
 //
 //	TEST_ASSERT_EQUAL_INT(0, length(x->s));
 //	TEST_ASSERT_EQUAL_INT(free_nodes(x), height(x->f));
-//}
-//
-//void test_swap_1() {
-//	C size = 256;
-//	B block[size];
-//	X* x = init(block, size);
-//
-//	push(x, ATM, 11);
-//	push(x, ATM, 7);
-//	_quote(x);
-//	_swap(x);
-//	TEST_ASSERT_EQUAL_INT(2, length(x->s));
-//	TEST_ASSERT(IS(ATM, x->s));
-//	TEST_ASSERT_EQUAL_INT(11, A(x->s));
-//	TEST_ASSERT(IS(LST, D_(x->s)));
-//	TEST_ASSERT_EQUAL_INT(1, length(A(D_(x->s))));
-//	TEST_ASSERT_EQUAL_INT(7, A(A(D_(x->s))));
-//}
-//
-//void test_swap_2() {
-//	C size = 256;
-//	B block[size];
-//	X* x = init(block, size);
-//
-//	push(x, ATM, 13);
-//	push(x, ATM, 11);
-//	push(x, ATM, 7);
-//	_quote(x);
-//	_swap(x);
-//	TEST_ASSERT_EQUAL_INT(3, length(x->s));
-//	TEST_ASSERT(IS(ATM, x->s));
-//	TEST_ASSERT_EQUAL_INT(11, A(x->s));
-//	TEST_ASSERT(IS(LST, D_(x->s)));
-//	TEST_ASSERT_EQUAL_INT(1, length(A(D_(x->s))));
-//	TEST_ASSERT_EQUAL_INT(7, A(A(D_(x->s))));
-//	TEST_ASSERT(IS(ATM, D_(D_(x->s))));
-//	TEST_ASSERT_EQUAL_INT(13, A(D_(D_(x->s))));
 //}
 //
 ////void test_clear_stack() {
@@ -841,17 +1009,6 @@ void test_dup_list() {
 ////	TEST_ASSERT_EQUAL_INT(7, T(x));
 ////	TEST_ASSERT_EQUAL_INT(13, x->s);
 ////	TEST_ASSERT_EQUAL_INT(R(x), P(x));
-////}
-////
-////void test_dup() {
-////	C size = 256;
-////	B block[size];
-////	X* ctx = init(block, size);
-////
-////	push(ctx, 7);
-////	_dup(ctx);
-////	TEST_ASSERT_EQUAL_INT(2, length(K(ctx)));
-////	TEST_ASSERT_EQUAL_INT(T(ctx), S(ctx));
 ////}
 ////
 ////void test_over() {
@@ -1433,7 +1590,7 @@ int main() {
 
 	RUN_TEST(test_length);
 	RUN_TEST(test_depth);
-	RUN_TEST(test_has);
+	RUN_TEST(test_min_length);
 	RUN_TEST(test_last);
 
 	RUN_TEST(test_block_initialization);
@@ -1465,10 +1622,22 @@ int main() {
 
 	RUN_TEST(test_dup_atom);
 	RUN_TEST(test_dup_list);
-	//RUN_TEST(test_drop);
 
-	//RUN_TEST(test_swap_1);
-	//RUN_TEST(test_swap_2);
+	RUN_TEST(test_swap_1);
+	RUN_TEST(test_swap_2);
+
+	RUN_TEST(test_add);
+	RUN_TEST(test_sub);
+	RUN_TEST(test_mul);
+	RUN_TEST(test_div);
+	RUN_TEST(test_mod);
+
+	RUN_TEST(test_gt);
+	RUN_TEST(test_lt);
+	RUN_TEST(test_eq);
+	RUN_TEST(test_neq);
+
+		//RUN_TEST(test_drop);
 
 	//RUN_TEST(test_clear_stack);
 	//RUN_TEST(test_push_stack);
