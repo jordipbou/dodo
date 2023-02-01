@@ -4,27 +4,68 @@
 typedef int8_t		B;
 typedef intptr_t	C;		// 16, 32 or 64 bits depending on system
 
-#define A(p)						(*((C*)p))
-#define A_(p)						(A(p) & -4)
-#define _A(p)						(A(p) & 3)
-#define D(p)						(*(((C*)p) + 1))
-#define D_(p)						(D(p) & -4)
-#define _D(p)						(D(p) & 3)
-#define T(t, c)					((c & -4) | t)
-#define R(p, a)					(D(p) = T(_D(p), a))
+#define A(p)						(*((C*)p))						// cAr part of pair
+#define A_(p)						(A(p) & -4)						// cAr part ignoring type (last two bits)
+#define _A(p)						(A(p) & 3)						// cAr part type, ignoring value
+#define D(p)						(*(((C*)p) + 1))			// cDr part of pair
+#define D_(p)						(D(p) & -4)						// cDr part ignoring type (last two bits)
+#define _D(p)						(D(p) & 3)						// cDr part type, ignoring value
+#define T(t, c)					((c & -4) | t)				// tag cell with a type on last 2 bits
+#define R(p, a)					(D(p) = T(_D(p), a))	// replace cDr value of a pair without changing type
 
 #define ATM							0
 #define LST							1
 #define BRN							2
 #define PRM							3
 
-#define IS(t, p)				((_D(p) & 3) == t)
-#define ARE(x, t1, t2)	IS(t1, x->s) && IS(t2, D_(x->s))
+#define IS(t, p)				((_D(p) & 3) == t)								// check if pair p has type t
+#define ARE(x, t1, t2)	IS(t1, x->s) && IS(t2, D_(x->s))	// check types of top two items of stack
 
-C depth(C p) { C c = 0; while (p) { c++; p = D_(p); }; return c; }
-C tdepth(C p) { /* TODO: Total number of cells in this list and its child lists. */ }
-C atleast(C p, C n) { C c = 0; while (p && c < n) { c++; p = D_(p); } return c == n; }
-C last(C l) { if (!l) return 0; C p = l; while (D_(l)) { l = D_(l); } return l; }
+C depth(C p) { 
+	C c = 0; 
+	while (p) { 
+		c++; p = D_(p); 
+	}; 
+	return c; 
+}
+
+C tdepth(C p) { 
+	C c = 0;
+	while (p) {
+		if (IS(ATM, p)) { 
+			c++; 
+			p = D_(p); 
+		} else if (IS(LST, p)) { 
+			c++; 
+			c += tdepth(A(p)); 
+			p = D_(p); 
+		} else if (IS(BRN, p)) { 
+			/* TODO */ 
+		} else if (IS(PRM, p)) { 
+			c++; 
+			p = D_(p); 
+		}
+	}
+	return c;
+}
+
+C atleast(C p, C n) { 
+	C c = 0; 
+	while (p && c < n) { 
+		c++; 
+		p = D_(p); 
+	} 
+	return c == n; 
+}
+
+C last(C l) { 
+	if (!l) return 0; 
+	C p = l; 
+	while (D_(l)) { 
+		l = D_(l); 
+	} 
+	return l; 
+}
 
 typedef struct {
 	B* here;

@@ -54,6 +54,30 @@ void test_depth() {
 	TEST_ASSERT_EQUAL_INT(3, depth(p1));
 }
 
+void test_tdepth() {
+	C p1 = (C)malloc(sizeof(C) * 2);
+	C p2 = (C)malloc(sizeof(C) * 2);
+	C p3 = (C)malloc(sizeof(C) * 2);
+	C p4 = (C)malloc(sizeof(C) * 2);
+	C p5 = (C)malloc(sizeof(C) * 2);
+
+	D(p1) = T(ATM, p2);
+	D(p2) = T(LST, p3);
+	A(p2) = p4;
+	D(p3) = T(PRM, 0);
+	D(p4) = p5;
+	D(p5) = 0;
+
+	TEST_ASSERT_EQUAL_INT(3, depth(p1));
+	TEST_ASSERT_EQUAL_INT(2, depth(A(p2)));
+	TEST_ASSERT_EQUAL_INT(5, tdepth(p1));
+	TEST_ASSERT_EQUAL_INT(4, tdepth(p2));
+	TEST_ASSERT_EQUAL_INT(2, tdepth(p4));
+	TEST_ASSERT_EQUAL_INT(1, tdepth(p3));
+	TEST_ASSERT_EQUAL_INT(1, tdepth(p5));
+	TEST_ASSERT_EQUAL_INT(0, tdepth(0));
+}
+
 void test_atleast() {
 	C p1 = (C)malloc(sizeof(C) * 2);
 	C p2 = (C)malloc(sizeof(C) * 2);
@@ -1399,6 +1423,7 @@ int main() {
 
 	RUN_TEST(test_types);
 	RUN_TEST(test_depth);
+	RUN_TEST(test_tdepth);
 	RUN_TEST(test_atleast);
 	RUN_TEST(test_last);
 
