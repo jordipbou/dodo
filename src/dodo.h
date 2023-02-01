@@ -18,10 +18,12 @@ typedef intptr_t	C;		// 16, 32 or 64 bits depending on system
 #define BRN							2
 #define PRM							3
 
-#define IS(t, p)				(_D(p) & 3) == t
+#define IS(t, p)				((_D(p) & 3) == t)
 #define ARE(x, t1, t2)	IS(t1, x->s) && IS(t2, D_(x->s))
 
 C depth(C p) { C c = 0; while (p) { c++; p = D_(p); }; return c; }
+C tdepth(C p) { /* TODO: Total number of cells in this list and its child lists. */ }
+C atleast(C p, C n) { C c = 0; while (p && c < n) { c++; p = D_(p); } return c == n; }
 C last(C l) { if (!l) return 0; C p = l; while (D_(l)) { l = D_(l); } return l; }
 
 typedef struct {
@@ -63,7 +65,19 @@ X* init(B* block, C size) {
 
 C cons(X* x, C a, C d) { C p; return x->f ? (p = x->f, x->f = D(x->f), A(p) = a, D(p) = d, p) : 0; }
 C reclaim(X* x, C l) { C r; return l = 0 ? 0 : (r = D_(l), D(l) = x->f, A(l) = 0, x->f = l, r); }
+C clone(X* x, C l) { 
+	// TODO: Errors, must know total depth of list for cloning !!! 
+	// TODO: It would be usefule to add an atleast function that checks if depth is atleast
+	// what is requested.
+	if (!l) { return 0; } else
+	if (IS(ATM, l)) { cons(x, A(l), T(ATM, clone(x, D_(l)))); } else
+	if (IS(LST, l)) { cons(x, clone(x, A(l)), T(LST, clone(x, D_(l)))); } else
+	if (IS(BRN, l)) { /* TODO */ } else
+	if (IS(PRM, l)) { cons(x, A(l), T(PRM, clone(x, D_(l)))); }
+}
 
+// TODO: Remove OF(x,) from push, every word must have its own error checking, as we
+// don't know how many cells are required in advance.
 void push(X* x, C t, C v) { OF(x,); C p = cons(x, v, T(t, x->s)); if (p) x->s = p; }
 C pop(X* x) { UF(x, 0); C v = A(x->s); x->s = reclaim(x, x->s); return v; }
 
@@ -78,9 +92,14 @@ void _join(X* x) {
 	0 ;
 }
 
-void _quote(X* x) { UF(x,); C t = x->s; x->s = D_(x->s); R(t, 0); push(x, LST, t); }
+void _quote(X* x) { UF(x,); 
+	C t = x->s; x->s = D_(x->s); R(t, 0); push(x, LST, t); 
+}
 
-
+void _dup(X* x) { UF(x,);
+	if (IS(ATM, x->s)) { push(x, ATM, A(x->s)); } else
+	if (IS(LST, x->s)) { /* check total depth!! */ push(x, LST, clone(x, A(x->s))); }
+}
 
 
 
