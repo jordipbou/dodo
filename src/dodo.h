@@ -11,18 +11,22 @@ typedef intptr_t	C;		// 16, 32 or 64 bits depending on system
 #define D_(p)						(D(p) & -4)
 #define _D(p)						(D(p) & 3)
 #define T(t, c)					((c & -4) | t)
+#define R(p, a)					(D(p) = T(_D(p), a))
 
-#define ATOM						1
-#define LIST						2
+#define ATM							0
+#define LST							1
+#define BRN							2
+#define PRM							3
 
-#define IS(t, p)				((_D(p) & 3) == t)
+#define IS(t, p)				(_D(p) & 3) == t
+#define ARE(x, t1, t2)	IS(t1, x->s) && IS(t2, D_(x->s))
 
-C height(C p) { C c = 0; while (p != 0) { c++; p = A_(p); } return c; }
-C depth(C p) { C c = 0; while (p != 0) { c++; p = D_(p); } return c; }
+C depth(C p) { C c = 0; while (p) { c++; p = D_(p); }; return c; }
+C last(C l) { if (!l) return 0; C p = l; while (D_(l)) { l = D_(l); } return l; }
 
 typedef struct {
 	B* here;
-	C there, size, nodes, rstack, dict, err;
+	C there, size, f, s, rstack, dict, err;
 } X;
 
 #define ALIGN(addr, bound)	((((C)addr) + (bound - 1)) & ~(bound - 1))
@@ -31,10 +35,6 @@ typedef struct {
 #define TOP(x)							(ALIGN(((B*)x) + x->size - 2*sizeof(C) - 1, 2*sizeof(C)))
 
 typedef void (*FUNC)(X*);
-
-#define N(x)					x->nodes
-#define S(x)					D(N(x))
-#define F(x)					A(N(x))
 
 #define ERR_NOT_ENOUGH_MEMORY		-1
 #define ERR_OVERFLOW						-2
@@ -45,250 +45,318 @@ X* init(B* block, C size) {
 	x->size = size;
 	x->here = BOTTOM(x);
 	x->there = ALIGN(BOTTOM(x), 2*sizeof(C));
-	x->nodes = TOP(x);
+	x->f = TOP(x);
 
-	for (C p = x->there; p <= x->nodes; p += 2*sizeof(C)) {
-		A(p) = p == x->there ? 0 : p - 2*sizeof(C);
-		D(p) = p == x->nodes ? 0 : p + 2*sizeof(C);
+	for (C p = x->there; p <= x->f; p += 2*sizeof(C)) {
+		A(p) = p == x->f ? 0 : p + 2*sizeof(C);
+		D(p) = p == x->there ? 0 : p - 2*sizeof(C);
 	}
 
-	x->err = x->dict = x->rstack = 0;
+	x->err = x->dict = x->s = x->rstack = 0;
 
 	return x;
 }
 
-#define OF(x)		if (F(x) == 0) { x->err = ERR_OVERFLOW; return; }
-#define UF(x)		if (S(x) == 0) { x->err = ERR_UNDERFLOW; return; }
-#define UF2(x)	if (S(x) == 0 || D_(S(x)) == 0) { x->err = ERR_UNDERFLOW; return; }
+#define OF(x, r)				if (x->f == 0) { x->err = ERR_OVERFLOW; return r; }
+#define UF(x, r)				if (x->s == 0) { x->err = ERR_UNDERFLOW; return r; }
+#define UF2(x, r)				if (x->s == 0 || D_(x->s) == 0) { x->err = ERR_UNDERFLOW; return r; }
 
-void push(X* x, C t, C v) { OF(x); N(x) = F(x); D(S(x)) = T(t, D_(S(x))); A(S(x)) = v; }
-void _empty(X* x) { push(x, LIST, 0); }
-void _join(X* x) {
-	UF2(x);
-	if (IS(ATOM, S(x)) && IS(ATOM, D_(S(x)))) {
-		C t = S(x); S(x) = D_(D_(S(x))); D(D_(t)) = T(ATOM, 0);	push(x, LIST, t);
-	} else if (IS(ATOM, S(x)) && IS(LIST, D_(S(x)))) {
-		C t = D_(S(x)); D(S(x)) = T(ATOM, A(D_(S(x)))); A(t) = S(x); S(x) = t;
-	} else if (IS(LIST, S(x)) && IS(LIST, D_(S(x)))) {
-		// TODO
-	}
+C cons(X* x, C a, C d) { C p; return x->f ? (p = x->f, x->f = D(x->f), A(p) = a, D(p) = d, p) : 0; }
+C reclaim(X* x, C l) { C r; return l = 0 ? 0 : (r = D_(l), D(l) = x->f, A(l) = 0, x->f = l, r); }
+
+void push(X* x, C t, C v) { OF(x,); C p = cons(x, v, T(t, x->s)); if (p) x->s = p; }
+C pop(X* x) { UF(x, 0); C v = A(x->s); x->s = reclaim(x, x->s); return v; }
+
+void _empty(X* x) { push(x, LST, 0); }
+
+void _join(X* x) { 
+	OF(x,); UF2(x,); C t, l;
+	ARE(x, ATM, ATM)? (l = x->s, x->s = D_(D_(x->s)), R(D_(l), 0), push(x, LST, l)) :
+	ARE(x, ATM, LST)? (l = D_(x->s), D(x->s) = T(ATM, A(D_(x->s))), A(l) = x->s, x->s = l) :
+	ARE(x, LST, ATM)? (t = D_(D_(x->s)), l = last(A(x->s)), R(l, D_(x->s)), R(D_(l), 0), R(x->s, t)) :
+	ARE(x, LST, LST)? (t = D_(x->s), l = last(A(x->s)), R(l, A(D_(x->s))), R(x->s, reclaim(x, t))) :
+	0 ;
 }
-//C pop(X* x) { UF(x); C t = T(x); T(x) = N(x); N(x) = K(x); return t; }
-//C cons(X* x, C a, C d) { C p = N(x); push(x, a); K(x) = K(x) ? D(K(x)) : 0; D(p) = d; return p; }
+
+void _quote(X* x) { UF(x,); C t = x->s; x->s = D_(x->s); R(t, 0); push(x, LST, t); }
+
+
+
+
+
+
+
+//#define OUx->f			Ox->f; UF(x,);
 //
-//void _sclear(X* x) { while (K(x)) pop(x); }
-//void _spush(X* x) { C t = P(x);	C n = F(x);	P(x) = N(x); A(N(x)) = t;	N(x) = n;	K(x) = 0; }
-//void _sdrop(X* x) { 
-//	_sclear(x); 
-//	if (P(x) != R(x)) { C t = A(P(x)); A(P(x)) = N(x); K(x) = D(P(x)); N(x) = P(x); P(x) = t;	} 
-//}
+//void push(X* x, C t, C v) { Ox->f; N(x) = x->f; D(x->s) = T(t, D_(x->s)); A(x->s) = v; }
+//C pop(X* x) { UF(x, 0); C v = A(x->s); A(x->s) = N(x); N(x) = x->s; return v; }
 //
-//void _dup(X* x) { push(x, T(x)); }
-//void _swap(X* x) { C t = T(x); T(x) = S(x); S(x) = t; }
-//void _over(X* x) { push(x, S(x)); }
-//void _rot(X* x) { C t = A(D(D(K(x)))); A(D(D(K(x)))) = S(x); S(x) = T(x); T(x) = t; }
-//void _drop(X* x) { pop(x); }
-//void _rev(X* x) {	C s = K(x);	K(x) = 0;	while (s) { C t = D(s); D(s) = K(x); K(x) = s; s = t; } }
+//void _quote(X* x) { OUx->f; C t = x->s; x->s = D_(x->s); D(t) = T(_D(t), 0); push(x, LST, t); }
 //
-//void _add(X* x) { C t = pop(x); T(x) += t; }
-//void _sub(X* x) { C t = pop(x); T(x) -= t; }
-//void _mul(X* x) { C t = pop(x); T(x) *= t; }
-//void _div(X* x) { C t = pop(x); T(x) /= t; }
-//void _mod(X* x) { C t = pop(x); T(x) %= t; }
+//void _drop(X* x) { 
+//	UF(x,); 
+//	if (IS(ATM, x->s)) {
+//		A(x->s) = N(x); N(x) = x->s;
+//	} else if (IS(LST, x->s)) {
+//		C t = x->s;
+//		x->s = A(x->s);
+//		while (x->s) { printf("drop\n"); _drop(x); }
+//		x->s = t;
+//		D(x->s) = D_(x->s); A(x->s) = N(x); N(x) = x->s;
 //
-//void _gt(X* x) { C t = pop(x); T(x) = T(x) > t; }
-//void _lt(X* x) { C t = pop(x); T(x) = T(x) < t; }
-//void _eq(X* x) { C t = pop(x); T(x) = T(x) == t; }
-//void _neq(X* x) { C t = pop(x); T(x) = T(x) != t; }
-//
-//void _and(X* x) { C t = pop(x); T(x) = T(x) && t; }
-//void _or(X* x) { C t = pop(x); T(x) = T(x) || t; }
-//void _not(X* x) { T(x) = !T(x); }
-//
-//#define ATOM(x, n, d)					cons(x, cons(x, T_ATOM, n), d)
-//#define PRIMITIVE(x, p, d)		cons(x, cons(x, T_PRIMITIVE, (C)p), d)
-//#define RECURSION(x, d)				cons(x, cons(x, T_RECURSION, 0), d)
-//C BRANCH(X* x, C t, C f, C d) {
-//	if (t) { C lt = t; while(D(lt)) lt = D(lt); D(lt) = d; } else { t = d; }
-//	if (f) { C lf = f; while(D(lf)) lf = D(lf); D(lf) = d; } else { f = d; }
-//	return cons(x, cons(x, T_BRANCH, cons(x, t, cons(x, f, 0))), d);
-//}
-//#define WORD(x, c, d)					cons(x, cons(x, T_WORD, c), d)
-//
-//void inner(X* x, C xlist) {
-//	C ip = xlist;
-//	while(x->err == 0 && ip != 0) {
-//		switch(A(A(ip))) {
-//			case T_ATOM: push(x, D(A(ip))); ip = D(ip); break;
-//			case T_PRIMITIVE:	((FUNC)D(A(ip)))(x); ip = D(ip); break;
-//			case T_RECURSION: ip = D(ip) ? (inner(x, xlist), D(ip)) : xlist; break;
-//			case T_BRANCH: ip = pop(x) ? A(D(A(ip))) : A(D(D(A(ip)))); break;
-//			case T_WORD: ip = D(ip) ? (inner(x, D(A(ip))), D(ip)) : D(A(ip)); break;
-//		}
+//		//C l = depth(A(x->s));
+//		//if (l == 0) {
+//		//	A(x->s) = N(x); N(x) = x->s;
+//		//} else {
+//		//	R(last(A(x->s)), D_(x->s));
+//		//	for (C i = 0; i < l; i++) { _drop(x); }
+//		//	_drop(x);
+//		//}
 //	}
 //}
-//
-//// Source code for getch is taken from:
-//// Crossline readline (https://github.com/jcwangxp/Crossline).
-//// It's a fantastic readline cross-platform replacement, but only getch was
-//// needed and there's no need to include everything else.
-//#ifdef _WIN32	// Windows
-//int dodo_getch (void) {	fflush (stdout); return _getch(); }
-//#else
-//int dodo_getch ()
-//{
-//	char ch = 0;
-//	struct termios old_term, cur_term;
-//	fflush (stdout);
-//	if (tcgetattr(STDIN_FILENO, &old_term) < 0)	{ perror("tcsetattr"); }
-//	cur_term = old_term;
-//	cur_term.c_lflag &= ~(ICANON | ECHO | ISIG); // echoing off, canonical off, no signal chars
-//	cur_term.c_cc[VMIN] = 1;
-//	cur_term.c_cc[VTIME] = 0;
-//	if (tcsetattr(STDIN_FILENO, TCSANOW, &cur_term) < 0)	{ perror("tcsetattr"); }
-//	if (read(STDIN_FILENO, &ch, 1) < 0)	{ /* perror("read()"); */ } // signal will interrupt
-//	if (tcsetattr(STDIN_FILENO, TCSADRAIN, &old_term) < 0)	{ perror("tcsetattr"); }
-//	return ch;
+//void _swap(X* x) { UF2(x); C t = D_(x->s); R(x->s, D_(D_(x->s))); R(t, x->s); x->s = t; }
+//void _join(X* x) {
+//	UF2(x);
+//	if (ARE(x, ATM, ATM)) { _quote(x); _swap(x); _quote(x); _swap(x); _join(x); return; }
+//	if (ARE(x, ATM, LST)) { _quote(x); _join(x); return; }
+//	if (ARE(x, LST, ATM)) { _swap(x); _quote(x); _swap(x); _join(x); return; }
+//	if (ARE(x, LST, LST)) { //C t = last(A(x->s)); R(t, A(D_(x->s))); A(D_(x->s)) = x->s; _drop(x); }
+//		printf("Depth %ld\n", depth(x->s));
+//		if (A(x->s)) {
+//			C t = last(A(x->s));
+//			R(t, A(D_(x->s)));
+//		} else {
+//			A(x->s) = A(D_(x->s));
+//		}
+//		printf("Depth %ld\n", depth(x->s));
+//		A(D_(x->s)) = A(x->s);
+//		printf("Depth %ld\n", depth(x->s));
+//		_drop(x);
+//		printf("Depth %ld\n", depth(x->s));
+//	}
+//	////ARE(x, ATM, ATM) ? (t = x->s, x->s = D_(D_(x->s)), D(D_(t)) = T(ATM, 0), push(x, LST, t)) :
+//	//ARE(x, ATM, ATM) ? _quote(x), _swap(x), _quote(x), _swap(x), _join(x) :
+//	////ARE(x, ATM, LST) ? (t = D_(x->s), D(x->s) = T(ATM, A(D_(x->s))), A(t) = x->s, x->s = t) :
+//	//ARE(x, ATM, LST) ? _quote(x), _join(x) :
+//	//ARE(x, LST, LST) ? 
+//	//0 ;
 //}
-//#endif
-//
-//void _key(X* x) { push(x, dodo_getch()); }
-//void _emit(X* x) { C K = T(x); pop(x); K == 127 ? printf ("\b \b") : printf ("%c", (char)K); }
-//
-//void _stack_to_ibuf(X* x) {
-//	C s = K(x);
-//	K(x) = x->ibuf;
-//	_sdrop(x);
-//}
-//
-//void _quit(X* x) {
-//	//while (!x->err) {
-//		while (K(x) ? T(x) != 10 : 1) { _key(x); _dup(x); _emit(x); }
-//		_rev(x);
-//		_stack_to_ibuf(x);
-//	//}
-//}
-//
-//void _header(X* x) {
-//	// Parses next word from input buffer
-//	//
-//}
+////C pop(X* x) { Ux->f; C t = T(x); T(x) = N(x); N(x) = K(x); return t; }
+////C cons(X* x, C a, C d) { C p = N(x); push(x, a); K(x) = K(x) ? D(K(x)) : 0; D(p) = d; return p; }
 ////
-////void push_stack(X* x) {
-////	x->stacks.next = cons(x, T_LIST, (C)AS(T_LIST, REF((&x->stacks))), NEXT((&x->stacks)));
-////	x->stacks.stack = 0;
+////void _sclear(X* x) { while (K(x)) pop(x); }
+////void _spush(X* x) { C t = P(x);	C n = x->f;	P(x) = N(x); A(N(x)) = t;	N(x) = n;	K(x) = 0; }
+////void _sdrop(X* x) { 
+////	_sclear(x); 
+////	if (P(x) != R(x)) { C t = A(P(x)); A(P(x)) = N(x); K(x) = D(P(x)); N(x) = P(x); P(x) = t;	} 
 ////}
 ////
-////void stack_to_list(X* x) {
-////	PAIR* list = REF((&x->stacks));
-////	x->stacks = *(NEXT((&x->stacks)));
-////	x->stacks.ref = (C)cons(x, T_LIST, (C)list, REF((&x->stacks)));
+////void _dup(X* x) { push(x, T(x)); }
+////void _swap(X* x) { C t = T(x); T(x) = x->s; x->s = t; }
+////void _over(X* x) { push(x, x->s); }
+////void _rot(X* x) { C t = A(D(D(K(x)))); A(D(D(K(x)))) = x->s; x->s = T(x); T(x) = t; }
+////void _drop(X* x) { pop(x); }
+////void _rev(X* x) {	C s = K(x);	K(x) = 0;	while (s) { C t = D(s); D(s) = K(x); K(x) = s; s = t; } }
+////
+////void _add(X* x) { C t = pop(x); T(x) += t; }
+////void _sub(X* x) { C t = pop(x); T(x) -= t; }
+////void _mul(X* x) { C t = pop(x); T(x) *= t; }
+////void _div(X* x) { C t = pop(x); T(x) /= t; }
+////void _mod(X* x) { C t = pop(x); T(x) %= t; }
+////
+////void _gt(X* x) { C t = pop(x); T(x) = T(x) > t; }
+////void _lt(X* x) { C t = pop(x); T(x) = T(x) < t; }
+////void _eq(X* x) { C t = pop(x); T(x) = T(x) == t; }
+////void _neq(X* x) { C t = pop(x); T(x) = T(x) != t; }
+////
+////void _and(X* x) { C t = pop(x); T(x) = T(x) && t; }
+////void _or(X* x) { C t = pop(x); T(x) = T(x) || t; }
+////void _not(X* x) { T(x) = !T(x); }
+////
+////#define ATM(x, n, d)					cons(x, cons(x, T_ATM, n), d)
+////#define PRM(x, p, d)		cons(x, cons(x, T_PRM, (C)p), d)
+////#define RECURSION(x, d)				cons(x, cons(x, T_RECURSION, 0), d)
+////C BRN(X* x, C t, C f, C d) {
+////	if (t) { C lt = t; while(D(lt)) lt = D(lt); D(lt) = d; } else { t = d; }
+////	if (f) { C lf = f; while(D(lf)) lf = D(lf); D(lf) = d; } else { f = d; }
+////	return cons(x, cons(x, T_BRN, cons(x, t, cons(x, f, 0))), d);
 ////}
+////#define WORD(x, c, d)					cons(x, cons(x, T_WORD, c), d)
 ////
-////#define RESERVED(x)				((x->there) - ((C)x->here))
-////
-////B* allot(X* x, C bytes) {
-////	B* here = x->here;
-////	if (bytes == 0) { 
-////		return here;
-////	} else if (bytes < 0) {
-////		if ((x->here + bytes) > BOTTOM(x)) x->here += bytes;
-////		else x->here = BOTTOM(x);
-////		while ((x->there - 1) >= PALIGN(x->here)) { reclaim(x, --x->there); }
-////	} else /* bytes > 0 */ {
-////		while (RESERVED(x) < bytes && x->there < x->top) {
-////			if (IS(T_F, x->there)) {
-////				if (x->there->prev != 0) {
-////					x->there->prev->next = AS(T_F, NEXT(x->there));
-////				}
-////				x->there++;
-////			} else {
-////				x->err = ERR_NOT_ENOUGH_MEMORY;
-////				return here;
-////			}
+////void inner(X* x, C xlist) {
+////	C ip = xlist;
+////	while(x->err == 0 && ip != 0) {
+////		switch(A(A(ip))) {
+////			case T_ATM: push(x, D(A(ip))); ip = D(ip); break;
+////			case T_PRM:	((FUNC)D(A(ip)))(x); ip = D(ip); break;
+////			case T_RECURSION: ip = D(ip) ? (inner(x, xlist), D(ip)) : xlist; break;
+////			case T_BRN: ip = pop(x) ? A(D(A(ip))) : A(D(D(A(ip)))); break;
+////			case T_WORD: ip = D(ip) ? (inner(x, D(A(ip))), D(ip)) : D(A(ip)); break;
 ////		}
-////		if (RESERVED(x) >= bytes)	x->here += bytes;
-////		else x->err = ERR_NOT_ENOUGH_MEMORY;
 ////	}
-////	return here;
 ////}
 ////
-////void align(X* x) { allot(x, ALIGN(x->here, sizeof(C)) - ((C)x->here)); }
+////// Source code for getch is taken from:
+////// Crossline readline (https://github.com/jcwangxp/Crossline).
+////// It's a fantastic readline cross-platform replacement, but only getch was
+////// needed and there's no need to include everything else.
+////#ifdef _WIN32	// Windows
+////int dodo_getch (void) {	fflush (stdout); return _getch(); }
+////#else
+////int dodo_getch ()
+////{
+////	char ch = 0;
+////	struct termios old_term, cur_term;
+////	fflush (stdout);
+////	if (tcgetattr(STDIN_FILENO, &old_term) < 0)	{ perror("tcsetattr"); }
+////	cur_term = old_term;
+////	cur_term.c_lflag &= ~(ICANON | ECHO | ISIG); // echoing off, canonical off, no signal chars
+////	cur_term.c_cc[VMIN] = 1;
+////	cur_term.c_cc[VTIME] = 0;
+////	if (tcsetattr(STDIN_FILENO, TCSANOW, &cur_term) < 0)	{ perror("tcsetattr"); }
+////	if (read(STDIN_FILENO, &ch, 1) < 0)	{ /* perror("read()"); */ } // signal will interrupt
+////	if (tcsetattr(STDIN_FILENO, TCSADRAIN, &old_term) < 0)	{ perror("tcsetattr"); }
+////	return ch;
+////}
+////#endif
 ////
-////#define NFA(w)		(REF(REF(w)))
-////#define DFA(w)		(REF(NEXT(REF(w))))
-////#define CFA(w)		(NEXT(NEXT(REF(w))))
-////#define COUNT(s)	(*((C*)(((B*)s) - sizeof(C))))
+////void _key(X* x) { push(x, dodo_getch()); }
+////void _emit(X* x) { C K = T(x); pop(x); K == 127 ? printf ("\b \b") : printf ("%c", (char)K); }
 ////
-////B* compile_str(X* x, B* str, C len) {
-////	align(x);
-////	B* cstr = allot(x, sizeof(C) + len + 1);
-////	*((C*)cstr) = len;
-////	for (C i = 0; i < len; i++) {
-////		cstr[sizeof(C) + i] = str[i];
-////	}
-////	cstr[sizeof(C) + len] = 0;
-////	return cstr + sizeof(C);
+////void _stack_to_ibuf(X* x) {
+////	C s = K(x);
+////	K(x) = x->ibuf;
+////	_sdrop(x);
 ////}
 ////
-////PAIR* header(X* x, B* name, C nlen) {
-////	B* str = compile_str(x, name, nlen);
-////
-////	return 
-////		cons(x, T_ATOM, 
-////			(C)cons(x, T_ATOM, (C)str,
-////						cons(x, T_ATOM, (C)x->here, 0)), 
-////			0);
+////void _quit(X* x) {
+////	//while (!x->err) {
+////		while (K(x) ? T(x) != 10 : 1) { _key(x); _dup(x); _emit(x); }
+////		_rev(x);
+////		_stack_to_ibuf(x);
+////	//}
 ////}
 ////
-////PAIR* body(X* x, PAIR* word, PAIR* cfa) {
-////	PAIR* old_cfa = CFA(word);
-////	NEXT(REF(word))->next = AS(T_ATOM, cfa);
-////	while (old_cfa != 0) { old_cfa = reclaim(x, old_cfa); }
-////	return word;
+////void _header(X* x) {
+////	// Parses next word from input buffer
+////	//
 ////}
-////
-////PAIR* reveal(X* x, PAIR* header) {
-////	header->next = AS(T_ATOM, x->dict);
-////	x->dict = header;
-////	return header;
-////}
-////
-////#define IS_IMMEDIATE(w)		(TYPE(w->ref) & 1)
-////
-////void _immediate(X* x) {
-////	x->dict->ref = AS(1, REF(x->dict));
-////}
-////
-//////PAIR* find(X* x, B* name, C nlen) {
-//////	// TODO
+//////
+//////void push_stack(X* x) {
+//////	x->stacks.next = cons(x, T_LST, (C)AS(T_LST, REF((&x->stacks))), NEXT((&x->stacks)));
+//////	x->stacks.stack = 0;
 //////}
-////
-////X* dodo(X* x) {
-////	reveal(x, body(x, header(x, "+", 1), cons(x, T_PRIMITIVE, (C)&_add, 0)));
-////	reveal(x, body(x, header(x, "-", 1), cons(x, T_PRIMITIVE, (C)&_sub, 0)));
-////	reveal(x, body(x, header(x, "*", 1), cons(x, T_PRIMITIVE, (C)&_mul, 0)));
-////	reveal(x, body(x, header(x, "/", 1), cons(x, T_PRIMITIVE, (C)&_div, 0)));
-////	reveal(x, body(x, header(x, "mod", 3), cons(x, T_PRIMITIVE, (C)&_mod, 0)));
-////
-////	reveal(x, body(x, header(x, ">", 1), cons(x, T_PRIMITIVE, (C)&_gt, 0)));
-////	reveal(x, body(x, header(x, "<", 1), cons(x, T_PRIMITIVE, (C)&_lt, 0)));
-////	reveal(x, body(x, header(x, "=", 1), cons(x, T_PRIMITIVE, (C)&_eq, 0)));
-////	reveal(x, body(x, header(x, "<>", 2), cons(x, T_PRIMITIVE, (C)&_neq, 0)));
-////
-////	reveal(x, body(x, header(x, "and", 3), cons(x, T_PRIMITIVE, (C)&_and, 0)));
-////	reveal(x, body(x, header(x, "or", 2), cons(x, T_PRIMITIVE, (C)&_or, 0)));
-////	reveal(x, body(x, header(x, "invert", 3), cons(x, T_PRIMITIVE, (C)&_not, 0)));
-////
-////	reveal(x, body(x, header(x, "dup", 3), cons(x, T_PRIMITIVE, (C)&_dup, 0)));
-////	reveal(x, body(x, header(x, "swap", 4), cons(x, T_PRIMITIVE, (C)&_swap, 0)));
-////
-////	//reveal(x, body(x, header(x, "key", 3), cons(x, T_PRIMITIVE, (C)&_key, 0)));
-////	//reveal(x, body(x, header(x, "emit", 4), cons(x, T_PRIMITIVE, (C)&_emit, 0)));
-////
-////	return x;
-////}
-////
-////// ----------------------------------------------------------------------------
-////
-////
+//////
+//////void stack_to_list(X* x) {
+//////	PAIR* list = REF((&x->stacks));
+//////	x->stacks = *(NEXT((&x->stacks)));
+//////	x->stacks.ref = (C)cons(x, T_LST, (C)list, REF((&x->stacks)));
+//////}
+//////
+//////#define RESERVED(x)				((x->there) - ((C)x->here))
+//////
+//////B* allot(X* x, C bytes) {
+//////	B* here = x->here;
+//////	if (bytes == 0) { 
+//////		return here;
+//////	} else if (bytes < 0) {
+//////		if ((x->here + bytes) > BOTTOM(x)) x->here += bytes;
+//////		else x->here = BOTTOM(x);
+//////		while ((x->there - 1) >= PALIGN(x->here)) { reclaim(x, --x->there); }
+//////	} else /* bytes > 0 */ {
+//////		while (RESERVED(x) < bytes && x->there < x->top) {
+//////			if (IS(T_F, x->there)) {
+//////				if (x->there->prev != 0) {
+//////					x->there->prev->next = AS(T_F, NEXT(x->there));
+//////				}
+//////				x->there++;
+//////			} else {
+//////				x->err = ERR_NOT_ENOUGH_MEMORY;
+//////				return here;
+//////			}
+//////		}
+//////		if (RESERVED(x) >= bytes)	x->here += bytes;
+//////		else x->err = ERR_NOT_ENOUGH_MEMORY;
+//////	}
+//////	return here;
+//////}
+//////
+//////void align(X* x) { allot(x, ALIGN(x->here, sizeof(C)) - ((C)x->here)); }
+//////
+//////#define NFA(w)		(REF(REF(w)))
+//////#define DFA(w)		(REF(NEXT(REF(w))))
+//////#define CFA(w)		(NEXT(NEXT(REF(w))))
+//////#define COUNT(s)	(*((C*)(((B*)s) - sizeof(C))))
+//////
+//////B* compile_str(X* x, B* str, C len) {
+//////	align(x);
+//////	B* cstr = allot(x, sizeof(C) + len + 1);
+//////	*((C*)cstr) = len;
+//////	for (C i = 0; i < len; i++) {
+//////		cstr[sizeof(C) + i] = str[i];
+//////	}
+//////	cstr[sizeof(C) + len] = 0;
+//////	return cstr + sizeof(C);
+//////}
+//////
+//////PAIR* header(X* x, B* name, C nlen) {
+//////	B* str = compile_str(x, name, nlen);
+//////
+//////	return 
+//////		cons(x, T_ATM, 
+//////			(C)cons(x, T_ATM, (C)str,
+//////						cons(x, T_ATM, (C)x->here, 0)), 
+//////			0);
+//////}
+//////
+//////PAIR* body(X* x, PAIR* word, PAIR* cfa) {
+//////	PAIR* old_cfa = CFA(word);
+//////	NEXT(REF(word))->next = AS(T_ATM, cfa);
+//////	while (old_cfa != 0) { old_cfa = reclaim(x, old_cfa); }
+//////	return word;
+//////}
+//////
+//////PAIR* reveal(X* x, PAIR* header) {
+//////	header->next = AS(T_ATM, x->dict);
+//////	x->dict = header;
+//////	return header;
+//////}
+//////
+//////#define IS_IMMEDIATE(w)		(TYPE(w->ref) & 1)
+//////
+//////void _immediate(X* x) {
+//////	x->dict->ref = AS(1, REF(x->dict));
+//////}
+//////
+////////PAIR* find(X* x, B* name, C nlen) {
+////////	// TODO
+////////}
+//////
+//////X* dodo(X* x) {
+//////	reveal(x, body(x, header(x, "+", 1), cons(x, T_PRM, (C)&_add, 0)));
+//////	reveal(x, body(x, header(x, "-", 1), cons(x, T_PRM, (C)&_sub, 0)));
+//////	reveal(x, body(x, header(x, "*", 1), cons(x, T_PRM, (C)&_mul, 0)));
+//////	reveal(x, body(x, header(x, "/", 1), cons(x, T_PRM, (C)&_div, 0)));
+//////	reveal(x, body(x, header(x, "mod", 3), cons(x, T_PRM, (C)&_mod, 0)));
+//////
+//////	reveal(x, body(x, header(x, ">", 1), cons(x, T_PRM, (C)&_gt, 0)));
+//////	reveal(x, body(x, header(x, "<", 1), cons(x, T_PRM, (C)&_lt, 0)));
+//////	reveal(x, body(x, header(x, "=", 1), cons(x, T_PRM, (C)&_eq, 0)));
+//////	reveal(x, body(x, header(x, "<>", 2), cons(x, T_PRM, (C)&_neq, 0)));
+//////
+//////	reveal(x, body(x, header(x, "and", 3), cons(x, T_PRM, (C)&_and, 0)));
+//////	reveal(x, body(x, header(x, "or", 2), cons(x, T_PRM, (C)&_or, 0)));
+//////	reveal(x, body(x, header(x, "invert", 3), cons(x, T_PRM, (C)&_not, 0)));
+//////
+//////	reveal(x, body(x, header(x, "dup", 3), cons(x, T_PRM, (C)&_dup, 0)));
+//////	reveal(x, body(x, header(x, "swap", 4), cons(x, T_PRM, (C)&_swap, 0)));
+//////
+//////	//reveal(x, body(x, header(x, "key", 3), cons(x, T_PRM, (C)&_key, 0)));
+//////	//reveal(x, body(x, header(x, "emit", 4), cons(x, T_PRM, (C)&_emit, 0)));
+//////
+//////	return x;
+//////}
+//////
+//////// ----------------------------------------------------------------------------
+//////
+//////
