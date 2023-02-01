@@ -16,6 +16,8 @@ void test_types() {
 	TEST_ASSERT(!IS(LST, p));
 	TEST_ASSERT(!IS(BRN, p));
 	TEST_ASSERT(!IS(PRM, p));
+	TEST_ASSERT(VAL(p));
+	TEST_ASSERT(!REF(p));
 	D(p) = T(LST, 8);
 	TEST_ASSERT_EQUAL_INT(8, D_(p));
 	TEST_ASSERT_EQUAL_INT(LST, _D(p));
@@ -23,6 +25,8 @@ void test_types() {
 	TEST_ASSERT(IS(LST, p));
 	TEST_ASSERT(!IS(BRN, p));
 	TEST_ASSERT(!IS(PRM, p));
+	TEST_ASSERT(!VAL(p));
+	TEST_ASSERT(REF(p));
 	D(p) = T(BRN, 8);
 	TEST_ASSERT_EQUAL_INT(8, D_(p));
 	TEST_ASSERT_EQUAL_INT(BRN, _D(p));
@@ -30,6 +34,8 @@ void test_types() {
 	TEST_ASSERT(!IS(LST, p));
 	TEST_ASSERT(IS(BRN, p));
 	TEST_ASSERT(!IS(PRM, p));
+	TEST_ASSERT(!VAL(p));
+	TEST_ASSERT(REF(p));
 	D(p) = T(PRM, 8);
 	TEST_ASSERT_EQUAL_INT(8, D_(p));
 	TEST_ASSERT_EQUAL_INT(PRM, _D(p));
@@ -37,24 +43,26 @@ void test_types() {
 	TEST_ASSERT(!IS(LST, p));
 	TEST_ASSERT(!IS(BRN, p));
 	TEST_ASSERT(IS(PRM, p));
+	TEST_ASSERT(VAL(p));
+	TEST_ASSERT(!REF(p));
 }
 
-void test_depth() {
+void test_length() {
 	C p1 = (C)malloc(sizeof(C) * 2);
 	C p2 = (C)malloc(sizeof(C) * 2);
 	C p3 = (C)malloc(sizeof(C) * 2);
 
-	D(p1) = p2;
+	D(p1) = T(ATM, p2);
 	D(p2) = p3;
 	D(p3) = 0;
 
-	TEST_ASSERT_EQUAL_INT(0, depth(0));
-	TEST_ASSERT_EQUAL_INT(1, depth(p3));
-	TEST_ASSERT_EQUAL_INT(2, depth(p2));
-	TEST_ASSERT_EQUAL_INT(3, depth(p1));
+	TEST_ASSERT_EQUAL_INT(0, length(0));
+	TEST_ASSERT_EQUAL_INT(1, length(p3));
+	TEST_ASSERT_EQUAL_INT(2, length(p2));
+	TEST_ASSERT_EQUAL_INT(3, length(p1));
 }
 
-void test_tdepth() {
+void test_depth() {
 	C p1 = (C)malloc(sizeof(C) * 2);
 	C p2 = (C)malloc(sizeof(C) * 2);
 	C p3 = (C)malloc(sizeof(C) * 2);
@@ -68,17 +76,17 @@ void test_tdepth() {
 	D(p4) = p5;
 	D(p5) = 0;
 
-	TEST_ASSERT_EQUAL_INT(3, depth(p1));
-	TEST_ASSERT_EQUAL_INT(2, depth(A(p2)));
-	TEST_ASSERT_EQUAL_INT(5, tdepth(p1));
-	TEST_ASSERT_EQUAL_INT(4, tdepth(p2));
-	TEST_ASSERT_EQUAL_INT(2, tdepth(p4));
-	TEST_ASSERT_EQUAL_INT(1, tdepth(p3));
-	TEST_ASSERT_EQUAL_INT(1, tdepth(p5));
-	TEST_ASSERT_EQUAL_INT(0, tdepth(0));
+	TEST_ASSERT_EQUAL_INT(3, length(p1));
+	TEST_ASSERT_EQUAL_INT(2, length(A(p2)));
+	TEST_ASSERT_EQUAL_INT(5, depth(p1));
+	TEST_ASSERT_EQUAL_INT(4, depth(p2));
+	TEST_ASSERT_EQUAL_INT(2, depth(p4));
+	TEST_ASSERT_EQUAL_INT(1, depth(p3));
+	TEST_ASSERT_EQUAL_INT(1, depth(p5));
+	TEST_ASSERT_EQUAL_INT(0, depth(0));
 }
 
-void test_atleast() {
+void test_has() {
 	C p1 = (C)malloc(sizeof(C) * 2);
 	C p2 = (C)malloc(sizeof(C) * 2);
 	C p3 = (C)malloc(sizeof(C) * 2);
@@ -87,18 +95,18 @@ void test_atleast() {
 	D(p2) = p3;
 	D(p3) = 0;
 
-	TEST_ASSERT(atleast(p1, 3));
-	TEST_ASSERT(atleast(p1, 2));
-	TEST_ASSERT(atleast(p1, 1));
-	TEST_ASSERT(atleast(p1, 0));
-	TEST_ASSERT(!atleast(p2, 3));
-	TEST_ASSERT(atleast(p2, 2));
-	TEST_ASSERT(atleast(p2, 1));
-	TEST_ASSERT(atleast(p2, 0));
-	TEST_ASSERT(!atleast(p3, 3));
-	TEST_ASSERT(!atleast(p3, 2));
-	TEST_ASSERT(atleast(p3, 1));
-	TEST_ASSERT(atleast(p3, 0));
+	TEST_ASSERT(has(p1, 3));
+	TEST_ASSERT(has(p1, 2));
+	TEST_ASSERT(has(p1, 1));
+	TEST_ASSERT(has(p1, 0));
+	TEST_ASSERT(!has(p2, 3));
+	TEST_ASSERT(has(p2, 2));
+	TEST_ASSERT(has(p2, 1));
+	TEST_ASSERT(has(p2, 0));
+	TEST_ASSERT(!has(p3, 3));
+	TEST_ASSERT(!has(p3, 2));
+	TEST_ASSERT(has(p3, 1));
+	TEST_ASSERT(has(p3, 0));
 }
 
 void test_last() {
@@ -124,8 +132,8 @@ void test_block_initialization() {
 	X* x = init(block, size);
 
 	TEST_ASSERT_EQUAL_INT(0, x->err);
-	TEST_ASSERT_EQUAL_INT(0, depth(x->s));
-	TEST_ASSERT_EQUAL_INT(free_nodes(x), depth(x->f));
+	TEST_ASSERT_EQUAL_INT(0, length(x->s));
+	TEST_ASSERT_EQUAL_INT(free_nodes(x), length(x->f));
 
 	TEST_ASSERT_EQUAL_INT(((B*)x) + sizeof(X), BOTTOM(x));
 	TEST_ASSERT_EQUAL_INT(BOTTOM(x), x->here);
@@ -145,19 +153,19 @@ void test_cons() {
 
 	C l = cons(x, 7, cons(x, 11, cons(x, 13, 0)));
 
-	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 3, depth(x->f));
-	TEST_ASSERT_EQUAL_INT(3, depth(l));
+	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 3, length(x->f));
+	TEST_ASSERT_EQUAL_INT(3, length(l));
 	TEST_ASSERT_EQUAL_INT(7, A(l));
 	TEST_ASSERT_EQUAL_INT(11, A(D(l)));
 	TEST_ASSERT_EQUAL_INT(13, A(D(D(l))));
 
 	C p = cons(x, 7, 0);
 
-	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 4, depth(x->f));
+	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 4, length(x->f));
 	TEST_ASSERT_EQUAL_INT(7, A(p));
 	TEST_ASSERT_EQUAL_INT(0, D(p));
 	
-	while (depth(x->f) > 0) { cons(x, 1, 0); }
+	while (length(x->f) > 0) { cons(x, 1, 0); }
 
 	C p3 = cons(x, 13, 0);
 	TEST_ASSERT_EQUAL_INT(0, p3);
@@ -171,8 +179,8 @@ void test_reclaim() {
 	C l = cons(x, 7, cons(x, 11, cons(x, 13, 0)));
 	C m = reclaim(x, l);
 
-	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 2, depth(x->f));
-	TEST_ASSERT_EQUAL_INT(2, depth(m));
+	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 2, length(x->f));
+	TEST_ASSERT_EQUAL_INT(2, length(m));
 	TEST_ASSERT_EQUAL_INT(11, A(m));
 	TEST_ASSERT_EQUAL_INT(13, A(D(m)));
 }
@@ -190,14 +198,14 @@ void test_clone() {
 			cons(x, 17, T(ATM, 0)))), T(LST,
 		cons(x, 19, T(ATM, 0))))))));
 
-	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 6, depth(x->f));
-	TEST_ASSERT_EQUAL_INT(4, depth(l));
+	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 6, length(x->f));
+	TEST_ASSERT_EQUAL_INT(4, length(l));
 	TEST_ASSERT(IS(ATM, l));
 	TEST_ASSERT_EQUAL_INT(7, A(l));
 	TEST_ASSERT(IS(PRM, D_(l)));
 	TEST_ASSERT_EQUAL_INT(11, A(D_(l)));
 	TEST_ASSERT(IS(LST, D_(D_(l))));
-	TEST_ASSERT_EQUAL_INT(2, depth(D_(D_(l))));
+	TEST_ASSERT_EQUAL_INT(2, length(D_(D_(l))));
 	TEST_ASSERT(IS(ATM, A(D_(D_(l)))));
 	TEST_ASSERT_EQUAL_INT(13, A(A(D_(D_(l)))));
 	TEST_ASSERT(IS(ATM, D_(A(D_(D_(l))))));
@@ -207,14 +215,14 @@ void test_clone() {
 
 	C c = clone(x, l);
 
-	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 12, depth(x->f));
-	TEST_ASSERT_EQUAL_INT(4, depth(c));
+	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 12, length(x->f));
+	TEST_ASSERT_EQUAL_INT(4, length(c));
 	TEST_ASSERT(IS(ATM, c));
 	TEST_ASSERT_EQUAL_INT(7, A(c));
 	TEST_ASSERT(IS(PRM, D_(c)));
 	TEST_ASSERT_EQUAL_INT(11, A(D_(c)));
 	TEST_ASSERT(IS(LST, D_(D_(c))));
-	TEST_ASSERT_EQUAL_INT(2, depth(D_(D_(c))));
+	TEST_ASSERT_EQUAL_INT(2, length(D_(D_(c))));
 	TEST_ASSERT(IS(ATM, A(D_(D_(c)))));
 	TEST_ASSERT_EQUAL_INT(13, A(A(D_(D_(c)))));
 	TEST_ASSERT(IS(ATM, D_(A(D_(D_(c))))));
@@ -238,21 +246,21 @@ void test_push() {
 	X* x = init(block, size);
 
 	push(x, ATM, 11);
-	TEST_ASSERT_EQUAL_INT(1, depth(x->s));
+	TEST_ASSERT_EQUAL_INT(1, length(x->s));
 	TEST_ASSERT_EQUAL_INT(0, x->err);
 	TEST_ASSERT(IS(ATM, x->s));
 	TEST_ASSERT_EQUAL_INT(11, A(x->s));
 	push(x, ATM, 7);
-	TEST_ASSERT_EQUAL_INT(2, depth(x->s));
+	TEST_ASSERT_EQUAL_INT(2, length(x->s));
 	TEST_ASSERT_EQUAL_INT(0, x->err);
 	TEST_ASSERT(IS(ATM, x->s));
 	TEST_ASSERT_EQUAL_INT(7, A(x->s));
 	TEST_ASSERT(IS(ATM, D_(x->s)));
 	TEST_ASSERT_EQUAL_INT(11, A(D_(x->s)));
 
-	while (depth(x->f) > 0) { push(x, ATM, 7); }
+	while (length(x->f) > 0) { push(x, ATM, 7); }
 
-	TEST_ASSERT_EQUAL_INT(free_nodes(x), depth(x->s));
+	TEST_ASSERT_EQUAL_INT(free_nodes(x), length(x->s));
 	TEST_ASSERT_EQUAL_INT(0, x->err);
 	push(x, ATM, 13);
 	TEST_ASSERT_EQUAL_INT(ERR_OVERFLOW, x->err);
@@ -274,12 +282,12 @@ void test_pop() {
 	push(x, ATM, 11);
 	push(x, ATM, 7);
 
-	TEST_ASSERT_EQUAL_INT(2, depth(x->s));
+	TEST_ASSERT_EQUAL_INT(2, length(x->s));
 	v = pop(x);
-	TEST_ASSERT_EQUAL_INT(1, depth(x->s));
+	TEST_ASSERT_EQUAL_INT(1, length(x->s));
 	TEST_ASSERT_EQUAL_INT(7, v);
 	v = pop(x);
-	TEST_ASSERT_EQUAL_INT(0, depth(x->s));
+	TEST_ASSERT_EQUAL_INT(0, length(x->s));
 	TEST_ASSERT_EQUAL_INT(11, v);
 }
 
@@ -290,7 +298,7 @@ void test_empty() {
 
 	_empty(x);
 
-	TEST_ASSERT_EQUAL_INT(1, depth(x->s));
+	TEST_ASSERT_EQUAL_INT(1, length(x->s));
 	TEST_ASSERT(IS(LST, x->s));
 	TEST_ASSERT_EQUAL_INT(0, A(x->s));
 }
@@ -304,9 +312,9 @@ void test_join_atom_atom_1() {
 	push(x, ATM, 7);
 	_join(x);
 
-	TEST_ASSERT_EQUAL_INT(1, depth(x->s));
+	TEST_ASSERT_EQUAL_INT(1, length(x->s));
 	TEST_ASSERT(IS(LST, x->s));
-	TEST_ASSERT_EQUAL_INT(2, depth(A(x->s)));
+	TEST_ASSERT_EQUAL_INT(2, length(A(x->s)));
 	TEST_ASSERT_EQUAL_INT(7, A(A(x->s)));
 	TEST_ASSERT_EQUAL_INT(11, A(D_(A(x->s))));
 }
@@ -322,9 +330,9 @@ void test_join_atom_atom_2() {
 	push(x, ATM, 7);
 	_join(x);
 
-	TEST_ASSERT_EQUAL_INT(2, depth(x->s));
+	TEST_ASSERT_EQUAL_INT(2, length(x->s));
 	TEST_ASSERT(IS(LST, x->s));
-	TEST_ASSERT_EQUAL_INT(2, depth(A(x->s)));
+	TEST_ASSERT_EQUAL_INT(2, length(A(x->s)));
 	TEST_ASSERT_EQUAL_INT(7, A(A(x->s)));
 	TEST_ASSERT_EQUAL_INT(11, A(D_(A(x->s))));
 	TEST_ASSERT_EQUAL_INT(13, A(D_(x->s)));
@@ -339,9 +347,9 @@ void test_join_atom_empty_1() {
 	push(x, ATM, 7);
 	_join(x);
 
-	TEST_ASSERT_EQUAL_INT(1, depth(x->s));
+	TEST_ASSERT_EQUAL_INT(1, length(x->s));
 	TEST_ASSERT(IS(LST, x->s));
-	TEST_ASSERT_EQUAL_INT(1, depth(A(x->s)));
+	TEST_ASSERT_EQUAL_INT(1, length(A(x->s)));
 	TEST_ASSERT_EQUAL_INT(7, A(A(x->s)));
 }
 
@@ -356,9 +364,9 @@ void test_join_atom_empty_2() {
 	push(x, ATM, 7);
 	_join(x);
 
-	TEST_ASSERT_EQUAL_INT(2, depth(x->s));
+	TEST_ASSERT_EQUAL_INT(2, length(x->s));
 	TEST_ASSERT(IS(LST, x->s));
-	TEST_ASSERT_EQUAL_INT(1, depth(A(x->s)));
+	TEST_ASSERT_EQUAL_INT(1, length(A(x->s)));
 	TEST_ASSERT_EQUAL_INT(7, A(A(x->s)));
 	TEST_ASSERT_EQUAL_INT(13, A(D_(x->s)));
 }
@@ -374,9 +382,9 @@ void test_join_atom_list_1() {
 	push(x, ATM, 7);
 	_join(x);
 
-	TEST_ASSERT_EQUAL_INT(1, depth(x->s));
+	TEST_ASSERT_EQUAL_INT(1, length(x->s));
 	TEST_ASSERT(IS(LST, x->s));
-	TEST_ASSERT_EQUAL_INT(3, depth(A(x->s)));
+	TEST_ASSERT_EQUAL_INT(3, length(A(x->s)));
 	TEST_ASSERT_EQUAL_INT(7, A(A(x->s)));
 	TEST_ASSERT_EQUAL_INT(11, A(D_(A(x->s))));
 	TEST_ASSERT_EQUAL_INT(13, A(D_(D_(A(x->s)))));
@@ -395,9 +403,9 @@ void test_join_atom_list_2() {
 	push(x, ATM, 7);
 	_join(x);
 
-	TEST_ASSERT_EQUAL_INT(2, depth(x->s));
+	TEST_ASSERT_EQUAL_INT(2, length(x->s));
 	TEST_ASSERT(IS(LST, x->s));
-	TEST_ASSERT_EQUAL_INT(3, depth(A(x->s)));
+	TEST_ASSERT_EQUAL_INT(3, length(A(x->s)));
 	TEST_ASSERT_EQUAL_INT(7, A(A(x->s)));
 	TEST_ASSERT_EQUAL_INT(11, A(D_(A(x->s))));
 	TEST_ASSERT_EQUAL_INT(13, A(D_(D_(A(x->s)))));
@@ -416,9 +424,9 @@ void test_join_list_atom_1() {
 	_join(x);
 	_join(x);
 
-	TEST_ASSERT_EQUAL_INT(1, depth(x->s));
+	TEST_ASSERT_EQUAL_INT(1, length(x->s));
 	TEST_ASSERT(IS(LST, x->s));
-	TEST_ASSERT_EQUAL_INT(3, depth(A(x->s)));
+	TEST_ASSERT_EQUAL_INT(3, length(A(x->s)));
 	TEST_ASSERT_EQUAL_INT(7, A(A(x->s)));
 	TEST_ASSERT_EQUAL_INT(11, A(D_(A(x->s))));
 	TEST_ASSERT_EQUAL_INT(13, A(D_(D_(A(x->s)))));
@@ -437,9 +445,9 @@ void test_join_list_atom_2() {
 	_join(x);
 	_join(x);
 
-	TEST_ASSERT_EQUAL_INT(2, depth(x->s));
+	TEST_ASSERT_EQUAL_INT(2, length(x->s));
 	TEST_ASSERT(IS(LST, x->s));
-	TEST_ASSERT_EQUAL_INT(3, depth(A(x->s)));
+	TEST_ASSERT_EQUAL_INT(3, length(A(x->s)));
 	TEST_ASSERT_EQUAL_INT(7, A(A(x->s)));
 	TEST_ASSERT_EQUAL_INT(11, A(D_(A(x->s))));
 	TEST_ASSERT_EQUAL_INT(13, A(D_(D_(A(x->s)))));
@@ -460,9 +468,9 @@ void test_join_list_list_1() {
 	_join(x);
 	_join(x);
 
-	TEST_ASSERT_EQUAL_INT(1, depth(x->s));
+	TEST_ASSERT_EQUAL_INT(1, length(x->s));
 	TEST_ASSERT(IS(LST, x->s));
-	TEST_ASSERT_EQUAL_INT(4, depth(A(x->s)));
+	TEST_ASSERT_EQUAL_INT(4, length(A(x->s)));
 	TEST_ASSERT_EQUAL_INT(7, A(A(x->s)));
 	TEST_ASSERT_EQUAL_INT(11, A(D_(A(x->s))));
 	TEST_ASSERT_EQUAL_INT(13, A(D_(D_(A(x->s)))));
@@ -484,9 +492,9 @@ void test_join_list_list_2() {
 	_join(x);
 	_join(x);
 
-	TEST_ASSERT_EQUAL_INT(2, depth(x->s));
+	TEST_ASSERT_EQUAL_INT(2, length(x->s));
 	TEST_ASSERT(IS(LST, x->s));
-	TEST_ASSERT_EQUAL_INT(4, depth(A(x->s)));
+	TEST_ASSERT_EQUAL_INT(4, length(A(x->s)));
 	TEST_ASSERT_EQUAL_INT(7, A(A(x->s)));
 	TEST_ASSERT_EQUAL_INT(11, A(D_(A(x->s))));
 	TEST_ASSERT_EQUAL_INT(13, A(D_(D_(A(x->s)))));
@@ -503,9 +511,9 @@ void test_quote_1() {
 	push(x, ATM, 7);
 	_quote(x);
 
-	TEST_ASSERT_EQUAL_INT(1, depth(x->s));
+	TEST_ASSERT_EQUAL_INT(1, length(x->s));
 	TEST_ASSERT(IS(LST, x->s));
-	TEST_ASSERT_EQUAL_INT(1, depth(A(x->s)));
+	TEST_ASSERT_EQUAL_INT(1, length(A(x->s)));
 	TEST_ASSERT_EQUAL_INT(7, A(A(x->s)));
 }
 
@@ -519,9 +527,9 @@ void test_quote_2() {
 	push(x, ATM, 7);
 	_quote(x);
 
-	TEST_ASSERT_EQUAL_INT(2, depth(x->s));
+	TEST_ASSERT_EQUAL_INT(2, length(x->s));
 	TEST_ASSERT(IS(LST, x->s));
-	TEST_ASSERT_EQUAL_INT(1, depth(A(x->s)));
+	TEST_ASSERT_EQUAL_INT(1, length(A(x->s)));
 	TEST_ASSERT_EQUAL_INT(7, A(A(x->s)));
 	TEST_ASSERT(IS(ATM, D_(x->s)));
 	TEST_ASSERT_EQUAL_INT(11, A(D_(x->s)));
@@ -537,11 +545,11 @@ void test_quote_3() {
 	_join(x);
 	_quote(x);
 
-	TEST_ASSERT_EQUAL_INT(1, depth(x->s));
+	TEST_ASSERT_EQUAL_INT(1, length(x->s));
 	TEST_ASSERT(IS(LST, x->s));
-	TEST_ASSERT_EQUAL_INT(1, depth(A(x->s)));
+	TEST_ASSERT_EQUAL_INT(1, length(A(x->s)));
 	TEST_ASSERT(IS(LST, A(x->s)));
-	TEST_ASSERT_EQUAL_INT(2, depth(A(A(x->s))));
+	TEST_ASSERT_EQUAL_INT(2, length(A(A(x->s))));
 	TEST_ASSERT_EQUAL_INT(7, A(A(A(x->s))));
 	TEST_ASSERT_EQUAL_INT(11, A(D_(A(A(x->s)))));
 }
@@ -558,11 +566,11 @@ void test_quote_4() {
 	_join(x);
 	_quote(x);
 
-	TEST_ASSERT_EQUAL_INT(2, depth(x->s));
+	TEST_ASSERT_EQUAL_INT(2, length(x->s));
 	TEST_ASSERT(IS(LST, x->s));
-	TEST_ASSERT_EQUAL_INT(1, depth(A(x->s)));
+	TEST_ASSERT_EQUAL_INT(1, length(A(x->s)));
 	TEST_ASSERT(IS(LST, A(x->s)));
-	TEST_ASSERT_EQUAL_INT(2, depth(A(A(x->s))));
+	TEST_ASSERT_EQUAL_INT(2, length(A(A(x->s))));
 	TEST_ASSERT_EQUAL_INT(7, A(A(A(x->s))));
 	TEST_ASSERT_EQUAL_INT(11, A(D_(A(A(x->s)))));
 	TEST_ASSERT(IS(ATM, D_(x->s)));
@@ -577,8 +585,8 @@ void test_dup_atom() {
 	push(x, ATM, 7);
 	_dup(x);
 
-	TEST_ASSERT_EQUAL_INT(2, depth(x->s));
-	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 2, depth(x->f));
+	TEST_ASSERT_EQUAL_INT(2, length(x->s));
+	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 2, length(x->f));
 	TEST_ASSERT(IS(ATM, x->s));
 	TEST_ASSERT(IS(ATM, D_(x->s)));
 	TEST_ASSERT_EQUAL_INT(7, A(x->s));
@@ -587,8 +595,8 @@ void test_dup_atom() {
 	push(x, ATM, 11);
 	_dup(x);
 
-	TEST_ASSERT_EQUAL_INT(4, depth(x->s));
-	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 4, depth(x->f));
+	TEST_ASSERT_EQUAL_INT(4, length(x->s));
+	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 4, length(x->f));
 	TEST_ASSERT(IS(ATM, x->s));
 	TEST_ASSERT(IS(ATM, D_(x->s)));
 	TEST_ASSERT_EQUAL_INT(11, A(x->s));
@@ -610,12 +618,12 @@ void test_dup_list() {
 	_quote(x);
 
 	// ((11, 7))
-	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 4, depth(x->f));
-	TEST_ASSERT_EQUAL_INT(1, depth(x->s));
+	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 4, length(x->f));
+	TEST_ASSERT_EQUAL_INT(1, length(x->s));
 	TEST_ASSERT(IS(LST, x->s));
-	TEST_ASSERT_EQUAL_INT(1, depth(A(x->s)));
+	TEST_ASSERT_EQUAL_INT(1, length(A(x->s)));
 	TEST_ASSERT(IS(LST, A(x->s)));
-	TEST_ASSERT_EQUAL_INT(2, depth(A(A(x->s))));
+	TEST_ASSERT_EQUAL_INT(2, length(A(A(x->s))));
 	TEST_ASSERT(IS(ATM, A(A(x->s))));
 	TEST_ASSERT_EQUAL_INT(11, A(A(A(x->s))));
 	TEST_ASSERT(IS(ATM, D_(A(A(x->s)))));
@@ -627,10 +635,10 @@ void test_dup_list() {
 
 	// (17, 13)
 	// ((11, 7))
-	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 7, depth(x->f));
-	TEST_ASSERT_EQUAL_INT(2, depth(x->s));
+	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 7, length(x->f));
+	TEST_ASSERT_EQUAL_INT(2, length(x->s));
 	TEST_ASSERT(IS(LST, x->s));
-	TEST_ASSERT_EQUAL_INT(2, depth(A(x->s)));
+	TEST_ASSERT_EQUAL_INT(2, length(A(x->s)));
 	TEST_ASSERT(IS(ATM, A(x->s)));
 	TEST_ASSERT_EQUAL_INT(17, A(A(x->s)));
 	TEST_ASSERT(IS(ATM, D_(A(x->s))));
@@ -639,16 +647,16 @@ void test_dup_list() {
 	_join(x);
 
 	// (17, 13, (11, 7))
-	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 6, depth(x->f));
-	TEST_ASSERT_EQUAL_INT(1, depth(x->s));
+	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 6, length(x->f));
+	TEST_ASSERT_EQUAL_INT(1, length(x->s));
 	TEST_ASSERT(IS(LST, x->s));
-	TEST_ASSERT_EQUAL_INT(3, depth(A(x->s)));
+	TEST_ASSERT_EQUAL_INT(3, length(A(x->s)));
 	TEST_ASSERT(IS(ATM, A(x->s)));
 	TEST_ASSERT_EQUAL_INT(17, A(A(x->s)));
 	TEST_ASSERT(IS(ATM, D_(A(x->s))));
 	TEST_ASSERT_EQUAL_INT(13, A(D_(A(x->s))));
 	TEST_ASSERT(IS(LST, D_(D_(A(x->s)))));
-	TEST_ASSERT_EQUAL_INT(2, depth(A(D_(D_(A(x->s))))));
+	TEST_ASSERT_EQUAL_INT(2, length(A(D_(D_(A(x->s))))));
 	TEST_ASSERT(IS(ATM, A(D_(D_(A(x->s))))));
 	TEST_ASSERT_EQUAL_INT(11, A(A(D_(D_(A(x->s))))));
 	TEST_ASSERT(IS(ATM, D_(A(D_(D_(A(x->s)))))));
@@ -656,30 +664,30 @@ void test_dup_list() {
 
 	_dup(x);
 
-	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 12, depth(x->f));
-	TEST_ASSERT_EQUAL_INT(2, depth(x->s));
+	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 12, length(x->f));
+	TEST_ASSERT_EQUAL_INT(2, length(x->s));
 
 	TEST_ASSERT(IS(LST, x->s));
-	TEST_ASSERT_EQUAL_INT(3, depth(A(x->s)));
+	TEST_ASSERT_EQUAL_INT(3, length(A(x->s)));
 	TEST_ASSERT(IS(ATM, A(x->s)));
 	TEST_ASSERT_EQUAL_INT(17, A(A(x->s)));
 	TEST_ASSERT(IS(ATM, D_(A(x->s))));
 	TEST_ASSERT_EQUAL_INT(13, A(D_(A(x->s))));
 	TEST_ASSERT(IS(LST, D_(D_(A(x->s)))));
-	TEST_ASSERT_EQUAL_INT(2, depth(A(D_(D_(A(x->s))))));
+	TEST_ASSERT_EQUAL_INT(2, length(A(D_(D_(A(x->s))))));
 	TEST_ASSERT(IS(ATM, A(D_(D_(A(x->s))))));
 	TEST_ASSERT_EQUAL_INT(11, A(A(D_(D_(A(x->s))))));
 	TEST_ASSERT(IS(ATM, D_(A(D_(D_(A(x->s)))))));
 	TEST_ASSERT_EQUAL_INT(7, A(D_(A(D_(D_(A(x->s)))))));
 
 	TEST_ASSERT(IS(LST, D_(x->s)));
-	TEST_ASSERT_EQUAL_INT(3, depth(A(D_(x->s))));
+	TEST_ASSERT_EQUAL_INT(3, length(A(D_(x->s))));
 	TEST_ASSERT(IS(ATM, A(D_(x->s))));
 	TEST_ASSERT_EQUAL_INT(17, A(A(D_(x->s))));
 	TEST_ASSERT(IS(ATM, D_(A(D_(x->s)))));
 	TEST_ASSERT_EQUAL_INT(13, A(D_(A(D_(x->s)))));
 	TEST_ASSERT(IS(LST, D_(D_(A(D_(x->s))))));
-	TEST_ASSERT_EQUAL_INT(2, depth(A(D_(D_(A(D_(x->s)))))));
+	TEST_ASSERT_EQUAL_INT(2, length(A(D_(D_(A(D_(x->s)))))));
 	TEST_ASSERT(IS(ATM, A(D_(D_(A(D_(x->s)))))));
 	TEST_ASSERT_EQUAL_INT(11, A(A(D_(D_(A(D_(x->s)))))));
 	TEST_ASSERT(IS(ATM, D_(A(D_(D_(A(D_(x->s))))))));
@@ -701,14 +709,14 @@ void test_dup_list() {
 //	push(x, ATM, 7);
 //	_drop(x);
 //
-//	TEST_ASSERT_EQUAL_INT(0, depth(x->s));
+//	TEST_ASSERT_EQUAL_INT(0, length(x->s));
 //	TEST_ASSERT_EQUAL_INT(free_nodes(x), height(x->f));
 //
 //	push(x, ATM, 7);
 //	_quote(x);
 //	_drop(x);
 //
-//	TEST_ASSERT_EQUAL_INT(0, depth(x->s));
+//	TEST_ASSERT_EQUAL_INT(0, length(x->s));
 //	TEST_ASSERT_EQUAL_INT(free_nodes(x), height(x->f));
 //}
 //
@@ -721,11 +729,11 @@ void test_dup_list() {
 //	push(x, ATM, 7);
 //	_quote(x);
 //	_swap(x);
-//	TEST_ASSERT_EQUAL_INT(2, depth(x->s));
+//	TEST_ASSERT_EQUAL_INT(2, length(x->s));
 //	TEST_ASSERT(IS(ATM, x->s));
 //	TEST_ASSERT_EQUAL_INT(11, A(x->s));
 //	TEST_ASSERT(IS(LST, D_(x->s)));
-//	TEST_ASSERT_EQUAL_INT(1, depth(A(D_(x->s))));
+//	TEST_ASSERT_EQUAL_INT(1, length(A(D_(x->s))));
 //	TEST_ASSERT_EQUAL_INT(7, A(A(D_(x->s))));
 //}
 //
@@ -739,11 +747,11 @@ void test_dup_list() {
 //	push(x, ATM, 7);
 //	_quote(x);
 //	_swap(x);
-//	TEST_ASSERT_EQUAL_INT(3, depth(x->s));
+//	TEST_ASSERT_EQUAL_INT(3, length(x->s));
 //	TEST_ASSERT(IS(ATM, x->s));
 //	TEST_ASSERT_EQUAL_INT(11, A(x->s));
 //	TEST_ASSERT(IS(LST, D_(x->s)));
-//	TEST_ASSERT_EQUAL_INT(1, depth(A(D_(x->s))));
+//	TEST_ASSERT_EQUAL_INT(1, length(A(D_(x->s))));
 //	TEST_ASSERT_EQUAL_INT(7, A(A(D_(x->s))));
 //	TEST_ASSERT(IS(ATM, D_(D_(x->s))));
 //	TEST_ASSERT_EQUAL_INT(13, A(D_(D_(x->s))));
@@ -761,12 +769,12 @@ void test_dup_list() {
 ////	push(x, 13);
 ////	push(x, 7);
 ////	
-////	TEST_ASSERT_EQUAL_INT(2, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(2, length(K(x)));
 ////	TEST_ASSERT_EQUAL_INT(free_nodes - 2, height(x->f));
 ////
 ////	_sclear(x);
 ////
-////	TEST_ASSERT_EQUAL_INT(0, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(0, length(K(x)));
 ////	TEST_ASSERT_EQUAL_INT(free_nodes, height(x->f));
 ////}
 ////
@@ -781,7 +789,7 @@ void test_dup_list() {
 ////	push(x, 7);
 ////
 ////	TEST_ASSERT_EQUAL_INT(free_nodes - 2, height(x->f));
-////	TEST_ASSERT_EQUAL_INT(2, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(2, length(K(x)));
 ////
 ////	_spush(x);
 ////
@@ -790,7 +798,7 @@ void test_dup_list() {
 ////	TEST_ASSERT_EQUAL_INT(13, A(D(D(P(x)))));
 ////	TEST_ASSERT_EQUAL_INT(2, height(P(x)));
 ////	TEST_ASSERT_EQUAL_INT(R(x), A(P(x)));
-////	TEST_ASSERT_EQUAL_INT(0, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(0, length(K(x)));
 ////}
 ////
 ////void test_drop_stack() {
@@ -802,8 +810,8 @@ void test_dup_list() {
 ////
 ////	_sdrop(x);
 ////
-////	TEST_ASSERT_EQUAL_INT(0, depth(K(x)));
-////	TEST_ASSERT_EQUAL_INT(1, depth(P(x)));
+////	TEST_ASSERT_EQUAL_INT(0, length(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(P(x)));
 ////	TEST_ASSERT_EQUAL_INT(R(x), P(x));
 ////	TEST_ASSERT_EQUAL_INT(free_nodes, height(x->f));
 ////
@@ -811,7 +819,7 @@ void test_dup_list() {
 ////	push(x, 7);
 ////
 ////	TEST_ASSERT_EQUAL_INT(free_nodes - 2, height(x->f));
-////	TEST_ASSERT_EQUAL_INT(2, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(2, length(K(x)));
 ////	TEST_ASSERT_EQUAL_INT(7, T(x));
 ////	TEST_ASSERT_EQUAL_INT(13, x->s);
 ////	TEST_ASSERT_EQUAL_INT(R(x), P(x));
@@ -823,13 +831,13 @@ void test_dup_list() {
 ////	push(x, 21);
 ////
 ////	TEST_ASSERT_EQUAL_INT(free_nodes - 4, height(x->f));
-////	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(K(x)));
 ////	TEST_ASSERT_EQUAL_INT(21, T(x));
 ////
 ////	_sdrop(x);
 ////
 ////	TEST_ASSERT_EQUAL_INT(free_nodes - 2, height(x->f));
-////	TEST_ASSERT_EQUAL_INT(2, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(2, length(K(x)));
 ////	TEST_ASSERT_EQUAL_INT(7, T(x));
 ////	TEST_ASSERT_EQUAL_INT(13, x->s);
 ////	TEST_ASSERT_EQUAL_INT(R(x), P(x));
@@ -842,7 +850,7 @@ void test_dup_list() {
 ////
 ////	push(ctx, 7);
 ////	_dup(ctx);
-////	TEST_ASSERT_EQUAL_INT(2, depth(K(ctx)));
+////	TEST_ASSERT_EQUAL_INT(2, length(K(ctx)));
 ////	TEST_ASSERT_EQUAL_INT(T(ctx), S(ctx));
 ////}
 ////
@@ -853,11 +861,11 @@ void test_dup_list() {
 ////
 ////	push(x, 13);
 ////	push(x, 7);
-////	TEST_ASSERT_EQUAL_INT(2, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(2, length(K(x)));
 ////	TEST_ASSERT_EQUAL_INT(7, T(x));
 ////	TEST_ASSERT_EQUAL_INT(13, x->s);
 ////	_over(x);
-////	TEST_ASSERT_EQUAL_INT(3, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(3, length(K(x)));
 ////	TEST_ASSERT_EQUAL_INT(13, T(x));
 ////	TEST_ASSERT_EQUAL_INT(7, x->s);
 ////	TEST_ASSERT_EQUAL_INT(13, A(D(D(K(x)))));
@@ -871,12 +879,12 @@ void test_dup_list() {
 ////	push(x, 21);
 ////	push(x, 13);
 ////	push(x, 7);
-////	TEST_ASSERT_EQUAL_INT(3, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(3, length(K(x)));
 ////	TEST_ASSERT_EQUAL_INT(7, T(x));
 ////	TEST_ASSERT_EQUAL_INT(13, x->s);
 ////	TEST_ASSERT_EQUAL_INT(21, A(D(D(K(x)))));
 ////	_rot(x);
-////	TEST_ASSERT_EQUAL_INT(3, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(3, length(K(x)));
 ////	TEST_ASSERT_EQUAL_INT(21, T(x));
 ////	TEST_ASSERT_EQUAL_INT(7, x->s);
 ////	TEST_ASSERT_EQUAL_INT(13, A(D(D(K(x)))));
@@ -890,19 +898,19 @@ void test_dup_list() {
 ////	push(x, 21);
 ////	push(x, 13);
 ////	push(x, 7);
-////	TEST_ASSERT_EQUAL_INT(3, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(3, length(K(x)));
 ////	TEST_ASSERT_EQUAL_INT(7, T(x));
 ////	TEST_ASSERT_EQUAL_INT(13, x->s);
 ////	TEST_ASSERT_EQUAL_INT(21, A(D(D(K(x)))));
 ////	_drop(x);
-////	TEST_ASSERT_EQUAL_INT(2, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(2, length(K(x)));
 ////	TEST_ASSERT_EQUAL_INT(13, T(x));
 ////	TEST_ASSERT_EQUAL_INT(21, x->s);
 ////	_drop(x);
-////	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(K(x)));
 ////	TEST_ASSERT_EQUAL_INT(21, T(x));
 ////	_drop(x);
-////	TEST_ASSERT_EQUAL_INT(0, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(0, length(K(x)));
 ////	_drop(x);
 ////	TEST_ASSERT_EQUAL_INT(ERR_UNDERFLOW, x->err);
 ////}
@@ -917,14 +925,14 @@ void test_dup_list() {
 ////	push(x, 7);
 ////	push(x, 5);
 ////	push(x, 3);
-////	TEST_ASSERT_EQUAL_INT(5, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(5, length(K(x)));
 ////	TEST_ASSERT_EQUAL_INT(3, T(x));
 ////	TEST_ASSERT_EQUAL_INT(5, x->s);
 ////	TEST_ASSERT_EQUAL_INT(7, A(D(D(K(x)))));
 ////	TEST_ASSERT_EQUAL_INT(13, A(D(D(D(K(x))))));
 ////	TEST_ASSERT_EQUAL_INT(21, A(D(D(D(D(K(x)))))));
 ////	_rev(x);
-////	TEST_ASSERT_EQUAL_INT(5, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(5, length(K(x)));
 ////	TEST_ASSERT_EQUAL_INT(21, T(x));
 ////	TEST_ASSERT_EQUAL_INT(13, x->s);
 ////	TEST_ASSERT_EQUAL_INT(7, A(D(D(K(x)))));
@@ -940,7 +948,7 @@ void test_dup_list() {
 ////	push(x, 7);
 ////	push(x, 13);
 ////	_add(x);
-////	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(K(x)));
 ////	TEST_ASSERT_EQUAL_INT(20, T(x));
 ////	pop(x);
 ////
@@ -948,168 +956,168 @@ void test_dup_list() {
 ////	push(x, 7);
 ////	_sub(x);
 ////	TEST_ASSERT_EQUAL_INT(6, T(x));
-////	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(K(x)));
 ////	pop(x);
 ////
 ////	push(x, 13);
 ////	push(x, 7);
 ////	_mul(x);
 ////	TEST_ASSERT_EQUAL_INT(91, T(x));
-////	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(K(x)));
 ////	pop(x);
 ////
 ////	push(x, 30);
 ////	push(x, 5);
 ////	_div(x);
 ////	TEST_ASSERT_EQUAL_INT(6, T(x));
-////	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(K(x)));
 ////	pop(x);
 ////
 ////	push(x, 9);
 ////	push(x, 2);
 ////	_mod(x);
 ////	TEST_ASSERT_EQUAL_INT(T(x), 1);
-////	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(K(x)));
 ////	pop(x);
 ////
 ////	push(x, 13);
 ////	push(x, 7);
 ////	_gt(x);
 ////	TEST_ASSERT_EQUAL_INT(1, T(x));
-////	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(K(x)));
 ////	pop(x);
 ////
 ////	push(x, 7);
 ////	push(x, 13);
 ////	_gt(x);
 ////	TEST_ASSERT_EQUAL_INT(0, T(x));
-////	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(K(x)));
 ////	pop(x);
 ////
 ////	push(x, 7);
 ////	push(x, 7);
 ////	_gt(x);
 ////	TEST_ASSERT_EQUAL_INT(0, T(x));
-////	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(K(x)));
 ////	pop(x);
 ////
 ////	push(x, 13);
 ////	push(x, 7);
 ////	_lt(x);
 ////	TEST_ASSERT_EQUAL_INT(0, T(x));
-////	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(K(x)));
 ////	pop(x);
 ////
 ////	push(x, 7);
 ////	push(x, 13);
 ////	_lt(x);
 ////	TEST_ASSERT_EQUAL_INT(1, T(x));
-////	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(K(x)));
 ////	pop(x);
 ////
 ////	push(x, 7);
 ////	push(x, 7);
 ////	_lt(x);
 ////	TEST_ASSERT_EQUAL_INT(0, T(x));
-////	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(K(x)));
 ////	pop(x);
 ////
 ////	push(x, 13),
 ////	push(x, 7);
 ////	_eq(x);
 ////	TEST_ASSERT_EQUAL_INT(0, T(x));
-////	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(K(x)));
 ////	pop(x);
 ////
 ////	push(x, 7);
 ////	push(x, 13);
 ////	_eq(x);
 ////	TEST_ASSERT_EQUAL_INT(0, T(x));
-////	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(K(x)));
 ////	pop(x);
 ////
 ////	push(x, 7);
 ////	push(x, 7);
 ////	_eq(x);
 ////	TEST_ASSERT_EQUAL_INT(1, T(x));
-////	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(K(x)));
 ////	pop(x);
 ////
 ////	push(x, 13);
 ////	push(x, 7);
 ////	_neq(x);
 ////	TEST_ASSERT_EQUAL_INT(1, T(x));
-////	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(K(x)));
 ////	pop(x);
 ////
 ////	push(x, 7);
 ////	push(x, 13);
 ////	_neq(x);
 ////	TEST_ASSERT_EQUAL_INT(1, T(x));
-////	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(K(x)));
 ////	pop(x);
 ////
 ////	push(x, 7);
 ////	push(x, 7);
 ////	_neq(x);
 ////	TEST_ASSERT_EQUAL_INT(0, T(x));
-////	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(K(x)));
 ////	pop(x);
 ////
 ////	push(x, 0);
 ////	push(x, 0);
 ////	_and(x);
 ////	TEST_ASSERT_EQUAL_INT(0, T(x));
-////	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(K(x)));
 ////	pop(x);
 ////
 ////	push(x, 0);
 ////	push(x, 1);
 ////	_and(x);
 ////	TEST_ASSERT_EQUAL_INT(0, T(x));
-////	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(K(x)));
 ////	pop(x);
 ////
 ////	push(x, 1);
 ////	push(x, 0);
 ////	_and(x);
 ////	TEST_ASSERT_EQUAL_INT(0, T(x));
-////	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(K(x)));
 ////	pop(x);
 ////
 ////	push(x, 1);
 ////	push(x, 1);
 ////	_and(x);
 ////	TEST_ASSERT_EQUAL_INT(1, T(x));
-////	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(K(x)));
 ////	pop(x);
 ////
 ////	push(x, 0);
 ////	push(x, 0);
 ////	_or(x);
 ////	TEST_ASSERT_EQUAL_INT(0, T(x));
-////	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(K(x)));
 ////	pop(x);
 ////
 ////	push(x, 0);
 ////	push(x, 1);
 ////	_or(x);
 ////	TEST_ASSERT_EQUAL_INT(1, T(x));
-////	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(K(x)));
 ////	pop(x);
 ////
 ////	push(x, 1);
 ////	push(x, 0);
 ////	_or(x);
 ////	TEST_ASSERT_EQUAL_INT(1, T(x));
-////	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(K(x)));
 ////	pop(x);
 ////
 ////	push(x, 1);
 ////	push(x, 1);
 ////	_or(x);
 ////	TEST_ASSERT_EQUAL_INT(1, T(x));
-////	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(K(x)));
 ////	pop(x);
 ////}
 ////
@@ -1120,7 +1128,7 @@ void test_dup_list() {
 ////
 ////	C code = ATM(x, 13, ATM(x, 7, 0));
 ////	inner(x, code);
-////	TEST_ASSERT_EQUAL_INT(2, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(2, length(K(x)));
 ////	TEST_ASSERT_EQUAL_INT(7, T(x));
 ////	TEST_ASSERT_EQUAL_INT(13, x->s);
 ////}
@@ -1132,7 +1140,7 @@ void test_dup_list() {
 ////
 ////	C code = ATM(x, 13, ATM(x, 7, PRM(x, &_add, PRM(x, &_dup, 0))));
 ////	inner(x, code);
-////	TEST_ASSERT_EQUAL_INT(2, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(2, length(K(x)));
 ////	TEST_ASSERT_EQUAL_INT(20, T(x));
 ////	TEST_ASSERT_EQUAL_INT(20, x->s);
 ////}
@@ -1146,13 +1154,13 @@ void test_dup_list() {
 ////
 ////	push(x, 1);
 ////	inner(x, code);
-////	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(K(x)));
 ////	TEST_ASSERT_EQUAL_INT(7, T(x));
 ////	pop(x);
 ////
 ////	push(x, 0);
 ////	inner(x, code);
-////	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(K(x)));
 ////	TEST_ASSERT_EQUAL_INT(13, T(x));
 ////}
 ////
@@ -1165,7 +1173,7 @@ void test_dup_list() {
 ////
 ////	push(x, 1);
 ////	inner(x, code);
-////	TEST_ASSERT_EQUAL_INT(2, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(2, length(K(x)));
 ////	TEST_ASSERT_EQUAL_INT(21, T(x));
 ////	TEST_ASSERT_EQUAL_INT(7, x->s);
 ////	pop(x);
@@ -1173,7 +1181,7 @@ void test_dup_list() {
 ////
 ////	push(x, 0);
 ////	inner(x, code);
-////	TEST_ASSERT_EQUAL_INT(2, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(2, length(K(x)));
 ////	TEST_ASSERT_EQUAL_INT(21, T(x));
 ////	TEST_ASSERT_EQUAL_INT(13, x->s);
 ////}
@@ -1203,7 +1211,7 @@ void test_dup_list() {
 ////	push(x, 0);
 ////	push(x, 5);
 ////	inner(x, code);
-////	TEST_ASSERT_EQUAL_INT(2, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(2, length(K(x)));
 ////	TEST_ASSERT_EQUAL_INT(0, T(x));
 ////	TEST_ASSERT_EQUAL_INT(10, x->s);
 ////}
@@ -1219,7 +1227,7 @@ void test_dup_list() {
 ////	C code = ATM(x, 5, WORD(x, square, 0));
 ////
 ////	inner(x, code);
-////	TEST_ASSERT_EQUAL_INT(1, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(1, length(K(x)));
 ////	TEST_ASSERT_EQUAL_INT(25, T(x));
 ////	pop(x);
 ////
@@ -1227,7 +1235,7 @@ void test_dup_list() {
 ////	code = ATM(x, 3, WORD(x, square, ATM(x, 13, 0)));
 ////
 ////	inner(x, code);
-////	TEST_ASSERT_EQUAL_INT(2, depth(K(x)));
+////	TEST_ASSERT_EQUAL_INT(2, length(K(x)));
 ////	TEST_ASSERT_EQUAL_INT(13, T(x));
 ////	TEST_ASSERT_EQUAL_INT(9, x->s);
 ////}
@@ -1241,7 +1249,7 @@ void test_dup_list() {
 //////////
 //////////	TEST_ASSERT_EQUAL_INT(0, ctx->err);
 //////////	TEST_ASSERT_EQUAL_INT(0, ctx->here - BOTTOM(ctx));
-//////////	TEST_ASSERT_EQUAL_INT(free_nodes, depth(ctx->free));
+//////////	TEST_ASSERT_EQUAL_INT(free_nodes, length(ctx->free));
 //////////	allot(ctx, 3);
 //////////	TEST_ASSERT_EQUAL_INT(0, ctx->err);
 //////////	TEST_ASSERT_EQUAL_INT(3, ctx->here - BOTTOM(ctx));
@@ -1252,9 +1260,9 @@ void test_dup_list() {
 //////////	allot(ctx, 1);
 //////////	TEST_ASSERT_EQUAL_INT(0, ctx->err);
 //////////	TEST_ASSERT_EQUAL_INT(17, ctx->here - BOTTOM(ctx));
-//////////	TEST_ASSERT_LESS_THAN(free_nodes, depth(ctx->free));
+//////////	TEST_ASSERT_LESS_THAN(free_nodes, length(ctx->free));
 //////////
-//////////	C fnodes = depth(ctx->free);
+//////////	C fnodes = length(ctx->free);
 //////////	B* here = ctx->here;
 //////////	C reserved = RESERVED(ctx);
 //////////
@@ -1263,25 +1271,25 @@ void test_dup_list() {
 //////////	TEST_ASSERT_EQUAL_INT(0, ctx->err);
 //////////	TEST_ASSERT_EQUAL_PTR(here + reserved, ctx->here);
 //////////	TEST_ASSERT_EQUAL_INT(0, RESERVED(ctx));
-//////////	TEST_ASSERT_EQUAL_INT(fnodes, depth(ctx->free));
+//////////	TEST_ASSERT_EQUAL_INT(fnodes, length(ctx->free));
 //////////
 //////////	allot(ctx, sizeof(C) * 8);
 //////////	TEST_ASSERT_EQUAL_INT(0, ctx->err);
 //////////	TEST_ASSERT_EQUAL_PTR(here + reserved + sizeof(C)*8, ctx->here);
-//////////	TEST_ASSERT_EQUAL_INT(fnodes - 4, depth(ctx->free));
+//////////	TEST_ASSERT_EQUAL_INT(fnodes - 4, length(ctx->free));
 //////////
 //////////	allot(ctx, -(sizeof(C) * 4));
 //////////	TEST_ASSERT_EQUAL_INT(0, ctx->err);
 //////////	TEST_ASSERT_EQUAL_PTR(here + reserved + sizeof(C)*4, ctx->here);
-//////////	TEST_ASSERT_EQUAL_INT(fnodes - 2, depth(ctx->free));
+//////////	TEST_ASSERT_EQUAL_INT(fnodes - 2, length(ctx->free));
 //////////	allot(ctx, -(sizeof(C) - 1));
 //////////	TEST_ASSERT_EQUAL_INT(0, ctx->err);
 //////////	TEST_ASSERT_EQUAL_PTR(here + reserved + sizeof(C)*3 + 1, ctx->here);
-//////////	TEST_ASSERT_EQUAL_INT(fnodes - 2, depth(ctx->free));
+//////////	TEST_ASSERT_EQUAL_INT(fnodes - 2, length(ctx->free));
 //////////	allot(ctx, -(sizeof(C) + 1));
 //////////	TEST_ASSERT_EQUAL_INT(0, ctx->err);
 //////////	TEST_ASSERT_EQUAL_PTR(here + reserved + sizeof(C)*2, ctx->here);
-//////////	TEST_ASSERT_EQUAL_INT(fnodes - 1, depth(ctx->free));
+//////////	TEST_ASSERT_EQUAL_INT(fnodes - 1, length(ctx->free));
 //////////
 //////////	allot(ctx, 2048);
 //////////	TEST_ASSERT_EQUAL_INT(ERR_NOT_ENOUGH_MEMORY, ctx->err);
@@ -1422,9 +1430,10 @@ int main() {
 	UNITY_BEGIN();
 
 	RUN_TEST(test_types);
+
+	RUN_TEST(test_length);
 	RUN_TEST(test_depth);
-	RUN_TEST(test_tdepth);
-	RUN_TEST(test_atleast);
+	RUN_TEST(test_has);
 	RUN_TEST(test_last);
 
 	RUN_TEST(test_block_initialization);

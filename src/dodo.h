@@ -4,68 +4,32 @@
 typedef int8_t		B;
 typedef intptr_t	C;		// 16, 32 or 64 bits depending on system
 
-#define A(p)						(*((C*)p))						// cAr part of pair
-#define A_(p)						(A(p) & -4)						// cAr part ignoring type (last two bits)
-#define _A(p)						(A(p) & 3)						// cAr part type, ignoring value
-#define D(p)						(*(((C*)p) + 1))			// cDr part of pair
-#define D_(p)						(D(p) & -4)						// cDr part ignoring type (last two bits)
-#define _D(p)						(D(p) & 3)						// cDr part type, ignoring value
-#define T(t, c)					((c & -4) | t)				// tag cell with a type on last 2 bits
-#define R(p, a)					(D(p) = T(_D(p), a))	// replace cDr value of a pair without changing type
+#define A(p)								(*((C*)p))
+#define A_(p)								(A(p) & -4)
+#define _A(p)								(A(p) & 3)
+#define D(p)								(*(((C*)p) + 1))
+#define D_(p)								(D(p) & -4)	
+#define _D(p)								(D(p) & 3)
+#define T(t, c)							((c & -4) | t)
+#define R(p, a)							(D(p) = T(_D(p), a))
 
-#define ATM							0
-#define LST							1
-#define BRN							2
-#define PRM							3
+#define ATM									0
+#define LST									1
+#define PRM									2
+#define BRN									3
 
-#define IS(t, p)				((_D(p) & 3) == t)								// check if pair p has type t
-#define ARE(x, t1, t2)	IS(t1, x->s) && IS(t2, D_(x->s))	// check types of top two items of stack
+#define IS(t, p)						((_D(p) & 3) == t)
+#define ARE(x, t1, t2)			IS(t1, x->s) && IS(t2, D_(x->s))
 
-C depth(C p) { 
-	C c = 0; 
-	while (p) { 
-		c++; p = D_(p); 
-	}; 
-	return c; 
-}
+#define REF(p)							(_D(p) & 1)
+#define VAL(p)							(!REF(p))
 
-C tdepth(C p) { 
-	C c = 0;
-	while (p) {
-		if (IS(ATM, p)) { 
-			c++; 
-			p = D_(p); 
-		} else if (IS(LST, p)) { 
-			c++; 
-			c += tdepth(A(p)); 
-			p = D_(p); 
-		} else if (IS(BRN, p)) { 
-			/* TODO */ 
-		} else if (IS(PRM, p)) { 
-			c++; 
-			p = D_(p); 
-		}
-	}
-	return c;
-}
+#define IT(cond, inc, r)		C c = 0; while(cond) { c += inc; p = D_(p); } return c r;
 
-C atleast(C p, C n) { 
-	C c = 0; 
-	while (p && c < n) { 
-		c++; 
-		p = D_(p); 
-	} 
-	return c == n; 
-}
-
-C last(C l) { 
-	if (!l) return 0; 
-	C p = l; 
-	while (D_(l)) { 
-		l = D_(l); 
-	} 
-	return l; 
-}
+C length(C p){ C c = 0; while (p) { c++; p = D_(p); } return c; }
+C depth(C p) { C c = 0; while (p) { c += REF(p) ? depth(A(p)) + 1 : 1; p = D_(p); } return c; }
+C has(C p, C n){ C c = 0; while (p && c < n) { c++; p = D_(p); } return c == n; }
+C last(C p) { if (!p) return 0; while (D_(p)) { p = D_(p); } return p; }
 
 typedef struct {
 	B* here;
@@ -107,8 +71,8 @@ X* init(B* block, C size) {
 C cons(X* x, C a, C d) { C p; return x->f ? (p = x->f, x->f = D(x->f), A(p) = a, D(p) = d, p) : 0; }
 C reclaim(X* x, C l) { C r; return l = 0 ? 0 : (r = D_(l), D(l) = x->f, A(l) = 0, x->f = l, r); }
 C clone(X* x, C l) { 
-	// TODO: Errors, must know total depth of list for cloning !!! 
-	// TODO: It would be usefule to add an atleast function that checks if depth is atleast
+	// TODO: Errors, must know total length of list for cloning !!! 
+	// TODO: It would be usefule to add an atleast function that checks if length is atleast
 	// what is requested.
 	if (!l) { return 0; } else
 	if (IS(ATM, l)) { cons(x, A(l), T(ATM, clone(x, D_(l)))); } else
@@ -139,7 +103,7 @@ void _quote(X* x) { UF(x,);
 
 void _dup(X* x) { UF(x,);
 	if (IS(ATM, x->s)) { push(x, ATM, A(x->s)); } else
-	if (IS(LST, x->s)) { /* check total depth!! */ push(x, LST, clone(x, A(x->s))); }
+	if (IS(LST, x->s)) { /* check total length!! */ push(x, LST, clone(x, A(x->s))); }
 }
 
 
@@ -164,7 +128,7 @@ void _dup(X* x) { UF(x,);
 //		x->s = t;
 //		D(x->s) = D_(x->s); A(x->s) = N(x); N(x) = x->s;
 //
-//		//C l = depth(A(x->s));
+//		//C l = length(A(x->s));
 //		//if (l == 0) {
 //		//	A(x->s) = N(x); N(x) = x->s;
 //		//} else {
@@ -181,18 +145,18 @@ void _dup(X* x) { UF(x,);
 //	if (ARE(x, ATM, LST)) { _quote(x); _join(x); return; }
 //	if (ARE(x, LST, ATM)) { _swap(x); _quote(x); _swap(x); _join(x); return; }
 //	if (ARE(x, LST, LST)) { //C t = last(A(x->s)); R(t, A(D_(x->s))); A(D_(x->s)) = x->s; _drop(x); }
-//		printf("Depth %ld\n", depth(x->s));
+//		printf("Depth %ld\n", length(x->s));
 //		if (A(x->s)) {
 //			C t = last(A(x->s));
 //			R(t, A(D_(x->s)));
 //		} else {
 //			A(x->s) = A(D_(x->s));
 //		}
-//		printf("Depth %ld\n", depth(x->s));
+//		printf("Depth %ld\n", length(x->s));
 //		A(D_(x->s)) = A(x->s);
-//		printf("Depth %ld\n", depth(x->s));
+//		printf("Depth %ld\n", length(x->s));
 //		_drop(x);
-//		printf("Depth %ld\n", depth(x->s));
+//		printf("Depth %ld\n", length(x->s));
 //	}
 //	////ARE(x, ATM, ATM) ? (t = x->s, x->s = D_(D_(x->s)), D(D_(t)) = T(ATM, 0), push(x, LST, t)) :
 //	//ARE(x, ATM, ATM) ? _quote(x), _swap(x), _quote(x), _swap(x), _join(x) :
