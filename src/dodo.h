@@ -14,7 +14,7 @@ typedef intptr_t	C;		// 16, 32 or 64 bits depending on system
 #define ATM									0
 #define LST									1
 #define PRM									2
-#define BRN									3
+#define JMP									3
 
 #define IS(t, p)						((_D(p) & 3) == t)
 #define ARE(x, t1, t2)			IS(t1, x->s) && IS(t2, D_(x->s))
@@ -67,10 +67,11 @@ void rmv(X* x, C l) { while (l) { if (REF(l)) {	rmv(x, A(l)); } l = rcl(x, l); }
 void push(X* x, C t, C v) { C p = cns(x, v, T(t, x->s)); if (p) x->s = p; }
 C pop(X* x) { C v = A(x->s); x->s = rcl(x, x->s); return v; }
 
-#define O(x)				if (x->f == 0) { x->err = ERR_OVERFLOW; return; }
+#define O(x)				if (!x->f) { x->err = ERR_OVERFLOW; return; }
 #define On(x, l)		if (!mlth(x->f, dth(l))) { x->err = ERR_OVERFLOW; return; }
-#define U(x)				if (x->s == 0) { x->err = ERR_UNDERFLOW; return; }
-#define U2(x)				if (x->s == 0 || D_(x->s) == 0) { x->err = ERR_UNDERFLOW; return; }
+#define U(x)				if (!x->s) { x->err = ERR_UNDERFLOW; return; }
+#define U2(x)				if (!x->s || !D_(x->s)) { x->err = ERR_UNDERFLOW; return; }
+#define U3(x)				if (!x->s || !D_(x->s) || !D_(D_(x->s))) { x->err = ERR_UNDERFLOW; return; }
 #define OU2(x)			O(x); U2(x);
 
 #define W(n)				void n(X* x)
@@ -84,11 +85,15 @@ W(jLL) { OU2(x); C t = D_(x->s); C l = lst(A(x->s)); R(l, A(D_(x->s))); R(x->s, 
 W(_join) { REF(D_(x->s)) ? (REF(x->s) ? jLL(x) : jAL(x)) : (REF(x->s) ? jLA(x) : jAA(x)); }
 W(_quote) { U(x); C t = x->s; x->s = D_(x->s); R(t, 0); push(x, LST, t); }
 
-W(dA) { U(x); O(x); push(x, _D(x->s), A(x->s)); }
-W(dL) { U(x); On(x, A(x->s)); push(x, _D(x->s), cln(x, A(x->s))); }
-W(_dup) { REF(x->s) ? dL(x) : dA(x); }
+W(dupA) { U(x); O(x); push(x, _D(x->s), A(x->s)); }
+W(dupL) { U(x); On(x, A(x->s)); push(x, _D(x->s), cln(x, A(x->s))); }
+W(_dup) { REF(x->s) ? dupL(x) : dupA(x); }
 W(_swap) { U2(x); C t = D_(x->s); R(x->s, D_(D_(x->s))); R(t, x->s); x->s = t; }
 W(_drop) { U(x); if (REF(x->s)) rmv(x, A(x->s)); pop(x); }
+W(overV) { O(x); push(x, _D(D_(x->s)), A(D_(x->s))); }
+W(overR) { On(x, A(D_(x->s))); push(x, _D(D_(x->s)), cln(x, A(D_(x->s)))); } 
+W(_over) { U2(x); REF(D_(x->s)) ? overR(x) : overV(x); }
+W(_rot) { C t = D_(D_(x->s)); R(D_(x->s), D_(D_(D_(x->s)))); R(t, x->s); x->s = t; }
 
 W(_add) { U2(x); A(D_(x->s)) = A(D_(x->s)) + A(x->s); pop(x); }
 W(_sub) { U2(x); A(D_(x->s)) = A(D_(x->s)) - A(x->s); pop(x); }
@@ -101,6 +106,10 @@ W(_lt) { U2(x); A(D_(x->s)) = A(D_(x->s)) < A(x->s); pop(x); }
 W(_eq) { U2(x); A(D_(x->s)) = A(D_(x->s)) == A(x->s); pop(x); }
 W(_neq) { U2(x); A(D_(x->s)) = A(D_(x->s)) != A(x->s); pop(x); }
 
+W(_and) { /* TODO */ }
+W(_or) { /* TODO */ }
+W(_invert) { /* TODO */ }
+
 #define ATOM(x, n, d)							cns(x, n, T(ATM, d))
 #define LIST(x, l, d)							cns(x, l, T(LST, d))
 #define PRIMITIVE(x, p, d)				cns(x, (C)p, T(PRM, d))
@@ -108,9 +117,9 @@ W(_neq) { U2(x); A(D_(x->s)) = A(D_(x->s)) != A(x->s); pop(x); }
 C BRANCH(X* x, C t, C f, C d) {
 	if (t) R(lst(t), d); else t = d;
 	if (f) R(lst(f), d); else f = d;
-	return cns(x, cns(x, t, T(LST, cns(x, f, T(LST, 0)))), T(BRN, d));
+	return cns(x, cns(x, t, T(LST, cns(x, f, T(LST, 0)))), T(JMP, d));
 }
-#define LAMBDA(x, w, d)						cns(x, cns(x, cns(x, w, T(LST, 0)), T(LST, 0)), T(BRN, d));
+#define LAMBDA(x, w, d)						cns(x, cns(x, w, T(LST, 0)), T(JMP, d))
 
 void inner(X* x, C xt) {
 	C ip = xt;
@@ -120,9 +129,9 @@ void inner(X* x, C xt) {
 				push(x, ATM, A(ip)); ip = D_(ip); break;
 			case LST: 
 				push(x, LST, cln(x, A(ip))); ip = D_(ip); break;
-			case BRN:
+			case JMP:
 				if (D_(A(ip))) { ip = pop(x) ? A(A(ip)) : A(D_(A(ip))); } /* BRANCH */
-				else { ip = D_(ip) ? (inner(x, A(A(A(ip)))), D_(ip)) : A(A(A(ip))); } /* LAMBDA */
+				else { ip = D_(ip) ? (inner(x, A(A(ip))), D_(ip)) : A(A(ip)); } /* LAMBDA */
 				break;
 			case PRM: 
 				if (A(ip)) { ((FUNC)A(ip))(x); ip = D_(ip); }
@@ -132,28 +141,6 @@ void inner(X* x, C xt) {
 	}
 }
 
-//void _drop(X* x) { 
-//	U(x,); 
-//	if (IS(ATM, x->s)) {
-//		A(x->s) = N(x); N(x) = x->s;
-//	} else if (IS(LST, x->s)) {
-//		C t = x->s;
-//		x->s = A(x->s);
-//		while (x->s) { printf("drop\n"); _drop(x); }
-//		x->s = t;
-//		D(x->s) = D_(x->s); A(x->s) = N(x); N(x) = x->s;
-//
-//		//C l = lth(A(x->s));
-//		//if (l == 0) {
-//		//	A(x->s) = N(x); N(x) = x->s;
-//		//} else {
-//		//	R(lst(A(x->s)), D_(x->s));
-//		//	for (C i = 0; i < l; i++) { _drop(x); }
-//		//	_drop(x);
-//		//}
-//	}
-//}
-///void _over(X* x) { push(x, x->s); }
 ////void _rot(X* x) { C t = A(D(D(K(x)))); A(D(D(K(x)))) = x->s; x->s = T(x); T(x) = t; }
 ////void _drop(X* x) { pop(x); }
 ////void _rev(X* x) {	C s = K(x);	K(x) = 0;	while (s) { C t = D(s); D(s) = K(x); K(x) = s; s = t; } }

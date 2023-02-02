@@ -14,7 +14,7 @@ void test_types() {
 	TEST_ASSERT_EQUAL_INT(ATM, _D(p));
 	TEST_ASSERT(IS(ATM, p));
 	TEST_ASSERT(!IS(LST, p));
-	TEST_ASSERT(!IS(BRN, p));
+	TEST_ASSERT(!IS(JMP, p));
 	TEST_ASSERT(!IS(PRM, p));
 	TEST_ASSERT(!REF(p));
 	D(p) = T(LST, 8);
@@ -22,15 +22,15 @@ void test_types() {
 	TEST_ASSERT_EQUAL_INT(LST, _D(p));
 	TEST_ASSERT(!IS(ATM, p));
 	TEST_ASSERT(IS(LST, p));
-	TEST_ASSERT(!IS(BRN, p));
+	TEST_ASSERT(!IS(JMP, p));
 	TEST_ASSERT(!IS(PRM, p));
 	TEST_ASSERT(REF(p));
-	D(p) = T(BRN, 8);
+	D(p) = T(JMP, 8);
 	TEST_ASSERT_EQUAL_INT(8, D_(p));
-	TEST_ASSERT_EQUAL_INT(BRN, _D(p));
+	TEST_ASSERT_EQUAL_INT(JMP, _D(p));
 	TEST_ASSERT(!IS(ATM, p));
 	TEST_ASSERT(!IS(LST, p));
-	TEST_ASSERT(IS(BRN, p));
+	TEST_ASSERT(IS(JMP, p));
 	TEST_ASSERT(!IS(PRM, p));
 	TEST_ASSERT(REF(p));
 	D(p) = T(PRM, 8);
@@ -38,7 +38,7 @@ void test_types() {
 	TEST_ASSERT_EQUAL_INT(PRM, _D(p));
 	TEST_ASSERT(!IS(ATM, p));
 	TEST_ASSERT(!IS(LST, p));
-	TEST_ASSERT(!IS(BRN, p));
+	TEST_ASSERT(!IS(JMP, p));
 	TEST_ASSERT(IS(PRM, p));
 	TEST_ASSERT(!REF(p));
 }
@@ -758,6 +758,51 @@ void test_drop() {
 	TEST_ASSERT_EQUAL_INT(free_nodes(x), lth(x->f));
 }
 
+void test_over() {
+	C size = 256;
+	B block[size];
+	X* x = init(block, size);
+
+	push(x, ATM, 11);
+	push(x, ATM, 7);
+	_over(x);
+	TEST_ASSERT_EQUAL_INT(3, lth(x->s));
+	TEST_ASSERT_EQUAL_INT(11, A(x->s));
+	TEST_ASSERT_EQUAL_INT(7, A(D_(x->s)));
+	TEST_ASSERT_EQUAL_INT(11, A(D_(D_(x->s))));
+	pop(x); pop(x); pop(x);
+
+	push(x, ATM, 13);
+	push(x, ATM, 11);
+	_join(x);
+	push(x, ATM, 7);
+	_over(x);
+	TEST_ASSERT_EQUAL_INT(3, lth(x->s));
+	TEST_ASSERT(IS(LST, x->s));
+	TEST_ASSERT_EQUAL_INT(2, lth(A(x->s)));
+	TEST_ASSERT_EQUAL_INT(11, A(A(x->s)));
+	TEST_ASSERT_EQUAL_INT(13, A(D_(A(x->s))));
+	TEST_ASSERT_EQUAL_INT(7, A(D_(x->s)));
+	TEST_ASSERT_NOT_EQUAL_INT(D_(D_(x->s)), x->s);
+	TEST_ASSERT_NOT_EQUAL_INT(A(D_(D_(x->s))), A(x->s));
+	TEST_ASSERT_NOT_EQUAL_INT(D_(A(D_(D_(x->s)))), D_(A(x->s)));
+}
+
+void test_rot() {
+	C size = 256;
+	B block[size];
+	X* x = init(block, size);
+
+	push(x, ATM, 13);
+	push(x, ATM, 11);
+	push(x, ATM, 7);
+	_rot(x);
+	TEST_ASSERT_EQUAL_INT(3, lth(x->s));
+	TEST_ASSERT_EQUAL_INT(13, A(x->s));
+	TEST_ASSERT_EQUAL_INT(7, A(D_(x->s)));
+	TEST_ASSERT_EQUAL_INT(11, A(D_(D_(x->s))));
+}
+
 void test_add() {
 	C size = 256;
 	B block[size];
@@ -1145,42 +1190,6 @@ void test_interpreter_lambda() {
 ////	TEST_ASSERT_EQUAL_INT(7, T(x));
 ////	TEST_ASSERT_EQUAL_INT(13, x->s);
 ////	TEST_ASSERT_EQUAL_INT(R(x), P(x));
-////}
-////
-////void test_over() {
-////	C size = 256;
-////	B block[size];
-////	X* x = init(block, size);
-////
-////	push(x, 13);
-////	push(x, 7);
-////	TEST_ASSERT_EQUAL_INT(2, lth(K(x)));
-////	TEST_ASSERT_EQUAL_INT(7, T(x));
-////	TEST_ASSERT_EQUAL_INT(13, x->s);
-////	_over(x);
-////	TEST_ASSERT_EQUAL_INT(3, lth(K(x)));
-////	TEST_ASSERT_EQUAL_INT(13, T(x));
-////	TEST_ASSERT_EQUAL_INT(7, x->s);
-////	TEST_ASSERT_EQUAL_INT(13, A(D(D(K(x)))));
-////}
-////
-////void test_rot() {
-////	C size = 256;
-////	B block[size];
-////	X* x = init(block, size);
-////
-////	push(x, 21);
-////	push(x, 13);
-////	push(x, 7);
-////	TEST_ASSERT_EQUAL_INT(3, lth(K(x)));
-////	TEST_ASSERT_EQUAL_INT(7, T(x));
-////	TEST_ASSERT_EQUAL_INT(13, x->s);
-////	TEST_ASSERT_EQUAL_INT(21, A(D(D(K(x)))));
-////	_rot(x);
-////	TEST_ASSERT_EQUAL_INT(3, lth(K(x)));
-////	TEST_ASSERT_EQUAL_INT(21, T(x));
-////	TEST_ASSERT_EQUAL_INT(7, x->s);
-////	TEST_ASSERT_EQUAL_INT(13, A(D(D(K(x)))));
 ////}
 ////
 ////void test_drop() {
@@ -1581,7 +1590,7 @@ void test_interpreter_lambda() {
 ////////////		cns(ctx, (C)&_gt, T_PRM,
 ////////////		cns(ctx,
 ////////////			0,
-////////////			T_BRN,
+////////////			T_JMP,
 ////////////			cns(ctx, 1, ATM,
 ////////////			cns(ctx, (C)&_sub, T_PRM,
 ////////////			cns(ctx, (C)&_dup, T_PRM,
@@ -1644,6 +1653,8 @@ int main() {
 	RUN_TEST(test_swap_1);
 	RUN_TEST(test_swap_2);
 	RUN_TEST(test_drop);
+	RUN_TEST(test_over);
+	RUN_TEST(test_rot);
 
 	RUN_TEST(test_add);
 	RUN_TEST(test_sub);
@@ -1661,9 +1672,6 @@ int main() {
 	//RUN_TEST(test_push_stack);
 	//RUN_TEST(test_drop_stack);
 
-	//RUN_TEST(test_over);
-	//RUN_TEST(test_rot);
-	//RUN_TEST(test_drop);
 	//RUN_TEST(test_rev);
 	//RUN_TEST(test_binops);
 
