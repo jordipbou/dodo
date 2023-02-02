@@ -1002,7 +1002,33 @@ void test_interpreter_list() {
 	B block[size];
 	X* x = init(block, size);
 
-	C code = cns(x, PRIMITIVE(x, &_dup, PRIMITIVE(x, &_mul, 0)), T(LST, 0));
+	C c3 = cns(x, 13, T(ATM, 0));
+	C c2 = cns(x, 11, T(ATM, 0));
+	C c1 = cns(x, 7, T(ATM, 0));
+	R(c1, c2);
+	R(c2, c3);
+	C l = cns(x, c1, T(LST, 0));
+
+	inner(x, l);
+
+	TEST_ASSERT_EQUAL_INT(1, lth(x->s));
+	TEST_ASSERT(IS(LST, x->s));
+	TEST_ASSERT_EQUAL_INT(3, lth(A(x->s)));
+	TEST_ASSERT_EQUAL_INT(7, A(A(x->s)));
+	TEST_ASSERT_EQUAL_INT(11, A(D_(A(x->s))));
+	TEST_ASSERT_EQUAL_INT(13, A(D_(D_(A(x->s)))));
+	TEST_ASSERT_NOT_EQUAL_INT(l, x->s);
+	TEST_ASSERT_NOT_EQUAL_INT(c1, A(x->s));
+	TEST_ASSERT_NOT_EQUAL_INT(c2, D_(A(x->s)));
+	TEST_ASSERT_NOT_EQUAL_INT(c3, D_(D_(A(x->s))));
+}
+
+void test_interpreter_lambda() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	C code = LAMBDA(x, PRIMITIVE(x, &_dup, PRIMITIVE(x, &_mul, 0)), 0);
 
 	push(x, ATM, 5);
 	inner(x, code);
@@ -1641,6 +1667,7 @@ int main() {
 	RUN_TEST(test_interpreter_continued_branch);
 	RUN_TEST(test_interpreter_recursion);
 	RUN_TEST(test_interpreter_list);
+	RUN_TEST(test_interpreter_lambda);
 
 //	//RUN_TEST(test_allot);
 //	//RUN_TEST(test_align);

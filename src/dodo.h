@@ -108,6 +108,7 @@ C BRANCH(X* x, C t, C f, C d) {
 	if (f) R(lst(f), d); else f = d;
 	return cns(x, cns(x, t, T(LST, cns(x, f, T(LST, 0)))), T(BRN, d));
 }
+#define LAMBDA(x, w, d)						cns(x, cns(x, cns(x, w, T(LST, 0)), T(LST, 0)), T(BRN, d));
 
 void inner(X* x, C xt) {
 	C ip = xt;
@@ -117,8 +118,10 @@ void inner(X* x, C xt) {
 				push(x, ATM, A(ip)); ip = D_(ip); break;
 			case LST: 
 				push(x, LST, cln(x, A(ip))); ip = D_(ip); break;
-			case BRN: 
-				ip = pop(x) ? A(A(ip)) : A(D_(A(ip))); break;
+			case BRN:
+				if (D_(A(ip))) { ip = pop(x) ? A(A(ip)) : A(D_(A(ip))); } /* BRANCH */
+				else { ip = D_(ip) ? (inner(x, A(A(A(ip)))), D_(ip)) : A(A(A(ip))); } /* LAMBDA */
+				break;
 			case PRM: 
 				if (A(ip)) { ((FUNC)A(ip))(x); ip = D_(ip); }
 				else { ip = D_(ip) ? (inner(x, xt), D_(ip)) : xt; } /* RECURSION */
@@ -127,13 +130,6 @@ void inner(X* x, C xt) {
 	}
 }
 
-//#define OUx->f			Ox->f; U(x,);
-//
-//void push(X* x, C t, C v) { Ox->f; N(x) = x->f; D(x->s) = T(t, D_(x->s)); A(x->s) = v; }
-//C pop(X* x) { U(x, 0); C v = A(x->s); A(x->s) = N(x); N(x) = x->s; return v; }
-//
-//void _quote(X* x) { OUx->f; C t = x->s; x->s = D_(x->s); D(t) = T(_D(t), 0); push(x, LST, t); }
-//
 //void _drop(X* x) { 
 //	U(x,); 
 //	if (IS(ATM, x->s)) {
@@ -155,86 +151,14 @@ void inner(X* x, C xt) {
 //		//}
 //	}
 //}
-//void _join(X* x) {
-//	U2(x);
-//	if (ARE(x, ATM, ATM)) { _quote(x); _swap(x); _quote(x); _swap(x); _join(x); return; }
-//	if (ARE(x, ATM, LST)) { _quote(x); _join(x); return; }
-//	if (ARE(x, LST, ATM)) { _swap(x); _quote(x); _swap(x); _join(x); return; }
-//	if (ARE(x, LST, LST)) { //C t = lst(A(x->s)); R(t, A(D_(x->s))); A(D_(x->s)) = x->s; _drop(x); }
-//		printf("Depth %ld\n", lth(x->s));
-//		if (A(x->s)) {
-//			C t = lst(A(x->s));
-//			R(t, A(D_(x->s)));
-//		} else {
-//			A(x->s) = A(D_(x->s));
-//		}
-//		printf("Depth %ld\n", lth(x->s));
-//		A(D_(x->s)) = A(x->s);
-//		printf("Depth %ld\n", lth(x->s));
-//		_drop(x);
-//		printf("Depth %ld\n", lth(x->s));
-//	}
-//	////ARE(x, ATM, ATM) ? (t = x->s, x->s = D_(D_(x->s)), D(D_(t)) = T(ATM, 0), push(x, LST, t)) :
-//	//ARE(x, ATM, ATM) ? _quote(x), _swap(x), _quote(x), _swap(x), _join(x) :
-//	////ARE(x, ATM, LST) ? (t = D_(x->s), D(x->s) = T(ATM, A(D_(x->s))), A(t) = x->s, x->s = t) :
-//	//ARE(x, ATM, LST) ? _quote(x), _join(x) :
-//	//ARE(x, LST, LST) ? 
-//	//0 ;
-//}
-////C pop(X* x) { Ux->f; C t = T(x); T(x) = N(x); N(x) = K(x); return t; }
-////C cns(X* x, C a, C d) { C p = N(x); push(x, a); K(x) = K(x) ? D(K(x)) : 0; D(p) = d; return p; }
-////
-////void _sclear(X* x) { while (K(x)) pop(x); }
-////void _spush(X* x) { C t = P(x);	C n = x->f;	P(x) = N(x); A(N(x)) = t;	N(x) = n;	K(x) = 0; }
-////void _sdrop(X* x) { 
-////	_sclear(x); 
-////	if (P(x) != R(x)) { C t = A(P(x)); A(P(x)) = N(x); K(x) = D(P(x)); N(x) = P(x); P(x) = t;	} 
-////}
-////
-////void _dup(X* x) { push(x, T(x)); }
-////void _swap(X* x) { C t = T(x); T(x) = x->s; x->s = t; }
-////void _over(X* x) { push(x, x->s); }
+///void _over(X* x) { push(x, x->s); }
 ////void _rot(X* x) { C t = A(D(D(K(x)))); A(D(D(K(x)))) = x->s; x->s = T(x); T(x) = t; }
 ////void _drop(X* x) { pop(x); }
 ////void _rev(X* x) {	C s = K(x);	K(x) = 0;	while (s) { C t = D(s); D(s) = K(x); K(x) = s; s = t; } }
 ////
-////void _add(X* x) { C t = pop(x); T(x) += t; }
-////void _sub(X* x) { C t = pop(x); T(x) -= t; }
-////void _mul(X* x) { C t = pop(x); T(x) *= t; }
-////void _div(X* x) { C t = pop(x); T(x) /= t; }
-////void _mod(X* x) { C t = pop(x); T(x) %= t; }
-////
-////void _gt(X* x) { C t = pop(x); T(x) = T(x) > t; }
-////void _lt(X* x) { C t = pop(x); T(x) = T(x) < t; }
-////void _eq(X* x) { C t = pop(x); T(x) = T(x) == t; }
-////void _neq(X* x) { C t = pop(x); T(x) = T(x) != t; }
-////
 ////void _and(X* x) { C t = pop(x); T(x) = T(x) && t; }
 ////void _or(X* x) { C t = pop(x); T(x) = T(x) || t; }
 ////void _not(X* x) { T(x) = !T(x); }
-////
-////#define ATM(x, n, d)					cns(x, cns(x, T_ATM, n), d)
-////#define PRM(x, p, d)		cns(x, cns(x, T_PRM, (C)p), d)
-////#define RECURSION(x, d)				cns(x, cns(x, T_RECURSION, 0), d)
-////C BRN(X* x, C t, C f, C d) {
-////	if (t) { C lt = t; while(D(lt)) lt = D(lt); D(lt) = d; } else { t = d; }
-////	if (f) { C lf = f; while(D(lf)) lf = D(lf); D(lf) = d; } else { f = d; }
-////	return cns(x, cns(x, T_BRN, cns(x, t, cns(x, f, 0))), d);
-////}
-////#define WORD(x, c, d)					cns(x, cns(x, T_WORD, c), d)
-////
-////void inner(X* x, C xlist) {
-////	C ip = xlist;
-////	while(x->err == 0 && ip != 0) {
-////		switch(A(A(ip))) {
-////			case T_ATM: push(x, D(A(ip))); ip = D(ip); break;
-////			case T_PRM:	((FUNC)D(A(ip)))(x); ip = D(ip); break;
-////			case T_RECURSION: ip = D(ip) ? (inner(x, xlist), D(ip)) : xlist; break;
-////			case T_BRN: ip = pop(x) ? A(D(A(ip))) : A(D(D(A(ip)))); break;
-////			case T_WORD: ip = D(ip) ? (inner(x, D(A(ip))), D(ip)) : D(A(ip)); break;
-////		}
-////	}
-////}
 ////
 ////// Source code for getch is taken from:
 ////// Crossline readline (https://github.com/jcwangxp/Crossline).
