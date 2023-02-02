@@ -139,7 +139,7 @@ void test_block_initialization() {
 
 	TEST_ASSERT_EQUAL_INT(0, x->dict);
 	TEST_ASSERT_EQUAL_INT(0, x->s);
-	TEST_ASSERT_EQUAL_INT(0, x->rstack);
+	TEST_ASSERT_EQUAL_INT(0, x->r);
 }
 
 void test_cns() {
@@ -232,8 +232,24 @@ void test_cln() {
 	TEST_ASSERT_NOT_EQUAL_INT(A(D_(D_(l))), A(D_(D_(c))));
 	TEST_ASSERT_NOT_EQUAL_INT(D_(A(D_(D_(l)))), D_(A(D_(D_(c)))));
 	TEST_ASSERT_NOT_EQUAL_INT(D_(D_(D_(l))), D_(D_(D_(c))));
+}
 
+void test_rmv() {
+	C size = 256;
+	B block[size];
+	X* x = init(block, size);
 
+	C l = 
+		cns(x, 
+			cns(x, 
+				cns(x, 7, T(ATM, 
+				cns(x, 11, T(ATM, 0)))), T(LST, 
+			cns(x, 13, T(ATM, 0)))), T(LST, 
+		0));
+
+	rmv(x, l);
+	TEST_ASSERT_EQUAL_INT(0, lth(x->s));
+	TEST_ASSERT_EQUAL_INT(free_nodes(x), lth(x->f));
 }
 
 void test_push() {
@@ -253,27 +269,12 @@ void test_push() {
 	TEST_ASSERT_EQUAL_INT(7, A(x->s));
 	TEST_ASSERT(IS(ATM, D_(x->s)));
 	TEST_ASSERT_EQUAL_INT(11, A(D_(x->s)));
-
-	//while (lth(x->f) > 0) { push(x, ATM, 7); }
-
-	//TEST_ASSERT_EQUAL_INT(free_nodes(x), lth(x->s));
-	//TEST_ASSERT_EQUAL_INT(0, x->err);
-	//push(x, ATM, 13);
-	//TEST_ASSERT_EQUAL_INT(ERR_OVERFLOW, x->err);
-	//TEST_ASSERT_EQUAL_INT(7, A(x->s));
 }
 
 void test_pop() {
 	C size = 256;
 	B block[size];
 	X* x = init(block, size);
-
-	//TEST_ASSERT_EQUAL_INT(0, x->err);
-	//C v = pop(x);
-	//TEST_ASSERT_EQUAL_INT(0, v);
-	//TEST_ASSERT_EQUAL_INT(ERR_UNDERFLOW, x->err);
-
-	//x->err = 0;
 
 	push(x, ATM, 11);
 	push(x, ATM, 7);
@@ -734,6 +735,29 @@ void test_swap_2() {
 	TEST_ASSERT_EQUAL_INT(13, A(D_(D_(x->s))));
 }
 
+void test_drop() {
+	C size = 256;
+	B block[size];
+	X* x = init(block, size);
+
+	push(x, ATM, 7);
+	_drop(x);
+
+	TEST_ASSERT_EQUAL_INT(0, lth(x->s));
+	TEST_ASSERT_EQUAL_INT(free_nodes(x), lth(x->f));
+
+	push(x, ATM, 13);
+	push(x, ATM, 11);
+	_join(x);
+	_quote(x);
+	push(x, ATM, 7);
+	_join(x);
+	_drop(x);
+
+	TEST_ASSERT_EQUAL_INT(0, lth(x->s));
+	TEST_ASSERT_EQUAL_INT(free_nodes(x), lth(x->f));
+}
+
 void test_add() {
 	C size = 256;
 	B block[size];
@@ -1037,25 +1061,6 @@ void test_interpreter_lambda() {
 	TEST_ASSERT_EQUAL_INT(25, A(x->s));
 }
 
-///void test_drop() {
-//	C size = 256;
-//	B block[size];
-//	X* x = init(block, size);
-//
-//	push(x, ATM, 7);
-//	_drop(x);
-//
-//	TEST_ASSERT_EQUAL_INT(0, lth(x->s));
-//	TEST_ASSERT_EQUAL_INT(free_nodes(x), height(x->f));
-//
-//	push(x, ATM, 7);
-//	_quote(x);
-//	_drop(x);
-//
-//	TEST_ASSERT_EQUAL_INT(0, lth(x->s));
-//	TEST_ASSERT_EQUAL_INT(free_nodes(x), height(x->f));
-//}
-//
 ////void test_clear_stack() {
 ////	C size = 512;
 ////	B block[size];
@@ -1588,7 +1593,7 @@ void test_interpreter_lambda() {
 ////////////			cns(ctx, (C)&_add, T_PRM, 0)))))))))))));
 ////////////
 ////////////		ctx->dstack = cns(ctx, 6, ATM, 0);
-////////////		ctx->rstack = cns(ctx, (C)ctx->ip, T_WORD, 0);
+////////////		ctx->r = cns(ctx, (C)ctx->ip, T_WORD, 0);
 ////////////
 ////////////		inner(ctx);
 ////////////
@@ -1610,6 +1615,7 @@ int main() {
 	RUN_TEST(test_cns);
 	RUN_TEST(test_rcl);
 	RUN_TEST(test_cln);
+	RUN_TEST(test_rmv);
 
 	RUN_TEST(test_push);
 	RUN_TEST(test_pop);
@@ -1637,6 +1643,7 @@ int main() {
 
 	RUN_TEST(test_swap_1);
 	RUN_TEST(test_swap_2);
+	RUN_TEST(test_drop);
 
 	RUN_TEST(test_add);
 	RUN_TEST(test_sub);
@@ -1649,7 +1656,6 @@ int main() {
 	RUN_TEST(test_eq);
 	RUN_TEST(test_neq);
 
-	//RUN_TEST(test_drop);
 
 	//RUN_TEST(test_clear_stack);
 	//RUN_TEST(test_push_stack);

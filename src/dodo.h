@@ -28,7 +28,7 @@ C lst(C p) { if (!p) return 0; while (D_(p)) { p = D_(p); } return p; }
 
 typedef struct {
 	B* here;
-	C there, size, f, s, rstack, dict, err;
+	C there, size, f, s, r, dict, err;
 } X;
 
 #define ALIGN(addr, bound)	((((C)addr) + (bound - 1)) & ~(bound - 1))
@@ -54,7 +54,7 @@ X* init(B* block, C size) {
 		D(p) = p == x->there ? 0 : p - 2*sizeof(C);
 	}
 
-	x->err = x->dict = x->s = x->rstack = 0;
+	x->err = x->dict = x->s = x->r = 0;
 
 	return x;
 }
@@ -62,6 +62,7 @@ X* init(B* block, C size) {
 C cns(X* x, C a, C d) { C p; return x->f ? (p = x->f, x->f = D(x->f), A(p) = a, D(p) = d, p) : 0; }
 C rcl(X* x, C l) { C r; return l ? (r = D_(l), D(l) = x->f, A(l) = 0, x->f = l, r) : 0; }
 C cln(X* x, C l) { return l ? cns(x, REF(l) ? cln(x, A(l)) : A(l), T(_D(l), cln(x, D_(l)))) : 0; }
+void rmv(X* x, C l) { while (l) { if (REF(l)) {	rmv(x, A(l)); } l = rcl(x, l); } }
 
 void push(X* x, C t, C v) { C p = cns(x, v, T(t, x->s)); if (p) x->s = p; }
 C pop(X* x) { C v = A(x->s); x->s = rcl(x, x->s); return v; }
@@ -87,6 +88,7 @@ W(dA) { U(x); O(x); push(x, _D(x->s), A(x->s)); }
 W(dL) { U(x); On(x, A(x->s)); push(x, _D(x->s), cln(x, A(x->s))); }
 W(_dup) { REF(x->s) ? dL(x) : dA(x); }
 W(_swap) { U2(x); C t = D_(x->s); R(x->s, D_(D_(x->s))); R(t, x->s); x->s = t; }
+W(_drop) { U(x); if (REF(x->s)) rmv(x, A(x->s)); pop(x); }
 
 W(_add) { U2(x); A(D_(x->s)) = A(D_(x->s)) + A(x->s); pop(x); }
 W(_sub) { U2(x); A(D_(x->s)) = A(D_(x->s)) - A(x->s); pop(x); }
