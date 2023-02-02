@@ -5,8 +5,6 @@ typedef int8_t		B;
 typedef intptr_t	C;		// 16, 32 or 64 bits depending on system
 
 #define A(p)								(*((C*)p))
-#define A_(p)								(A(p) & -4)
-#define _A(p)								(A(p) & 3)
 #define D(p)								(*(((C*)p) + 1))
 #define D_(p)								(D(p) & -4)	
 #define _D(p)								(D(p) & 3)
@@ -22,12 +20,11 @@ typedef intptr_t	C;		// 16, 32 or 64 bits depending on system
 #define ARE(x, t1, t2)			IS(t1, x->s) && IS(t2, D_(x->s))
 
 #define REF(p)							(_D(p) & 1)
-#define VAL(p)							(!REF(p))
 
-C length(C p) { C c = 0; while (p) { c++; p = D_(p); } return c; }
-C depth(C p) { C c = 0; while (p) { c += REF(p) ? depth(A(p)) + 1 : 1; p = D_(p); } return c; }
-C min_length(C p, C n) { C c = 0; while (p && c < n) { c++; p = D_(p); } return c == n; }
-C last(C p) { if (!p) return 0; while (D_(p)) { p = D_(p); } return p; }
+C lth(C p) { C c = 0; while (p) { c++; p = D_(p); } return c; }
+C dth(C p) { C c = 0; while (p) { c += REF(p) ? dth(A(p)) + 1 : 1; p = D_(p); } return c; }
+C mlth(C p, C n) { C c = 0; while (p && c < n) { c++; p = D_(p); } return c == n; }
+C lst(C p) { if (!p) return 0; while (D_(p)) { p = D_(p); } return p; }
 
 typedef struct {
 	B* here;
@@ -62,62 +59,57 @@ X* init(B* block, C size) {
 	return x;
 }
 
-#define OF(x, r)				if (x->f == 0) { x->err = ERR_OVERFLOW; return r; }
-#define OFn(x, l, r)		if (!min_length(x->f, depth(l))) { x->err = ERR_OVERFLOW; return r; }
-#define UF(x, r)				if (x->s == 0) { x->err = ERR_UNDERFLOW; return r; }
-#define UF2(x, r)				if (x->s == 0 || D_(x->s) == 0) { x->err = ERR_UNDERFLOW; return r; }
+C cns(X* x, C a, C d) { C p; return x->f ? (p = x->f, x->f = D(x->f), A(p) = a, D(p) = d, p) : 0; }
+C rcl(X* x, C l) { C r; return l ? (r = D_(l), D(l) = x->f, A(l) = 0, x->f = l, r) : 0; }
+C cln(X* x, C l) { return l ? cns(x, REF(l) ? cln(x, A(l)) : A(l), T(_D(l), cln(x, D_(l)))) : 0; }
 
-C cons(X* x, C a, C d) { C p; return x->f ? (p = x->f, x->f = D(x->f), A(p) = a, D(p) = d, p) : 0; }
-C reclaim(X* x, C l) { C r; return l ? (r = D_(l), D(l) = x->f, A(l) = 0, x->f = l, r) : 0; }
-C clone(X* x, C l) { 
-	return l ? cons(x, REF(l) ? clone(x, A(l)) : A(l), T(_D(l), clone(x, D_(l)))) : 0;
-}
+void push(X* x, C t, C v) { C p = cns(x, v, T(t, x->s)); if (p) x->s = p; }
+C pop(X* x) { C v = A(x->s); x->s = rcl(x, x->s); return v; }
 
-void push(X* x, C t, C v) { C p = cons(x, v, T(t, x->s)); if (p) x->s = p; }
-C pop(X* x) { C v = A(x->s); x->s = reclaim(x, x->s); return v; }
+#define O(x)				if (x->f == 0) { x->err = ERR_OVERFLOW; return; }
+#define On(x, l)		if (!mlth(x->f, dth(l))) { x->err = ERR_OVERFLOW; return; }
+#define U(x)				if (x->s == 0) { x->err = ERR_UNDERFLOW; return; }
+#define U2(x)				if (x->s == 0 || D_(x->s) == 0) { x->err = ERR_UNDERFLOW; return; }
+#define OU2(x)			O(x); U2(x);
 
-void _empty(X* x) { push(x, LST, 0); }
+#define W(n)				void n(X* x)
 
-void _join(X* x) { 
-	OF(x,); UF2(x,); C t, l;
-	ARE(x, ATM, ATM)? (l = x->s, x->s = D_(D_(x->s)), R(D_(l), 0), push(x, LST, l)) :
-	ARE(x, ATM, LST)? (l = D_(x->s), D(x->s) = T(ATM, A(D_(x->s))), A(l) = x->s, x->s = l) :
-	ARE(x, LST, ATM)? (t = D_(D_(x->s)), l = last(A(x->s)), R(l, D_(x->s)), R(D_(l), 0), R(x->s, t)) :
-	ARE(x, LST, LST)? (t = D_(x->s), l = last(A(x->s)), R(l, A(D_(x->s))), R(x->s, reclaim(x, t))) :
-	0 ;
-}
+W(_empty) { O(x); push(x, LST, 0); }
 
-void _quote(X* x) { UF(x,); C t = x->s; x->s = D_(x->s); R(t, 0); push(x, LST, t); }
+W(jAA) { OU2(x); C l = x->s; x->s = D_(D_(x->s)); R(D_(l), 0); push(x, LST, l); }
+W(jAL) { OU2(x); C l = D_(x->s); D(x->s) = T(ATM, A(D_(x->s))); A(l) = x->s; x->s = l; }
+W(jLA) { OU2(x); C t = D_(D_(x->s)); C l = lst(A(x->s)); R(l, D_(x->s)); R(D_(l), 0); R(x->s, t); }
+W(jLL) { OU2(x); C t = D_(x->s); C l = lst(A(x->s)); R(l, A(D_(x->s))); R(x->s, rcl(x, t)); }
+W(_join) { REF(D_(x->s)) ? (REF(x->s) ? jLL(x) : jAL(x)) : (REF(x->s) ? jLA(x) : jAA(x)); }
+W(_quote) { U(x); C t = x->s; x->s = D_(x->s); R(t, 0); push(x, LST, t); }
 
-void _dup(X* x) { UF(x,); 
-	if (VAL(x->s)) { OF(x,); push(x, _D(x->s), A(x->s)); }
-	else { OFn(x, A(x->s),); push(x, _D(x->s), clone(x, A(x->s))); }
-}
+W(dA) { U(x); O(x); push(x, _D(x->s), A(x->s)); }
+W(dL) { U(x); On(x, A(x->s)); push(x, _D(x->s), cln(x, A(x->s))); }
+W(_dup) { REF(x->s) ? dL(x) : dA(x); }
+W(_swap) { U2(x); C t = D_(x->s); R(x->s, D_(D_(x->s))); R(t, x->s); x->s = t; }
 
-void _swap(X* x) { UF2(x,); C t = D_(x->s); R(x->s, D_(D_(x->s))); R(t, x->s); x->s = t; }
+W(_add) { U2(x); A(D_(x->s)) = A(D_(x->s)) + A(x->s); pop(x); }
+W(_sub) { U2(x); A(D_(x->s)) = A(D_(x->s)) - A(x->s); pop(x); }
+W(_mul) { U2(x); A(D_(x->s)) = A(D_(x->s)) * A(x->s); pop(x); }
+W(_div) { U2(x); A(D_(x->s)) = A(D_(x->s)) / A(x->s); pop(x); }
+W(_mod) { U2(x); A(D_(x->s)) = A(D_(x->s)) % A(x->s); pop(x); }
 
-void _add(X* x) { UF2(x,); A(D_(x->s)) = A(D_(x->s)) + A(x->s); pop(x); }
-void _sub(X* x) { UF2(x,); A(D_(x->s)) = A(D_(x->s)) - A(x->s); pop(x); }
-void _mul(X* x) { UF2(x,); A(D_(x->s)) = A(D_(x->s)) * A(x->s); pop(x); }
-void _div(X* x) { UF2(x,); A(D_(x->s)) = A(D_(x->s)) / A(x->s); pop(x); }
-void _mod(X* x) { UF2(x,); A(D_(x->s)) = A(D_(x->s)) % A(x->s); pop(x); }
-
-void _gt(X* x) { UF2(x,); A(D_(x->s)) = A(D_(x->s)) > A(x->s); pop(x); }
-void _lt(X* x) { UF2(x,); A(D_(x->s)) = A(D_(x->s)) < A(x->s); pop(x); }
-void _eq(X* x) { UF2(x,); A(D_(x->s)) = A(D_(x->s)) == A(x->s); pop(x); }
-void _neq(X* x) { UF2(x,); A(D_(x->s)) = A(D_(x->s)) != A(x->s); pop(x); }
+W(_gt) { U2(x); A(D_(x->s)) = A(D_(x->s)) > A(x->s); pop(x); }
+W(_lt) { U2(x); A(D_(x->s)) = A(D_(x->s)) < A(x->s); pop(x); }
+W(_eq) { U2(x); A(D_(x->s)) = A(D_(x->s)) == A(x->s); pop(x); }
+W(_neq) { U2(x); A(D_(x->s)) = A(D_(x->s)) != A(x->s); pop(x); }
 
 
 
-//#define OUx->f			Ox->f; UF(x,);
+//#define OUx->f			Ox->f; U(x,);
 //
 //void push(X* x, C t, C v) { Ox->f; N(x) = x->f; D(x->s) = T(t, D_(x->s)); A(x->s) = v; }
-//C pop(X* x) { UF(x, 0); C v = A(x->s); A(x->s) = N(x); N(x) = x->s; return v; }
+//C pop(X* x) { U(x, 0); C v = A(x->s); A(x->s) = N(x); N(x) = x->s; return v; }
 //
 //void _quote(X* x) { OUx->f; C t = x->s; x->s = D_(x->s); D(t) = T(_D(t), 0); push(x, LST, t); }
 //
 //void _drop(X* x) { 
-//	UF(x,); 
+//	U(x,); 
 //	if (IS(ATM, x->s)) {
 //		A(x->s) = N(x); N(x) = x->s;
 //	} else if (IS(LST, x->s)) {
@@ -127,34 +119,34 @@ void _neq(X* x) { UF2(x,); A(D_(x->s)) = A(D_(x->s)) != A(x->s); pop(x); }
 //		x->s = t;
 //		D(x->s) = D_(x->s); A(x->s) = N(x); N(x) = x->s;
 //
-//		//C l = length(A(x->s));
+//		//C l = lth(A(x->s));
 //		//if (l == 0) {
 //		//	A(x->s) = N(x); N(x) = x->s;
 //		//} else {
-//		//	R(last(A(x->s)), D_(x->s));
+//		//	R(lst(A(x->s)), D_(x->s));
 //		//	for (C i = 0; i < l; i++) { _drop(x); }
 //		//	_drop(x);
 //		//}
 //	}
 //}
 //void _join(X* x) {
-//	UF2(x);
+//	U2(x);
 //	if (ARE(x, ATM, ATM)) { _quote(x); _swap(x); _quote(x); _swap(x); _join(x); return; }
 //	if (ARE(x, ATM, LST)) { _quote(x); _join(x); return; }
 //	if (ARE(x, LST, ATM)) { _swap(x); _quote(x); _swap(x); _join(x); return; }
-//	if (ARE(x, LST, LST)) { //C t = last(A(x->s)); R(t, A(D_(x->s))); A(D_(x->s)) = x->s; _drop(x); }
-//		printf("Depth %ld\n", length(x->s));
+//	if (ARE(x, LST, LST)) { //C t = lst(A(x->s)); R(t, A(D_(x->s))); A(D_(x->s)) = x->s; _drop(x); }
+//		printf("Depth %ld\n", lth(x->s));
 //		if (A(x->s)) {
-//			C t = last(A(x->s));
+//			C t = lst(A(x->s));
 //			R(t, A(D_(x->s)));
 //		} else {
 //			A(x->s) = A(D_(x->s));
 //		}
-//		printf("Depth %ld\n", length(x->s));
+//		printf("Depth %ld\n", lth(x->s));
 //		A(D_(x->s)) = A(x->s);
-//		printf("Depth %ld\n", length(x->s));
+//		printf("Depth %ld\n", lth(x->s));
 //		_drop(x);
-//		printf("Depth %ld\n", length(x->s));
+//		printf("Depth %ld\n", lth(x->s));
 //	}
 //	////ARE(x, ATM, ATM) ? (t = x->s, x->s = D_(D_(x->s)), D(D_(t)) = T(ATM, 0), push(x, LST, t)) :
 //	//ARE(x, ATM, ATM) ? _quote(x), _swap(x), _quote(x), _swap(x), _join(x) :
@@ -164,7 +156,7 @@ void _neq(X* x) { UF2(x,); A(D_(x->s)) = A(D_(x->s)) != A(x->s); pop(x); }
 //	//0 ;
 //}
 ////C pop(X* x) { Ux->f; C t = T(x); T(x) = N(x); N(x) = K(x); return t; }
-////C cons(X* x, C a, C d) { C p = N(x); push(x, a); K(x) = K(x) ? D(K(x)) : 0; D(p) = d; return p; }
+////C cns(X* x, C a, C d) { C p = N(x); push(x, a); K(x) = K(x) ? D(K(x)) : 0; D(p) = d; return p; }
 ////
 ////void _sclear(X* x) { while (K(x)) pop(x); }
 ////void _spush(X* x) { C t = P(x);	C n = x->f;	P(x) = N(x); A(N(x)) = t;	N(x) = n;	K(x) = 0; }
@@ -195,15 +187,15 @@ void _neq(X* x) { UF2(x,); A(D_(x->s)) = A(D_(x->s)) != A(x->s); pop(x); }
 ////void _or(X* x) { C t = pop(x); T(x) = T(x) || t; }
 ////void _not(X* x) { T(x) = !T(x); }
 ////
-////#define ATM(x, n, d)					cons(x, cons(x, T_ATM, n), d)
-////#define PRM(x, p, d)		cons(x, cons(x, T_PRM, (C)p), d)
-////#define RECURSION(x, d)				cons(x, cons(x, T_RECURSION, 0), d)
+////#define ATM(x, n, d)					cns(x, cns(x, T_ATM, n), d)
+////#define PRM(x, p, d)		cns(x, cns(x, T_PRM, (C)p), d)
+////#define RECURSION(x, d)				cns(x, cns(x, T_RECURSION, 0), d)
 ////C BRN(X* x, C t, C f, C d) {
 ////	if (t) { C lt = t; while(D(lt)) lt = D(lt); D(lt) = d; } else { t = d; }
 ////	if (f) { C lf = f; while(D(lf)) lf = D(lf); D(lf) = d; } else { f = d; }
-////	return cons(x, cons(x, T_BRN, cons(x, t, cons(x, f, 0))), d);
+////	return cns(x, cns(x, T_BRN, cns(x, t, cns(x, f, 0))), d);
 ////}
-////#define WORD(x, c, d)					cons(x, cons(x, T_WORD, c), d)
+////#define WORD(x, c, d)					cns(x, cns(x, T_WORD, c), d)
 ////
 ////void inner(X* x, C xlist) {
 ////	C ip = xlist;
@@ -265,14 +257,14 @@ void _neq(X* x) { UF2(x,); A(D_(x->s)) = A(D_(x->s)) != A(x->s); pop(x); }
 ////}
 //////
 //////void push_stack(X* x) {
-//////	x->stacks.next = cons(x, T_LST, (C)AS(T_LST, REF((&x->stacks))), NEXT((&x->stacks)));
+//////	x->stacks.next = cns(x, T_LST, (C)AS(T_LST, REF((&x->stacks))), NEXT((&x->stacks)));
 //////	x->stacks.stack = 0;
 //////}
 //////
 //////void stack_to_list(X* x) {
 //////	PAIR* list = REF((&x->stacks));
 //////	x->stacks = *(NEXT((&x->stacks)));
-//////	x->stacks.ref = (C)cons(x, T_LST, (C)list, REF((&x->stacks)));
+//////	x->stacks.ref = (C)cns(x, T_LST, (C)list, REF((&x->stacks)));
 //////}
 //////
 //////#define RESERVED(x)				((x->there) - ((C)x->here))
@@ -284,7 +276,7 @@ void _neq(X* x) { UF2(x,); A(D_(x->s)) = A(D_(x->s)) != A(x->s); pop(x); }
 //////	} else if (bytes < 0) {
 //////		if ((x->here + bytes) > BOTTOM(x)) x->here += bytes;
 //////		else x->here = BOTTOM(x);
-//////		while ((x->there - 1) >= PALIGN(x->here)) { reclaim(x, --x->there); }
+//////		while ((x->there - 1) >= PALIGN(x->here)) { rcl(x, --x->there); }
 //////	} else /* bytes > 0 */ {
 //////		while (RESERVED(x) < bytes && x->there < x->top) {
 //////			if (IS(T_F, x->there)) {
@@ -325,16 +317,16 @@ void _neq(X* x) { UF2(x,); A(D_(x->s)) = A(D_(x->s)) != A(x->s); pop(x); }
 //////	B* str = compile_str(x, name, nlen);
 //////
 //////	return 
-//////		cons(x, T_ATM, 
-//////			(C)cons(x, T_ATM, (C)str,
-//////						cons(x, T_ATM, (C)x->here, 0)), 
+//////		cns(x, T_ATM, 
+//////			(C)cns(x, T_ATM, (C)str,
+//////						cns(x, T_ATM, (C)x->here, 0)), 
 //////			0);
 //////}
 //////
 //////PAIR* body(X* x, PAIR* word, PAIR* cfa) {
 //////	PAIR* old_cfa = CFA(word);
 //////	NEXT(REF(word))->next = AS(T_ATM, cfa);
-//////	while (old_cfa != 0) { old_cfa = reclaim(x, old_cfa); }
+//////	while (old_cfa != 0) { old_cfa = rcl(x, old_cfa); }
 //////	return word;
 //////}
 //////
@@ -355,26 +347,26 @@ void _neq(X* x) { UF2(x,); A(D_(x->s)) = A(D_(x->s)) != A(x->s); pop(x); }
 ////////}
 //////
 //////X* dodo(X* x) {
-//////	reveal(x, body(x, header(x, "+", 1), cons(x, T_PRM, (C)&_add, 0)));
-//////	reveal(x, body(x, header(x, "-", 1), cons(x, T_PRM, (C)&_sub, 0)));
-//////	reveal(x, body(x, header(x, "*", 1), cons(x, T_PRM, (C)&_mul, 0)));
-//////	reveal(x, body(x, header(x, "/", 1), cons(x, T_PRM, (C)&_div, 0)));
-//////	reveal(x, body(x, header(x, "mod", 3), cons(x, T_PRM, (C)&_mod, 0)));
+//////	reveal(x, body(x, header(x, "+", 1), cns(x, T_PRM, (C)&_add, 0)));
+//////	reveal(x, body(x, header(x, "-", 1), cns(x, T_PRM, (C)&_sub, 0)));
+//////	reveal(x, body(x, header(x, "*", 1), cns(x, T_PRM, (C)&_mul, 0)));
+//////	reveal(x, body(x, header(x, "/", 1), cns(x, T_PRM, (C)&_div, 0)));
+//////	reveal(x, body(x, header(x, "mod", 3), cns(x, T_PRM, (C)&_mod, 0)));
 //////
-//////	reveal(x, body(x, header(x, ">", 1), cons(x, T_PRM, (C)&_gt, 0)));
-//////	reveal(x, body(x, header(x, "<", 1), cons(x, T_PRM, (C)&_lt, 0)));
-//////	reveal(x, body(x, header(x, "=", 1), cons(x, T_PRM, (C)&_eq, 0)));
-//////	reveal(x, body(x, header(x, "<>", 2), cons(x, T_PRM, (C)&_neq, 0)));
+//////	reveal(x, body(x, header(x, ">", 1), cns(x, T_PRM, (C)&_gt, 0)));
+//////	reveal(x, body(x, header(x, "<", 1), cns(x, T_PRM, (C)&_lt, 0)));
+//////	reveal(x, body(x, header(x, "=", 1), cns(x, T_PRM, (C)&_eq, 0)));
+//////	reveal(x, body(x, header(x, "<>", 2), cns(x, T_PRM, (C)&_neq, 0)));
 //////
-//////	reveal(x, body(x, header(x, "and", 3), cons(x, T_PRM, (C)&_and, 0)));
-//////	reveal(x, body(x, header(x, "or", 2), cons(x, T_PRM, (C)&_or, 0)));
-//////	reveal(x, body(x, header(x, "invert", 3), cons(x, T_PRM, (C)&_not, 0)));
+//////	reveal(x, body(x, header(x, "and", 3), cns(x, T_PRM, (C)&_and, 0)));
+//////	reveal(x, body(x, header(x, "or", 2), cns(x, T_PRM, (C)&_or, 0)));
+//////	reveal(x, body(x, header(x, "invert", 3), cns(x, T_PRM, (C)&_not, 0)));
 //////
-//////	reveal(x, body(x, header(x, "dup", 3), cons(x, T_PRM, (C)&_dup, 0)));
-//////	reveal(x, body(x, header(x, "swap", 4), cons(x, T_PRM, (C)&_swap, 0)));
+//////	reveal(x, body(x, header(x, "dup", 3), cns(x, T_PRM, (C)&_dup, 0)));
+//////	reveal(x, body(x, header(x, "swap", 4), cns(x, T_PRM, (C)&_swap, 0)));
 //////
-//////	//reveal(x, body(x, header(x, "key", 3), cons(x, T_PRM, (C)&_key, 0)));
-//////	//reveal(x, body(x, header(x, "emit", 4), cons(x, T_PRM, (C)&_emit, 0)));
+//////	//reveal(x, body(x, header(x, "key", 3), cns(x, T_PRM, (C)&_key, 0)));
+//////	//reveal(x, body(x, header(x, "emit", 4), cns(x, T_PRM, (C)&_emit, 0)));
 //////
 //////	return x;
 //////}
