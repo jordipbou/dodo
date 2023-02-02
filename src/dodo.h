@@ -99,7 +99,33 @@ W(_lt) { U2(x); A(D_(x->s)) = A(D_(x->s)) < A(x->s); pop(x); }
 W(_eq) { U2(x); A(D_(x->s)) = A(D_(x->s)) == A(x->s); pop(x); }
 W(_neq) { U2(x); A(D_(x->s)) = A(D_(x->s)) != A(x->s); pop(x); }
 
+#define ATOM(x, n, d)							cns(x, n, T(ATM, d))
+#define LIST(x, l, d)							cns(x, l, T(LST, d))
+#define PRIMITIVE(x, p, d)				cns(x, (C)p, T(PRM, d))
+#define RECURSION(x, d)						PRIMITIVE(x, 0, d)
+C BRANCH(X* x, C t, C f, C d) {
+	if (t) R(lst(t), d); else t = d;
+	if (f) R(lst(f), d); else f = d;
+	return cns(x, cns(x, t, T(LST, cns(x, f, T(LST, 0)))), T(BRN, d));
+}
 
+void inner(X* x, C xt) {
+	C ip = xt;
+	while(!x->err && ip) {
+		switch(_D(ip)) {
+			case ATM: 
+				push(x, ATM, A(ip)); ip = D_(ip); break;
+			case LST: 
+				push(x, LST, cln(x, A(ip))); ip = D_(ip); break;
+			case BRN: 
+				ip = pop(x) ? A(A(ip)) : A(D_(A(ip))); break;
+			case PRM: 
+				if (A(ip)) { ((FUNC)A(ip))(x); ip = D_(ip); }
+				else { ip = D_(ip) ? (inner(x, xt), D_(ip)) : xt; } /* RECURSION */
+				break;
+		}
+	}
+}
 
 //#define OUx->f			Ox->f; U(x,);
 //

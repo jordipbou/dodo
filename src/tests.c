@@ -902,6 +902,115 @@ void test_neq() {
 	pop(x);
 }
 
+void test_interpreter_atom() {
+	C size = 256;
+	B block[size];
+	X* x = init(block, size);
+
+	C code = ATOM(x, 13, ATOM(x, 7, 0));
+	inner(x, code);
+	TEST_ASSERT_EQUAL_INT(2, lth(x->s));
+	TEST_ASSERT_EQUAL_INT(7, A(x->s));
+	TEST_ASSERT_EQUAL_INT(13, A(D_(x->s)));
+}
+
+void test_interpreter_primitive() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	C code = ATOM(x, 13, ATOM(x, 7, PRIMITIVE(x, &_add, PRIMITIVE(x, &_dup, 0))));
+	inner(x, code);
+	TEST_ASSERT_EQUAL_INT(2, lth(x->s));
+	TEST_ASSERT_EQUAL_INT(20, A(x->s));
+	TEST_ASSERT_EQUAL_INT(20, A(D_(x->s)));
+}
+
+void test_interpreter_branch() {
+	C size = 256;
+	B block[size];
+	X* x = init(block, size);
+
+	C code = BRANCH(x, ATOM(x, 7, 0), ATOM(x, 13, 0), 0);
+
+	push(x, ATM, 1);
+	inner(x, code);
+	TEST_ASSERT_EQUAL_INT(1, lth(x->s));
+	TEST_ASSERT_EQUAL_INT(7, A(x->s));
+	pop(x);
+
+	push(x, ATM, 0);
+	inner(x, code);
+	TEST_ASSERT_EQUAL_INT(1, lth(x->s));
+	TEST_ASSERT_EQUAL_INT(13, A(x->s));
+}
+
+void test_interpreter_continued_branch() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	C code = BRANCH(x, ATOM(x, 7, 0), ATOM(x, 13, 0), ATOM(x, 21, 0));
+
+	push(x, ATM, 1);
+	inner(x, code);
+	TEST_ASSERT_EQUAL_INT(2, lth(x->s));
+	TEST_ASSERT_EQUAL_INT(21, A(x->s));
+	TEST_ASSERT_EQUAL_INT(7, A(D_(x->s)));
+	pop(x);
+	pop(x);
+
+	push(x, ATM, 0);
+	inner(x, code);
+	TEST_ASSERT_EQUAL_INT(2, lth(x->s));
+	TEST_ASSERT_EQUAL_INT(21, A(x->s));
+	TEST_ASSERT_EQUAL_INT(13, A(D_(x->s)));
+}
+
+void test_interpreter_recursion() {
+	C size = 1024;
+	B block[size];
+	X* x = init(block, size);
+
+	C code = 
+		PRIMITIVE(x, &_dup,
+		ATOM(x, 0,
+		PRIMITIVE(x, &_gt,
+		BRANCH(x,
+			// True branch
+			ATOM(x, 1,
+			PRIMITIVE(x, &_sub,
+			PRIMITIVE(x, &_swap,
+			ATOM(x, 2,
+			PRIMITIVE(x, &_add,
+			PRIMITIVE(x, &_swap,
+			RECURSION(x, 0))))))),
+			// False branch
+			0,
+		0))));
+	
+	push(x, ATM, 0);
+	push(x, ATM, 5);
+	inner(x, code);
+	TEST_ASSERT_EQUAL_INT(2, lth(x->s));
+	TEST_ASSERT_EQUAL_INT(0, A(x->s));
+	TEST_ASSERT_EQUAL_INT(10, A(D_(x->s)));
+}
+
+void test_interpreter_list() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	C code = cns(x, PRIMITIVE(x, &_dup, PRIMITIVE(x, &_mul, 0)), T(LST, 0));
+
+	push(x, ATM, 5);
+	inner(x, code);
+
+	TEST_ASSERT_EQUAL_INT(1, lth(x->s));
+	TEST_ASSERT_EQUAL_INT(25, A(x->s));
+}
+
 ///void test_drop() {
 //	C size = 256;
 //	B block[size];
@@ -1274,125 +1383,6 @@ void test_neq() {
 ////	pop(x);
 ////}
 ////
-////void test_interpreter_atom() {
-////	C size = 256;
-////	B block[size];
-////	X* x = init(block, size);
-////
-////	C code = ATM(x, 13, ATM(x, 7, 0));
-////	inner(x, code);
-////	TEST_ASSERT_EQUAL_INT(2, lth(K(x)));
-////	TEST_ASSERT_EQUAL_INT(7, T(x));
-////	TEST_ASSERT_EQUAL_INT(13, x->s);
-////}
-////
-////void test_interpreter_primitive() {
-////	C size = 512;
-////	B block[size];
-////	X* x = init(block, size);
-////
-////	C code = ATM(x, 13, ATM(x, 7, PRM(x, &_add, PRM(x, &_dup, 0))));
-////	inner(x, code);
-////	TEST_ASSERT_EQUAL_INT(2, lth(K(x)));
-////	TEST_ASSERT_EQUAL_INT(20, T(x));
-////	TEST_ASSERT_EQUAL_INT(20, x->s);
-////}
-////
-////void test_interpreter_branch() {
-////	C size = 256;
-////	B block[size];
-////	X* x = init(block, size);
-////
-////	C code = BRN(x, ATM(x, 7, 0), ATM(x, 13, 0), 0);
-////
-////	push(x, 1);
-////	inner(x, code);
-////	TEST_ASSERT_EQUAL_INT(1, lth(K(x)));
-////	TEST_ASSERT_EQUAL_INT(7, T(x));
-////	pop(x);
-////
-////	push(x, 0);
-////	inner(x, code);
-////	TEST_ASSERT_EQUAL_INT(1, lth(K(x)));
-////	TEST_ASSERT_EQUAL_INT(13, T(x));
-////}
-////
-////void test_interpreter_continued_branch() {
-////	C size = 512;
-////	B block[size];
-////	X* x = init(block, size);
-////
-////	C code = BRN(x, ATM(x, 7, 0), ATM(x, 13, 0), ATM(x, 21, 0));
-////
-////	push(x, 1);
-////	inner(x, code);
-////	TEST_ASSERT_EQUAL_INT(2, lth(K(x)));
-////	TEST_ASSERT_EQUAL_INT(21, T(x));
-////	TEST_ASSERT_EQUAL_INT(7, x->s);
-////	pop(x);
-////	pop(x);
-////
-////	push(x, 0);
-////	inner(x, code);
-////	TEST_ASSERT_EQUAL_INT(2, lth(K(x)));
-////	TEST_ASSERT_EQUAL_INT(21, T(x));
-////	TEST_ASSERT_EQUAL_INT(13, x->s);
-////}
-////
-////void test_interpreter_recursion() {
-////	C size = 1024;
-////	B block[size];
-////	X* x = init(block, size);
-////
-////	C code = 
-////		PRM(x, &_dup,
-////		ATM(x, 0,
-////		PRM(x, &_gt,
-////		BRN(x,
-////			// True branch
-////			ATM(x, 1,
-////			PRM(x, &_sub,
-////			PRM(x, &_swap,
-////			ATM(x, 2,
-////			PRM(x, &_add,
-////			PRM(x, &_swap,
-////			RECURSION(x, 0))))))),
-////			// False branch
-////			0,
-////		0))));
-////		
-////	push(x, 0);
-////	push(x, 5);
-////	inner(x, code);
-////	TEST_ASSERT_EQUAL_INT(2, lth(K(x)));
-////	TEST_ASSERT_EQUAL_INT(0, T(x));
-////	TEST_ASSERT_EQUAL_INT(10, x->s);
-////}
-////
-////void test_interpreter_word() {
-////	C size = 512;
-////	B block[size];
-////	X* x = init(block, size);
-////
-////	C square = PRM(x, &_dup, PRM(x, &_mul, 0));
-////
-////	// Tail call
-////	C code = ATM(x, 5, WORD(x, square, 0));
-////
-////	inner(x, code);
-////	TEST_ASSERT_EQUAL_INT(1, lth(K(x)));
-////	TEST_ASSERT_EQUAL_INT(25, T(x));
-////	pop(x);
-////
-////	// Non tail call
-////	code = ATM(x, 3, WORD(x, square, ATM(x, 13, 0)));
-////
-////	inner(x, code);
-////	TEST_ASSERT_EQUAL_INT(2, lth(K(x)));
-////	TEST_ASSERT_EQUAL_INT(13, T(x));
-////	TEST_ASSERT_EQUAL_INT(9, x->s);
-////}
-////
 //////////void test_allot() {
 //////////	C size = 256;
 //////////	B block[size];
@@ -1633,7 +1623,7 @@ int main() {
 	RUN_TEST(test_eq);
 	RUN_TEST(test_neq);
 
-		//RUN_TEST(test_drop);
+	//RUN_TEST(test_drop);
 
 	//RUN_TEST(test_clear_stack);
 	//RUN_TEST(test_push_stack);
@@ -1645,12 +1635,12 @@ int main() {
 	//RUN_TEST(test_rev);
 	//RUN_TEST(test_binops);
 
-	//RUN_TEST(test_interpreter_atom);
-	//RUN_TEST(test_interpreter_primitive);
-	//RUN_TEST(test_interpreter_branch);
-	//RUN_TEST(test_interpreter_continued_branch);
-	//RUN_TEST(test_interpreter_recursion);
-	//RUN_TEST(test_interpreter_word);
+	RUN_TEST(test_interpreter_atom);
+	RUN_TEST(test_interpreter_primitive);
+	RUN_TEST(test_interpreter_branch);
+	RUN_TEST(test_interpreter_continued_branch);
+	RUN_TEST(test_interpreter_recursion);
+	RUN_TEST(test_interpreter_list);
 
 //	//RUN_TEST(test_allot);
 //	//RUN_TEST(test_align);

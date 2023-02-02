@@ -8,6 +8,6 @@ add_executable (
 	recursive_fibonacci 
 	recursive_fibonacci.c)
 
-add_executable(
-	tail_call_fibonacci	
-	tail_call_fibonacci.c)
+# add_executable(
+# 	tail_call_fibonacci	
+# 	tail_call_fibonacci.c)

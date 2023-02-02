@@ -6,7 +6,7 @@ void main() {
 	B block[size];
 	X* x = init(block, size);
 
-	push(x, 36);
+	push(x, ATM, 36);
 
 	// recursive fibonacci
 	C code =
