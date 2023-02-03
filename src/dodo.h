@@ -106,9 +106,10 @@ W(_lt) { U2(x); A(D_(x->s)) = A(D_(x->s)) < A(x->s); pop(x); }
 W(_eq) { U2(x); A(D_(x->s)) = A(D_(x->s)) == A(x->s); pop(x); }
 W(_neq) { U2(x); A(D_(x->s)) = A(D_(x->s)) != A(x->s); pop(x); }
 
-W(_and) { /* TODO */ }
-W(_or) { /* TODO */ }
-W(_invert) { /* TODO */ }
+W(_and) { U2(x); A(D_(x->s)) = A(D_(x->s)) & A(x->s); pop(x); }
+W(_or) { U2(x); A(D_(x->s)) = A(D_(x->s)) | A(x->s); pop(x); }
+W(_invert) { U(x); A(x->s) = ~A(x->s); }
+W(_not) { U(x); A(x->s) = !A(x->s); }
 
 #define ATOM(x, n, d)							cns(x, n, T(ATM, d))
 #define LIST(x, l, d)							cns(x, l, T(LST, d))
@@ -141,8 +142,6 @@ void inner(X* x, C xt) {
 	}
 }
 
-////void _rot(X* x) { C t = A(D(D(K(x)))); A(D(D(K(x)))) = x->s; x->s = T(x); T(x) = t; }
-////void _drop(X* x) { pop(x); }
 ////void _rev(X* x) {	C s = K(x);	K(x) = 0;	while (s) { C t = D(s); D(s) = K(x); K(x) = s; s = t; } }
 ////
 ////void _and(X* x) { C t = pop(x); T(x) = T(x) && t; }
