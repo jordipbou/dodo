@@ -119,7 +119,7 @@ C BRANCH(X* x, C t, C f, C d) {
 	if (f) R(lst(f), d); else f = d;
 	return cns(x, cns(x, t, T(LST, cns(x, f, T(LST, 0)))), T(JMP, d));
 }
-#define LAMBDA(x, w, d)						cns(x, cns(x, w, T(LST, 0)), T(JMP, d))
+#define XT(x, w, d)						cns(x, cns(x, cns(x, w, T(LST, 0)), T(LST, 0)), T(JMP, d))
 
 void inner(X* x, C xt) {
 	C ip = xt;
@@ -131,7 +131,7 @@ void inner(X* x, C xt) {
 				push(x, LST, cln(x, A(ip))); ip = D_(ip); break;
 			case JMP:
 				if (D_(A(ip))) { ip = pop(x) ? A(A(ip)) : A(D_(A(ip))); } /* BRANCH */
-				else { ip = D_(ip) ? (inner(x, A(A(ip))), D_(ip)) : A(A(ip)); } /* LAMBDA */
+				else { ip = D_(ip) ? (inner(x, A(A(A(ip)))), D_(ip)) : A(A(A(ip))); } /* XT */
 				break;
 			case PRM: 
 				if (A(ip)) { ((FUNC)A(ip))(x); ip = D_(ip); }

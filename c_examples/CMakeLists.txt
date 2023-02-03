@@ -9,5 +9,5 @@ add_executable (
 	recursive_fibonacci.c)
 
 add_executable(
-	tail_call_fibonacci	
-	tail_call_fibonacci.c)
+	tail_recursive_fibonacci	
+	tail_recursive_fibonacci.c)

@@ -1092,12 +1092,12 @@ void test_interpreter_list() {
 	TEST_ASSERT_NOT_EQUAL_INT(c3, D_(D_(A(x->s))));
 }
 
-void test_interpreter_lambda() {
+void test_interpreter_xt() {
 	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
-	C code = LAMBDA(x, PRIMITIVE(x, &_dup, PRIMITIVE(x, &_mul, 0)), 0);
+	C code = XT(x, PRIMITIVE(x, &_dup, PRIMITIVE(x, &_mul, 0)), 0);
 
 	push(x, ATM, 5);
 	inner(x, code);
@@ -1681,7 +1681,7 @@ int main() {
 	RUN_TEST(test_interpreter_continued_branch);
 	RUN_TEST(test_interpreter_recursion);
 	RUN_TEST(test_interpreter_list);
-	RUN_TEST(test_interpreter_lambda);
+	RUN_TEST(test_interpreter_xt);
 
 //	//RUN_TEST(test_allot);
 //	//RUN_TEST(test_align);

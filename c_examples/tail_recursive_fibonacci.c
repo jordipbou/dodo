@@ -27,7 +27,7 @@ void main() {
 		ATOM(x, 36, 
 		ATOM(x, 0, 
 		ATOM(x, 1, 
-		LAMBDA(x, loop, 
+		XT(x, loop, 
 		PRIMITIVE(x, &_drop, 
 		PRIMITIVE(x, &_drop, 0))))));
 	
