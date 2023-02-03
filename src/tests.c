@@ -1248,6 +1248,106 @@ void test_interpreter_xt() {
 	TEST_ASSERT_EQUAL_INT(25, A(x->s));
 }
 
+void test_allot() {
+	C size = 1024;
+	B block[size];
+	X* x = init(block, size);
+
+	B* here = x->here;
+	push(x, ATM, 0);
+	_allot(x);
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_INT(here, x->here);
+
+	push(x, ATM, 13);
+	_allot(x);
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_INT(here + 13, x->here);
+
+	C fnodes = lth(x->f);
+	here = x->here;
+	C reserved = RESERVED(x);
+
+	// Ensure reserved memory is 0 to allow next tests to pass
+	push(x, ATM, RESERVED(x));
+	_allot(x);
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_PTR(here + reserved, x->here);
+	TEST_ASSERT_EQUAL_INT(0, RESERVED(x));
+	TEST_ASSERT_EQUAL_INT(fnodes, lth(x->f));
+
+	here = x->here;
+
+	push(x, ATM, 8*sizeof(C));
+	_allot(x);
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_PTR(here + 8*sizeof(C), x->here);
+	TEST_ASSERT_EQUAL_INT(fnodes - 4, lth(x->f));
+	TEST_ASSERT_EQUAL_INT(0, RESERVED(x));
+
+	here = x->here;
+
+	push(x, ATM, 2*sizeof(C) - 3);
+	_allot(x);
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_PTR(here + 2*sizeof(C) - 3, x->here);
+	TEST_ASSERT_EQUAL_INT(fnodes - 5, lth(x->f));
+	TEST_ASSERT_EQUAL_INT(3, RESERVED(x));
+
+	push(x, ATM, -(2*sizeof(C) - 3));
+	_allot(x);
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_PTR(here, x->here);
+	TEST_ASSERT_EQUAL_INT(fnodes - 4, lth(x->f));
+	TEST_ASSERT_EQUAL_INT(0, RESERVED(x));
+
+	push(x, ATM, -1);
+	_allot(x);
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_PTR(here - 1, x->here);
+	TEST_ASSERT_EQUAL_INT(fnodes - 4, lth(x->f));
+	TEST_ASSERT_EQUAL_INT(1, RESERVED(x));
+
+	here = x->here;
+	reserved = RESERVED(x);
+	fnodes = lth(x->f);
+
+	push(x, ATM, 2048);
+	_allot(x);
+	TEST_ASSERT_EQUAL_INT(ERR_NOT_ENOUGH_MEMORY, x->err);
+	TEST_ASSERT_EQUAL_PTR(here, x->here);
+	TEST_ASSERT_EQUAL_INT(reserved, RESERVED(x));
+	TEST_ASSERT_EQUAL_INT(fnodes, lth(x->f));
+
+	x->err = 0;
+
+	push(x, ATM, -2048);
+	_allot(x);
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_PTR(BOTTOM(x), x->here);
+	TEST_ASSERT_EQUAL_INT((C)ALIGN(x->here, 2*sizeof(C)), x->there);
+	TEST_ASSERT_EQUAL_INT(free_nodes(x), lth(x->f));
+}
+
+void test_align() {
+	C size = 256;
+	B block[size];
+	X* x = init(block, size);
+
+	// This ensures here will be aligned with a pair 
+	push(x, ATM, RESERVED(x));
+	_allot(x);
+
+	push(x, ATM, 1);
+	_allot(x);
+	TEST_ASSERT_NOT_EQUAL_INT(ALIGN(x->here, sizeof(C)), x->here);
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+
+	_align(x);
+	TEST_ASSERT_EQUAL_INT(ALIGN(x->here, sizeof(C)), x->here);
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+}
+
 ////void test_clear_stack() {
 ////	C size = 512;
 ////	B block[size];
@@ -1384,80 +1484,6 @@ void test_interpreter_xt() {
 ////	TEST_ASSERT_EQUAL_INT(3, A(D(D(D(D(K(x)))))));
 ////}
 ////
-//////////void test_allot() {
-//////////	C size = 256;
-//////////	B block[size];
-//////////	X* ctx = init(block, size);
-//////////
-//////////	C free_nodes = (size - sizeof(X)) / sizeof(PAIR);
-//////////
-//////////	TEST_ASSERT_EQUAL_INT(0, ctx->err);
-//////////	TEST_ASSERT_EQUAL_INT(0, ctx->here - BOTTOM(ctx));
-//////////	TEST_ASSERT_EQUAL_INT(free_nodes, lth(ctx->free));
-//////////	allot(ctx, 3);
-//////////	TEST_ASSERT_EQUAL_INT(0, ctx->err);
-//////////	TEST_ASSERT_EQUAL_INT(3, ctx->here - BOTTOM(ctx));
-//////////	TEST_ASSERT_EQUAL_INT(BOTTOM(ctx) + 3 + RESERVED(ctx), ctx->there);
-//////////	allot(ctx, 13);
-//////////	TEST_ASSERT_EQUAL_INT(0, ctx->err);
-//////////	TEST_ASSERT_EQUAL_INT(16, ctx->here - BOTTOM(ctx));
-//////////	allot(ctx, 1);
-//////////	TEST_ASSERT_EQUAL_INT(0, ctx->err);
-//////////	TEST_ASSERT_EQUAL_INT(17, ctx->here - BOTTOM(ctx));
-//////////	TEST_ASSERT_LESS_THAN(free_nodes, lth(ctx->free));
-//////////
-//////////	C fnodes = lth(ctx->free);
-//////////	B* here = ctx->here;
-//////////	C reserved = RESERVED(ctx);
-//////////
-//////////	// Ensure reserved memory is 0 to allow next tests to pass
-//////////	allot(ctx, RESERVED(ctx));
-//////////	TEST_ASSERT_EQUAL_INT(0, ctx->err);
-//////////	TEST_ASSERT_EQUAL_PTR(here + reserved, ctx->here);
-//////////	TEST_ASSERT_EQUAL_INT(0, RESERVED(ctx));
-//////////	TEST_ASSERT_EQUAL_INT(fnodes, lth(ctx->free));
-//////////
-//////////	allot(ctx, sizeof(C) * 8);
-//////////	TEST_ASSERT_EQUAL_INT(0, ctx->err);
-//////////	TEST_ASSERT_EQUAL_PTR(here + reserved + sizeof(C)*8, ctx->here);
-//////////	TEST_ASSERT_EQUAL_INT(fnodes - 4, lth(ctx->free));
-//////////
-//////////	allot(ctx, -(sizeof(C) * 4));
-//////////	TEST_ASSERT_EQUAL_INT(0, ctx->err);
-//////////	TEST_ASSERT_EQUAL_PTR(here + reserved + sizeof(C)*4, ctx->here);
-//////////	TEST_ASSERT_EQUAL_INT(fnodes - 2, lth(ctx->free));
-//////////	allot(ctx, -(sizeof(C) - 1));
-//////////	TEST_ASSERT_EQUAL_INT(0, ctx->err);
-//////////	TEST_ASSERT_EQUAL_PTR(here + reserved + sizeof(C)*3 + 1, ctx->here);
-//////////	TEST_ASSERT_EQUAL_INT(fnodes - 2, lth(ctx->free));
-//////////	allot(ctx, -(sizeof(C) + 1));
-//////////	TEST_ASSERT_EQUAL_INT(0, ctx->err);
-//////////	TEST_ASSERT_EQUAL_PTR(here + reserved + sizeof(C)*2, ctx->here);
-//////////	TEST_ASSERT_EQUAL_INT(fnodes - 1, lth(ctx->free));
-//////////
-//////////	allot(ctx, 2048);
-//////////	TEST_ASSERT_EQUAL_INT(ERR_NOT_ENOUGH_MEMORY, ctx->err);
-//////////}
-//////////
-//////////void test_align() {
-//////////	C size = 256;
-//////////	B block[size];
-//////////	X* ctx = init(block, size);
-//////////
-//////////	// This ensures here will be aligned with a pair 
-//////////	allot(ctx, RESERVED(ctx));
-//////////
-//////////	allot(ctx, 1);
-//////////	TEST_ASSERT_NOT_EQUAL_INT(ctx->here, ALIGN(ctx->here, sizeof(C)));
-//////////
-//////////	TEST_ASSERT_EQUAL_INT(0, ctx->err);
-//////////
-//////////	align(ctx);
-//////////	TEST_ASSERT_EQUAL_INT(ctx->here, ALIGN(ctx->here, sizeof(C)));
-//////////
-//////////	TEST_ASSERT_EQUAL_INT(0, ctx->err);
-//////////}
-//////////
 //////////void test_stack_to_list() {
 //////////}
 //////////
@@ -1647,9 +1673,9 @@ int main() {
 	RUN_TEST(test_interpreter_list);
 	RUN_TEST(test_interpreter_xt);
 
-//	//RUN_TEST(test_allot);
-//	//RUN_TEST(test_align);
-//
+	RUN_TEST(test_allot);
+	RUN_TEST(test_align);
+
 //	//RUN_TEST(test_stack_to_list);
 //
 //	////RUN_TEST(test_fib);

@@ -32,6 +32,7 @@ typedef struct {
 } X;
 
 #define ALIGN(addr, bound)	((((C)addr) + (bound - 1)) & ~(bound - 1))
+#define RESERVED(x)					((x->there) - ((C)x->here))
 
 #define BOTTOM(x)						(((B*)x) + sizeof(X))
 #define TOP(x)							(ALIGN(((B*)x) + x->size - 2*sizeof(C) - 1, 2*sizeof(C)))
@@ -142,12 +143,63 @@ void inner(X* x, C xt) {
 	}
 }
 
+W(_allot) {
+	B* here = x->here;
+	C bytes = pop(x);
+	if (bytes == 0) { return;
+	} else if (bytes < 0) { 
+		x->here = (x->here + bytes) > BOTTOM(x) ? x->here + bytes : BOTTOM(x);
+		while (x->there - 2*sizeof(C) >= ALIGN(x->here, 2*sizeof(C))) { 
+			C t = x->there;
+			x->there -= 2*sizeof(C);
+			A(x->there) = t;
+			D(x->there) = 0;
+			D(t) = x->there;
+		}
+	} else {
+		C p = x->there;
+		while(A(p) == (p + 2*sizeof(C)) && p < (C)(x->here + bytes) && p < TOP(x)) { p = A(p);	}
+		if (p >= (C)(here + bytes)) {
+			x->there = p;
+			D(x->there) = 0;
+			x->here += bytes;
+		} else {
+			x->err = ERR_NOT_ENOUGH_MEMORY;
+			return;
+		}
+	}
+}
+
+W(_align) { push(x, ATM, ALIGN(x->here, sizeof(C)) - ((C)x->here)); _allot(x); }
+
+//B* allot(X* x, C bytes) {
+//	B* here = x->here;
+//	if (bytes == 0) { 
+//		return here;
+//	} else if (bytes < 0) {
+//		if ((x->here + bytes) > BOTTOM(x)) x->here += bytes;
+//		else x->here = BOTTOM(x);
+//		while ((x->there - 1) >= PALIGN(x->here)) { rcl(x, --x->there); }
+//	} else /* bytes > 0 */ {
+//		while (RESERVED(x) < bytes && x->there < x->top) {
+//			if (IS(T_F, x->there)) {
+//				if (x->there->prev != 0) {
+//					x->there->prev->next = AS(T_F, NEXT(x->there));
+//				}
+//				x->there++;
+//			} else {
+//				x->err = ERR_NOT_ENOUGH_MEMORY;
+//				return here;
+//			}
+//		}
+//		if (RESERVED(x) >= bytes)	x->here += bytes;
+//		else x->err = ERR_NOT_ENOUGH_MEMORY;
+//	}
+//	return here;
+//}
+
+
 ////void _rev(X* x) {	C s = K(x);	K(x) = 0;	while (s) { C t = D(s); D(s) = K(x); K(x) = s; s = t; } }
-////
-////void _and(X* x) { C t = pop(x); T(x) = T(x) && t; }
-////void _or(X* x) { C t = pop(x); T(x) = T(x) || t; }
-////void _not(X* x) { T(x) = !T(x); }
-////
 ////// Source code for getch is taken from:
 ////// Crossline readline (https://github.com/jcwangxp/Crossline).
 ////// It's a fantastic readline cross-platform replacement, but only getch was
@@ -174,66 +226,11 @@ void inner(X* x, C xt) {
 ////
 ////void _key(X* x) { push(x, dodo_getch()); }
 ////void _emit(X* x) { C K = T(x); pop(x); K == 127 ? printf ("\b \b") : printf ("%c", (char)K); }
-////
-////void _stack_to_ibuf(X* x) {
-////	C s = K(x);
-////	K(x) = x->ibuf;
-////	_sdrop(x);
-////}
-////
-////void _quit(X* x) {
-////	//while (!x->err) {
-////		while (K(x) ? T(x) != 10 : 1) { _key(x); _dup(x); _emit(x); }
-////		_rev(x);
-////		_stack_to_ibuf(x);
-////	//}
-////}
-////
+
 ////void _header(X* x) {
 ////	// Parses next word from input buffer
 ////	//
 ////}
-//////
-//////void push_stack(X* x) {
-//////	x->stacks.next = cns(x, T_LST, (C)AS(T_LST, REF((&x->stacks))), NEXT((&x->stacks)));
-//////	x->stacks.stack = 0;
-//////}
-//////
-//////void stack_to_list(X* x) {
-//////	PAIR* list = REF((&x->stacks));
-//////	x->stacks = *(NEXT((&x->stacks)));
-//////	x->stacks.ref = (C)cns(x, T_LST, (C)list, REF((&x->stacks)));
-//////}
-//////
-//////#define RESERVED(x)				((x->there) - ((C)x->here))
-//////
-//////B* allot(X* x, C bytes) {
-//////	B* here = x->here;
-//////	if (bytes == 0) { 
-//////		return here;
-//////	} else if (bytes < 0) {
-//////		if ((x->here + bytes) > BOTTOM(x)) x->here += bytes;
-//////		else x->here = BOTTOM(x);
-//////		while ((x->there - 1) >= PALIGN(x->here)) { rcl(x, --x->there); }
-//////	} else /* bytes > 0 */ {
-//////		while (RESERVED(x) < bytes && x->there < x->top) {
-//////			if (IS(T_F, x->there)) {
-//////				if (x->there->prev != 0) {
-//////					x->there->prev->next = AS(T_F, NEXT(x->there));
-//////				}
-//////				x->there++;
-//////			} else {
-//////				x->err = ERR_NOT_ENOUGH_MEMORY;
-//////				return here;
-//////			}
-//////		}
-//////		if (RESERVED(x) >= bytes)	x->here += bytes;
-//////		else x->err = ERR_NOT_ENOUGH_MEMORY;
-//////	}
-//////	return here;
-//////}
-//////
-//////void align(X* x) { allot(x, ALIGN(x->here, sizeof(C)) - ((C)x->here)); }
 //////
 //////#define NFA(w)		(REF(REF(w)))
 //////#define DFA(w)		(REF(NEXT(REF(w))))
