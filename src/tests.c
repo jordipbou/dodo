@@ -1359,14 +1359,14 @@ void test_align() {
 	TEST_ASSERT_EQUAL_INT(0, x->err);
 }
 
-void test_cmp_str() {
+void test_Cstr() {
 	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
 	B* here = x->here;
 
-	B* str = cmp_str(x, "test string");
+	B* str = Cstr(x, "test string", 11);
 
 	TEST_ASSERT_EQUAL_PTR(here + sizeof(C), str);
 	TEST_ASSERT_EQUAL_STRING("test string", str);
@@ -1390,6 +1390,22 @@ void test_header() {
 	TEST_ASSERT_EQUAL_INT(h, D_(XT(h)));
 }
 
+void test_body() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	C h = header(x, "test");
+
+	C w = body(x, h, ATOM(x, 11, ATOM(x, 7, 0)));
+
+	inner(x, LAMBDA(x, BODY(w), 0));
+
+	TEST_ASSERT_EQUAL_INT(2, lth(x->s));
+	TEST_ASSERT_EQUAL_INT(7, A(x->s));
+	TEST_ASSERT_EQUAL_INT(11, A(D_(x->s)));
+}
+
 void test_reveal() {
 	C size = 512;
 	B block[size];
@@ -1410,6 +1426,24 @@ void test_reveal() {
 	TEST_ASSERT_EQUAL_INT(h2, x->dict);
 	TEST_ASSERT_EQUAL_INT(2, lth(x->dict));
 	TEST_ASSERT_EQUAL_INT(h, D_(x->dict));
+}
+
+void test_find() {
+	C size = 2048;
+	B block[size];
+	X* x = bootstrap(init(block, size));
+
+	C xt = find(x, "+");
+
+	TEST_ASSERT_EQUAL_PTR(&_add, (FUNC)A(A(xt)));
+
+	xt = find(x, "allot");
+
+	TEST_ASSERT_EQUAL_PTR(&_allot, (FUNC)A(A(xt)));
+
+	xt = find(x, "test");
+
+	TEST_ASSERT_EQUAL_INT(0, xt);
 }
 
 ////void test_clear_stack() {
@@ -1741,10 +1775,13 @@ int main() {
 	RUN_TEST(test_allot);
 	RUN_TEST(test_align);
 
-	RUN_TEST(test_cmp_str);
+	RUN_TEST(test_Cstr);
 
 	RUN_TEST(test_header);
+	RUN_TEST(test_body);
 	RUN_TEST(test_reveal);
+
+	RUN_TEST(test_find);
 
 //	//RUN_TEST(test_stack_to_list);
 //

@@ -1,7 +1,11 @@
 #include<stdint.h>
+#include<string.h>
 
 typedef int8_t		B;
 typedef intptr_t	C;		// 16, 32 or 64 bits depending on system
+
+#define sC									sizeof(C)
+#define sP									(2*sC)
 
 #define A(p)								(*((C*)p))
 #define D(p)								(*(((C*)p) + 1))
@@ -26,39 +30,40 @@ C mlth(C p, C n) { C c = 0; while (p && c < n) { c++; p = D_(p); } return c == n
 C lst(C p) { if (!p) return 0; while (D_(p)) { p = D_(p); } return p; }
 
 typedef struct {
-	B* here;
-	C there, size, f, s, r, cf, dict, err;
-} X;
+		B* here;
+		C there, size, f, s, r, cf, dict, err;
+	} X;
 
 #define ALIGN(addr, bound)	((((C)addr) + (bound - 1)) & ~(bound - 1))
 #define RESERVED(x)					((x->there) - ((C)x->here))
 
 #define BOTTOM(x)						(((B*)x) + sizeof(X))
-#define TOP(x)							(ALIGN(((B*)x) + x->size - 2*sizeof(C) - 1, 2*sizeof(C)))
+#define TOP(x)							(ALIGN(((B*)x) + x->size - sP - 1, sP))
 
 typedef void (*FUNC)(X*);
 
 #define ERR_NOT_ENOUGH_MEMORY		-1
 #define ERR_OVERFLOW						-2
 #define ERR_UNDERFLOW						-3
+#define ERR_BYE									-5
 
 X* init(B* block, C size) {
-	if (size < sizeof(C) + 2*2*sizeof(C)) return 0;
-	X* x = (X*)block;	
-	x->size = size;
-	x->here = BOTTOM(x);
-	x->there = ALIGN(BOTTOM(x), 2*sizeof(C));
-	x->f = TOP(x);
-
-	for (C p = x->there; p <= x->f; p += 2*sizeof(C)) {
-		A(p) = p == x->f ? 0 : p + 2*sizeof(C);
-		D(p) = p == x->there ? 0 : p - 2*sizeof(C);
+		if (size < sC + 2*sP) return 0;
+		X* x = (X*)block;	
+		x->size = size;
+		x->here = BOTTOM(x);
+		x->there = ALIGN(BOTTOM(x), 2*sC);
+		x->f = TOP(x);
+	
+		for (C p = x->there; p <= x->f; p += 2*sC) {
+			A(p) = p == x->f ? 0 : p + 2*sC;
+			D(p) = p == x->there ? 0 : p - 2*sC;
+		}
+	
+		x->err = x->dict = x->s = x->r = x->cf = 0;
+	
+		return x;
 	}
-
-	x->err = x->dict = x->s = x->r = x->cf = 0;
-
-	return x;
-}
 
 C cns(X* x, C a, C d) { C p; return x->f ? (p = x->f, x->f = D(x->f), A(p) = a, D(p) = d, p) : 0; }
 C rcl(X* x, C l) { C r; return l ? (r = D_(l), D(l) = x->f, A(l) = 0, x->f = l, r) : 0; }
@@ -116,93 +121,115 @@ W(_not) { U(x); A(x->s) = !A(x->s); }
 #define LIST(x, l, d)							cns(x, l, T(LST, d))
 #define PRIMITIVE(x, p, d)				cns(x, (C)p, T(PRM, d))
 #define RECURSION(x, d)						PRIMITIVE(x, 0, d)
-C BRANCH(X* x, C t, C f, C d) {
-	if (t) R(lst(t), d); else t = d;
-	if (f) R(lst(f), d); else f = d;
-	return cns(x, cns(x, t, T(LST, cns(x, f, T(LST, 0)))), T(JMP, d));
-}
 #define LAMBDA(x, w, d)						cns(x, cns(x, cns(x, w, T(LST, 0)), T(LST, 0)), T(JMP, d))
+C BRANCH(X* x, C t, C f, C d) {
+		if (t) R(lst(t), d); else t = d;
+		if (f) R(lst(f), d); else f = d;
+		return cns(x, cns(x, t, T(LST, cns(x, f, T(LST, 0)))), T(JMP, d));
+	}
 
 void inner(X* x, C xt) {
-	C ip = xt;
-	while(!x->err && ip) {
-		switch(_D(ip)) {
-			case ATM: 
-				push(x, ATM, A(ip)); ip = D_(ip); break;
-			case LST: 
-				push(x, LST, cln(x, A(ip))); ip = D_(ip); break;
-			case JMP:
-				if (D_(A(ip))) { ip = pop(x) ? A(A(ip)) : A(D_(A(ip))); } /* BRANCH */
-				else { ip = D_(ip) ? (inner(x, A(A(A(ip)))), D_(ip)) : A(A(A(ip))); } /* LAMBDA */
-				break;
-			case PRM: 
-				if (A(ip)) { ((FUNC)A(ip))(x); ip = D_(ip); }
-				else { ip = D_(ip) ? (inner(x, xt), D_(ip)) : xt; } /* RECURSION */
-				break;
+		C ip = xt;
+		while(!x->err && ip) {
+			switch(_D(ip)) {
+				case ATM: 
+					push(x, ATM, A(ip)); ip = D_(ip); break;
+				case LST: 
+					push(x, LST, cln(x, A(ip))); ip = D_(ip); break;
+				case JMP:
+					if (D_(A(ip))) { ip = pop(x) ? A(A(ip)) : A(D_(A(ip))); } /* BRANCH */
+					else { ip = D_(ip) ? (inner(x, A(A(A(ip)))), D_(ip)) : A(A(A(ip))); } /* LAMBDA */
+					break;
+				case PRM: 
+					if (A(ip)) { ((FUNC)A(ip))(x); ip = D_(ip); }
+					else { ip = D_(ip) ? (inner(x, xt), D_(ip)) : xt; } /* RECURSION */
+					break;
+			}
 		}
 	}
-}
 
 B* allot(X* x, C b) {
-	B* here = x->here;
-	if (!b) { return 0;
-	} else if (b < 0) { 
-		x->here = (x->here + b) > BOTTOM(x) ? x->here + b : BOTTOM(x);
-		while (x->there - 2*sizeof(C) >= ALIGN(x->here, 2*sizeof(C))) { 
-			C t = x->there;
-			x->there -= 2*sizeof(C);
-			A(x->there) = t;
-			D(x->there) = 0;
-			D(t) = x->there;
-		}
-	} else {
-		C p = x->there;
-		while(A(p) == (p + 2*sizeof(C)) && p < (C)(x->here + b) && p < TOP(x)) { p = A(p);	}
-		if (p >= (C)(here + b)) {
-			x->there = p;
-			D(x->there) = 0;
-			x->here += b;
+		B* here = x->here;
+		if (!b) { return 0;
+		} else if (b < 0) { 
+			x->here = (x->here + b) > BOTTOM(x) ? x->here + b : BOTTOM(x);
+			while (x->there - sP >= ALIGN(x->here, sP)) { 
+				C t = x->there;
+				x->there -= sP;
+				A(x->there) = t;
+				D(x->there) = 0;
+				D(t) = x->there;
+			}
 		} else {
-			x->err = ERR_NOT_ENOUGH_MEMORY;
-			return 0;
+			C p = x->there;
+			while(A(p) == (p + sP) && p < (C)(x->here + b) && p < TOP(x)) { p = A(p);	}
+			if (p >= (C)(here + b)) {
+				x->there = p;
+				D(x->there) = 0;
+				x->here += b;
+			} else {
+				x->err = ERR_NOT_ENOUGH_MEMORY;
+				return 0;
+			}
 		}
+		return here;
 	}
-	return here;
-}
 
 W(_allot) { allot(x, pop(x)); }
-W(_align) { push(x, ATM, ALIGN(x->here, sizeof(C)) - ((C)x->here)); _allot(x); }
+W(_align) { push(x, ATM, ALIGN(x->here, sC) - ((C)x->here)); _allot(x); }
 
-#define count(s)				(*((C*)(s - sizeof(C))))
+#define count(s)				(*((C*)(s - sC)))
 
-B* cmp_str(X* x, B* str) {
-	if (!str) return 0;
-	C len = 0, i = 0;
-	while (str[len]) len++;
-	B* h = allot(x, sizeof(C) + len + 1);
-	*((C*)h) = len;
-	h += sizeof(C);
-	if (x->err) return 0;
-	while (i < len) { h[i] = str[i]; i++; }
-	h[len] = 0;
-	return h;
-}
+B* Cstr(X* x, B* s, C l) { *(C*)allot(x, sC) = l; B* h = allot(x, l + 1); strcpy(h, s); return h; }
 
-#define NFA(w)					(A(A(w)))
+#define NFA(w)					((B*)(A(A(w))))
 #define DFA(w)					(A(A(w)) + count(A(A(w))) + 1)
 #define XT(w)						(D_(A(w)))	
-#define BODY(w)					(A(D_(A(w))))
+#define BODY(w)					(A(XT(w)))
 
-C header(X* x, B* name) {
-	B* s = allot(x, 1);
-	*(s) = 0;
-	s = cmp_str(x, name);
-	C h = cns(x, 0, T(LST, 0));
-	A(h) = cns(x, (C)s, T(ATM, cns(x, 0, T(LST, h))));
-	return h;
-}
-
+C header(X* x, B* n) {
+		*allot(x, 1) = 0;
+		C h = cns(x, 0, T(LST, 0));
+		A(h) = ATOM(x, (C)Cstr(x, n, strlen(n)), cns(x, 0, T(LST, h)));
+		return h;
+	}
+C body(X* x, C h, C l) { BODY(h) = l; return h; }
 C reveal(X* x, C h) {	R(h, x->dict); x->dict = h;	return h; }
+
+W(_bye) { x->err = ERR_BYE; }
+
+X* bootstrap(X* x) {
+		reveal(x, body(x, header(x, "[]"), PRIMITIVE(x, &_empty, 0)));
+		reveal(x, body(x, header(x, "join"), PRIMITIVE(x, &_join, 0)));
+		reveal(x, body(x, header(x, "quote"), PRIMITIVE(x, &_quote, 0)));
+		reveal(x, body(x, header(x, "dup"), PRIMITIVE(x, &_dup, 0)));
+		reveal(x, body(x, header(x, "swap"), PRIMITIVE(x, &_swap, 0)));
+		reveal(x, body(x, header(x, "drop"), PRIMITIVE(x, &_drop, 0)));
+		reveal(x, body(x, header(x, "over"), PRIMITIVE(x, &_over, 0)));
+		reveal(x, body(x, header(x, "rot"), PRIMITIVE(x, &_rot, 0)));
+		reveal(x, body(x, header(x, "+"), PRIMITIVE(x, &_add, 0)));
+		reveal(x, body(x, header(x, "-"), PRIMITIVE(x, &_sub, 0)));
+		reveal(x, body(x, header(x, "*"), PRIMITIVE(x, &_mul, 0)));
+		reveal(x, body(x, header(x, "/"), PRIMITIVE(x, &_div, 0)));
+		reveal(x, body(x, header(x, "%"), PRIMITIVE(x, &_mod, 0)));
+		reveal(x, body(x, header(x, ">"), PRIMITIVE(x, &_gt, 0)));
+		reveal(x, body(x, header(x, "<"), PRIMITIVE(x, &_lt, 0)));
+		reveal(x, body(x, header(x, "="), PRIMITIVE(x, &_eq, 0)));
+		//reveal(x, body(x, header(x, "!="), PRIMITIVE(x, &_neq, 0)));
+		reveal(x, body(x, header(x, "and"), PRIMITIVE(x, &_and, 0)));
+		reveal(x, body(x, header(x, "or"), PRIMITIVE(x, &_or, 0)));
+		reveal(x, body(x, header(x, "invert"), PRIMITIVE(x, &_invert, 0)));
+		//reveal(x, body(x, header(x, "not"), PRIMITIVE(x, &_not, 0)));
+		reveal(x, body(x, header(x, "allot"), PRIMITIVE(x, &_allot, 0)));
+		reveal(x, body(x, header(x, "align"), PRIMITIVE(x, &_align, 0)));
+		reveal(x, body(x, header(x, "bye"), PRIMITIVE(x, &_bye, 0)));
+		return x;
+	}
+
+C find(X* x, B* w) { 
+		for (C h = x->dict; h; h = D_(h)) if (!strcmp(w, NFA(h))) return XT(h); 
+		return 0;
+	}
 
 ////void _rev(X* x) {	C s = K(x);	K(x) = 0;	while (s) { C t = D(s); D(s) = K(x); K(x) = s; s = t; } }
 ////// Source code for getch is taken from:
@@ -237,32 +264,4 @@ C reveal(X* x, C h) {	R(h, x->dict); x->dict = h;	return h; }
 //////void _immediate(X* x) {
 //////	x->dict->ref = AS(1, REF(x->dict));
 //////}
-//////
-//////X* dodo(X* x) {
-//////	reveal(x, body(x, header(x, "+", 1), cns(x, T_PRM, (C)&_add, 0)));
-//////	reveal(x, body(x, header(x, "-", 1), cns(x, T_PRM, (C)&_sub, 0)));
-//////	reveal(x, body(x, header(x, "*", 1), cns(x, T_PRM, (C)&_mul, 0)));
-//////	reveal(x, body(x, header(x, "/", 1), cns(x, T_PRM, (C)&_div, 0)));
-//////	reveal(x, body(x, header(x, "mod", 3), cns(x, T_PRM, (C)&_mod, 0)));
-//////
-//////	reveal(x, body(x, header(x, ">", 1), cns(x, T_PRM, (C)&_gt, 0)));
-//////	reveal(x, body(x, header(x, "<", 1), cns(x, T_PRM, (C)&_lt, 0)));
-//////	reveal(x, body(x, header(x, "=", 1), cns(x, T_PRM, (C)&_eq, 0)));
-//////	reveal(x, body(x, header(x, "<>", 2), cns(x, T_PRM, (C)&_neq, 0)));
-//////
-//////	reveal(x, body(x, header(x, "and", 3), cns(x, T_PRM, (C)&_and, 0)));
-//////	reveal(x, body(x, header(x, "or", 2), cns(x, T_PRM, (C)&_or, 0)));
-//////	reveal(x, body(x, header(x, "invert", 3), cns(x, T_PRM, (C)&_not, 0)));
-//////
-//////	reveal(x, body(x, header(x, "dup", 3), cns(x, T_PRM, (C)&_dup, 0)));
-//////	reveal(x, body(x, header(x, "swap", 4), cns(x, T_PRM, (C)&_swap, 0)));
-//////
-//////	//reveal(x, body(x, header(x, "key", 3), cns(x, T_PRM, (C)&_key, 0)));
-//////	//reveal(x, body(x, header(x, "emit", 4), cns(x, T_PRM, (C)&_emit, 0)));
-//////
-//////	return x;
-//////}
-//////
-//////// ----------------------------------------------------------------------------
-//////
-//////
+
