@@ -1,5 +1,4 @@
 #include<stdint.h>
-#include<stdio.h>
 
 typedef int8_t		B;
 typedef intptr_t	C;		// 16, 32 or 64 bits depending on system
@@ -28,7 +27,7 @@ C lst(C p) { if (!p) return 0; while (D_(p)) { p = D_(p); } return p; }
 
 typedef struct {
 	B* here;
-	C there, size, f, s, r, dict, err;
+	C there, size, f, s, r, cf, dict, err;
 } X;
 
 #define ALIGN(addr, bound)	((((C)addr) + (bound - 1)) & ~(bound - 1))
@@ -44,6 +43,7 @@ typedef void (*FUNC)(X*);
 #define ERR_UNDERFLOW						-3
 
 X* init(B* block, C size) {
+	if (size < sizeof(C) + 2*2*sizeof(C)) return 0;
 	X* x = (X*)block;	
 	x->size = size;
 	x->here = BOTTOM(x);
@@ -55,7 +55,7 @@ X* init(B* block, C size) {
 		D(p) = p == x->there ? 0 : p - 2*sizeof(C);
 	}
 
-	x->err = x->dict = x->s = x->r = 0;
+	x->err = x->dict = x->s = x->r = x->cf = 0;
 
 	return x;
 }
@@ -121,7 +121,7 @@ C BRANCH(X* x, C t, C f, C d) {
 	if (f) R(lst(f), d); else f = d;
 	return cns(x, cns(x, t, T(LST, cns(x, f, T(LST, 0)))), T(JMP, d));
 }
-#define XT(x, w, d)						cns(x, cns(x, cns(x, w, T(LST, 0)), T(LST, 0)), T(JMP, d))
+#define LAMBDA(x, w, d)						cns(x, cns(x, cns(x, w, T(LST, 0)), T(LST, 0)), T(JMP, d))
 
 void inner(X* x, C xt) {
 	C ip = xt;
@@ -133,7 +133,7 @@ void inner(X* x, C xt) {
 				push(x, LST, cln(x, A(ip))); ip = D_(ip); break;
 			case JMP:
 				if (D_(A(ip))) { ip = pop(x) ? A(A(ip)) : A(D_(A(ip))); } /* BRANCH */
-				else { ip = D_(ip) ? (inner(x, A(A(A(ip)))), D_(ip)) : A(A(A(ip))); } /* XT */
+				else { ip = D_(ip) ? (inner(x, A(A(A(ip)))), D_(ip)) : A(A(A(ip))); } /* LAMBDA */
 				break;
 			case PRM: 
 				if (A(ip)) { ((FUNC)A(ip))(x); ip = D_(ip); }
@@ -143,12 +143,11 @@ void inner(X* x, C xt) {
 	}
 }
 
-W(_allot) {
+B* allot(X* x, C b) {
 	B* here = x->here;
-	C bytes = pop(x);
-	if (bytes == 0) { return;
-	} else if (bytes < 0) { 
-		x->here = (x->here + bytes) > BOTTOM(x) ? x->here + bytes : BOTTOM(x);
+	if (!b) { return 0;
+	} else if (b < 0) { 
+		x->here = (x->here + b) > BOTTOM(x) ? x->here + b : BOTTOM(x);
 		while (x->there - 2*sizeof(C) >= ALIGN(x->here, 2*sizeof(C))) { 
 			C t = x->there;
 			x->there -= 2*sizeof(C);
@@ -158,46 +157,52 @@ W(_allot) {
 		}
 	} else {
 		C p = x->there;
-		while(A(p) == (p + 2*sizeof(C)) && p < (C)(x->here + bytes) && p < TOP(x)) { p = A(p);	}
-		if (p >= (C)(here + bytes)) {
+		while(A(p) == (p + 2*sizeof(C)) && p < (C)(x->here + b) && p < TOP(x)) { p = A(p);	}
+		if (p >= (C)(here + b)) {
 			x->there = p;
 			D(x->there) = 0;
-			x->here += bytes;
+			x->here += b;
 		} else {
 			x->err = ERR_NOT_ENOUGH_MEMORY;
-			return;
+			return 0;
 		}
 	}
+	return here;
 }
 
+W(_allot) { allot(x, pop(x)); }
 W(_align) { push(x, ATM, ALIGN(x->here, sizeof(C)) - ((C)x->here)); _allot(x); }
 
-//B* allot(X* x, C bytes) {
-//	B* here = x->here;
-//	if (bytes == 0) { 
-//		return here;
-//	} else if (bytes < 0) {
-//		if ((x->here + bytes) > BOTTOM(x)) x->here += bytes;
-//		else x->here = BOTTOM(x);
-//		while ((x->there - 1) >= PALIGN(x->here)) { rcl(x, --x->there); }
-//	} else /* bytes > 0 */ {
-//		while (RESERVED(x) < bytes && x->there < x->top) {
-//			if (IS(T_F, x->there)) {
-//				if (x->there->prev != 0) {
-//					x->there->prev->next = AS(T_F, NEXT(x->there));
-//				}
-//				x->there++;
-//			} else {
-//				x->err = ERR_NOT_ENOUGH_MEMORY;
-//				return here;
-//			}
-//		}
-//		if (RESERVED(x) >= bytes)	x->here += bytes;
-//		else x->err = ERR_NOT_ENOUGH_MEMORY;
-//	}
-//	return here;
-//}
+#define count(s)				(*((C*)(s - sizeof(C))))
 
+B* cmp_str(X* x, B* str) {
+	if (!str) return 0;
+	C len = 0, i = 0;
+	while (str[len]) len++;
+	B* h = allot(x, sizeof(C) + len + 1);
+	*((C*)h) = len;
+	h += sizeof(C);
+	if (x->err) return 0;
+	while (i < len) { h[i] = str[i]; i++; }
+	h[len] = 0;
+	return h;
+}
+
+#define NFA(w)					(A(A(w)))
+#define DFA(w)					(A(A(w)) + count(A(A(w))) + 1)
+#define XT(w)						(D_(A(w)))	
+#define BODY(w)					(A(D_(A(w))))
+
+C header(X* x, B* name) {
+	B* s = allot(x, 1);
+	*(s) = 0;
+	s = cmp_str(x, name);
+	C h = cns(x, 0, T(LST, 0));
+	A(h) = cns(x, (C)s, T(ATM, cns(x, 0, T(LST, h))));
+	return h;
+}
+
+C reveal(X* x, C h) {	R(h, x->dict); x->dict = h;	return h; }
 
 ////void _rev(X* x) {	C s = K(x);	K(x) = 0;	while (s) { C t = D(s); D(s) = K(x); K(x) = s; s = t; } }
 ////// Source code for getch is taken from:
@@ -227,59 +232,11 @@ W(_align) { push(x, ATM, ALIGN(x->here, sizeof(C)) - ((C)x->here)); _allot(x); }
 ////void _key(X* x) { push(x, dodo_getch()); }
 ////void _emit(X* x) { C K = T(x); pop(x); K == 127 ? printf ("\b \b") : printf ("%c", (char)K); }
 
-////void _header(X* x) {
-////	// Parses next word from input buffer
-////	//
-////}
-//////
-//////#define NFA(w)		(REF(REF(w)))
-//////#define DFA(w)		(REF(NEXT(REF(w))))
-//////#define CFA(w)		(NEXT(NEXT(REF(w))))
-//////#define COUNT(s)	(*((C*)(((B*)s) - sizeof(C))))
-//////
-//////B* compile_str(X* x, B* str, C len) {
-//////	align(x);
-//////	B* cstr = allot(x, sizeof(C) + len + 1);
-//////	*((C*)cstr) = len;
-//////	for (C i = 0; i < len; i++) {
-//////		cstr[sizeof(C) + i] = str[i];
-//////	}
-//////	cstr[sizeof(C) + len] = 0;
-//////	return cstr + sizeof(C);
-//////}
-//////
-//////PAIR* header(X* x, B* name, C nlen) {
-//////	B* str = compile_str(x, name, nlen);
-//////
-//////	return 
-//////		cns(x, T_ATM, 
-//////			(C)cns(x, T_ATM, (C)str,
-//////						cns(x, T_ATM, (C)x->here, 0)), 
-//////			0);
-//////}
-//////
-//////PAIR* body(X* x, PAIR* word, PAIR* cfa) {
-//////	PAIR* old_cfa = CFA(word);
-//////	NEXT(REF(word))->next = AS(T_ATM, cfa);
-//////	while (old_cfa != 0) { old_cfa = rcl(x, old_cfa); }
-//////	return word;
-//////}
-//////
-//////PAIR* reveal(X* x, PAIR* header) {
-//////	header->next = AS(T_ATM, x->dict);
-//////	x->dict = header;
-//////	return header;
-//////}
-//////
 //////#define IS_IMMEDIATE(w)		(TYPE(w->ref) & 1)
 //////
 //////void _immediate(X* x) {
 //////	x->dict->ref = AS(1, REF(x->dict));
 //////}
-//////
-////////PAIR* find(X* x, B* name, C nlen) {
-////////	// TODO
-////////}
 //////
 //////X* dodo(X* x) {
 //////	reveal(x, body(x, header(x, "+", 1), cns(x, T_PRM, (C)&_add, 0)));

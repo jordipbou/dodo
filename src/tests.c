@@ -122,10 +122,20 @@ void test_lst() {
 
 #define free_nodes(x)			((x->size - sizeof(X)) / (2*sizeof(C)))
 
-void test_block_initialization() {
-	C size = 256;
+void test_block_size() {
+	C size = 2;
 	B block[size];
 	X* x = init(block, size);
+
+	TEST_ASSERT_EQUAL_PTR(0, x);
+}
+
+void test_block_initialization() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+		
+	TEST_ASSERT_NOT_EQUAL(0, x);
 
 	TEST_ASSERT_EQUAL_INT(0, x->err);
 	TEST_ASSERT_EQUAL_INT(0, lth(x->s));
@@ -140,10 +150,11 @@ void test_block_initialization() {
 	TEST_ASSERT_EQUAL_INT(0, x->dict);
 	TEST_ASSERT_EQUAL_INT(0, x->s);
 	TEST_ASSERT_EQUAL_INT(0, x->r);
+	TEST_ASSERT_EQUAL_INT(0, x->cf);
 }
 
 void test_cns() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -168,7 +179,7 @@ void test_cns() {
 }
 
 void test_rcl() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -235,7 +246,7 @@ void test_cln() {
 }
 
 void test_rmv() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -253,7 +264,7 @@ void test_rmv() {
 }
 
 void test_push() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -272,7 +283,7 @@ void test_push() {
 }
 
 void test_pop() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -289,7 +300,7 @@ void test_pop() {
 }
 
 void test_empty() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -301,7 +312,7 @@ void test_empty() {
 }
 
 void test_join_atom_atom_1() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -317,7 +328,7 @@ void test_join_atom_atom_1() {
 }
 
 void test_join_atom_atom_2() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -336,7 +347,7 @@ void test_join_atom_atom_2() {
 }
 
 void test_join_atom_empty_1() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -351,7 +362,7 @@ void test_join_atom_empty_1() {
 }
 
 void test_join_atom_empty_2() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -369,7 +380,7 @@ void test_join_atom_empty_2() {
 }
 
 void test_join_atom_list_1() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -388,7 +399,7 @@ void test_join_atom_list_1() {
 }
 
 void test_join_atom_list_2() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -411,7 +422,7 @@ void test_join_atom_list_2() {
 }
 
 void test_join_list_atom_1() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -430,7 +441,7 @@ void test_join_list_atom_1() {
 }
 
 void test_join_list_atom_2() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -453,7 +464,7 @@ void test_join_list_atom_2() {
 }
 
 void test_join_list_list_1() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -475,7 +486,7 @@ void test_join_list_list_1() {
 }
 
 void test_join_list_list_2() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -501,7 +512,7 @@ void test_join_list_list_2() {
 }
 
 void test_quote_1() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -515,7 +526,7 @@ void test_quote_1() {
 }
 
 void test_quote_2() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -533,7 +544,7 @@ void test_quote_2() {
 }
 
 void test_quote_3() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -552,7 +563,7 @@ void test_quote_3() {
 }
 
 void test_quote_4() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -575,7 +586,7 @@ void test_quote_4() {
 }
 
 void test_dup_atom() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -699,7 +710,7 @@ void test_dup_list() {
 }
 
 void test_swap_1() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -716,7 +727,7 @@ void test_swap_1() {
 }
 
 void test_swap_2() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -736,7 +747,7 @@ void test_swap_2() {
 }
 
 void test_drop() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -759,7 +770,7 @@ void test_drop() {
 }
 
 void test_over() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -789,7 +800,7 @@ void test_over() {
 }
 
 void test_rot() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -804,7 +815,7 @@ void test_rot() {
 }
 
 void test_add() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -816,7 +827,7 @@ void test_add() {
 }
 
 void test_sub() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -828,7 +839,7 @@ void test_sub() {
 }
 
 void test_mul() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -840,7 +851,7 @@ void test_mul() {
 }
 
 void test_div() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -852,7 +863,7 @@ void test_div() {
 }
 
 void test_mod() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -864,7 +875,7 @@ void test_mod() {
 }
 
 void test_gt() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -891,7 +902,7 @@ void test_gt() {
 }
 
 void test_lt() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -918,7 +929,7 @@ void test_lt() {
 }
 
 void test_eq() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -945,7 +956,7 @@ void test_eq() {
 }
 
 void test_neq() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -972,7 +983,7 @@ void test_neq() {
 }
 
 void test_and() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -1013,7 +1024,7 @@ void test_and() {
 }
 
 void test_or() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -1054,7 +1065,7 @@ void test_or() {
 }
 
 void test_invert() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -1084,7 +1095,7 @@ void test_invert() {
 }
 
 void test_not() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -1114,7 +1125,7 @@ void test_not() {
 }
 
 void test_interpreter_atom() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -1138,7 +1149,7 @@ void test_interpreter_primitive() {
 }
 
 void test_interpreter_branch() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -1234,12 +1245,12 @@ void test_interpreter_list() {
 	TEST_ASSERT_NOT_EQUAL_INT(c3, D_(D_(A(x->s))));
 }
 
-void test_interpreter_xt() {
+void test_interpreter_lambda() {
 	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
-	C code = XT(x, PRIMITIVE(x, &_dup, PRIMITIVE(x, &_mul, 0)), 0);
+	C code = LAMBDA(x, PRIMITIVE(x, &_dup, PRIMITIVE(x, &_mul, 0)), 0);
 
 	push(x, ATM, 5);
 	inner(x, code);
@@ -1330,7 +1341,7 @@ void test_allot() {
 }
 
 void test_align() {
-	C size = 256;
+	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
@@ -1346,6 +1357,59 @@ void test_align() {
 	_align(x);
 	TEST_ASSERT_EQUAL_INT(ALIGN(x->here, sizeof(C)), x->here);
 	TEST_ASSERT_EQUAL_INT(0, x->err);
+}
+
+void test_cmp_str() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	B* here = x->here;
+
+	B* str = cmp_str(x, "test string");
+
+	TEST_ASSERT_EQUAL_PTR(here + sizeof(C), str);
+	TEST_ASSERT_EQUAL_STRING("test string", str);
+	TEST_ASSERT_EQUAL_INT(11, count(str));
+	TEST_ASSERT_EQUAL_PTR(here + sizeof(C) + 12, x->here);
+}
+
+void test_header() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	B* here = x->here;
+
+	C h = header(x, "test");
+
+	TEST_ASSERT_EQUAL_PTR(here + 1 + sizeof(C) + 4 + 1, x->here);
+	TEST_ASSERT_EQUAL_PTR(here + 1 + sizeof(C), NFA(h));
+	TEST_ASSERT_EQUAL_PTR(x->here, DFA(h));
+	TEST_ASSERT_EQUAL_INT(0, BODY(h));
+	TEST_ASSERT_EQUAL_INT(h, D_(XT(h)));
+}
+
+void test_reveal() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	C h = header(x, "test1");
+	C h2 = header(x, "test2");
+
+	C d = reveal(x, h);
+
+	TEST_ASSERT_EQUAL_INT(h, d);
+	TEST_ASSERT_EQUAL_INT(h, x->dict);
+	TEST_ASSERT_EQUAL_INT(1, lth(x->dict));
+
+	d = reveal(x, h2);
+
+	TEST_ASSERT_EQUAL_INT(h2, d);
+	TEST_ASSERT_EQUAL_INT(h2, x->dict);
+	TEST_ASSERT_EQUAL_INT(2, lth(x->dict));
+	TEST_ASSERT_EQUAL_INT(h, D_(x->dict));
 }
 
 ////void test_clear_stack() {
@@ -1435,7 +1499,7 @@ void test_align() {
 ////}
 ////
 ////void test_drop() {
-////	C size = 256;
+////	C size = 512;
 ////	B block[size];
 ////	X* x = init(block, size);
 ////
@@ -1460,7 +1524,7 @@ void test_align() {
 ////}
 ////
 ////void test_rev() {
-////	C size = 256;
+////	C size = 512;
 ////	B block[size];
 ////	X* x = init(block, size);
 ////
@@ -1491,7 +1555,7 @@ void test_align() {
 ////////////}
 ////////////
 ////////////void test_copy() {
-////////////	C size = 256;
+////////////	C size = 512;
 ////////////	B block[size];
 ////////////	X* ctx = init(block, size);
 ////////////
@@ -1606,6 +1670,7 @@ int main() {
 	RUN_TEST(test_mlth);
 	RUN_TEST(test_lst);
 
+	RUN_TEST(test_block_size);
 	RUN_TEST(test_block_initialization);
 
 	RUN_TEST(test_cns);
@@ -1671,10 +1736,15 @@ int main() {
 	RUN_TEST(test_interpreter_continued_branch);
 	RUN_TEST(test_interpreter_recursion);
 	RUN_TEST(test_interpreter_list);
-	RUN_TEST(test_interpreter_xt);
+	RUN_TEST(test_interpreter_lambda);
 
 	RUN_TEST(test_allot);
 	RUN_TEST(test_align);
+
+	RUN_TEST(test_cmp_str);
+
+	RUN_TEST(test_header);
+	RUN_TEST(test_reveal);
 
 //	//RUN_TEST(test_stack_to_list);
 //
