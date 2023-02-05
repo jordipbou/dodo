@@ -96,7 +96,7 @@ void cppop(X* x) {
 #define W(n)				void n(X* x)
 
 W(_lbrace) { x->st = ST_COMPILING; cppush(x); }
-W(_rbrace) { x->st = ST_INTERPRETING; cppop(x); }
+W(_rbrace) { cppop(x); x->st = x->cp != 0; }
 
 W(_empty) { O(x); push(x, LST, 0); }
 

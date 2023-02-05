@@ -458,6 +458,46 @@ void test_cppop_2() {
 	TEST_ASSERT_EQUAL_INT(7, A(D_(D_(A(x->s)))));
 }
 
+void test_braces() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	_lbrace(x);
+	cspush(x, cns(x, 1, T(ATM, 0)));
+	cspush(x, cns(x, 2, T(ATM, 0)));
+	_lbrace(x);
+	cspush(x, cns(x, 3, T(ATM, 0)));
+	cspush(x, cns(x, 4, T(ATM, 0)));
+	_rbrace(x);
+	cspush(x, cns(x, 5, T(ATM, 0)));
+	_lbrace(x);
+	cspush(x, cns(x, 6, T(ATM, 0)));
+	_rbrace(x);
+	_rbrace(x);
+
+	TEST_ASSERT_EQUAL_INT(1, lth(x->s));
+	TEST_ASSERT_EQUAL_INT(0, x->cp);
+	TEST_ASSERT(IS(LST, x->s));
+	TEST_ASSERT_EQUAL_INT(5, lth(A(x->s)));
+	TEST_ASSERT(IS(LST, A(x->s)));
+	TEST_ASSERT_EQUAL_INT(1, lth(A(A(x->s))));
+	TEST_ASSERT(IS(ATM, A(A(x->s))));
+	TEST_ASSERT_EQUAL_INT(6, A(A(A(x->s))));
+	TEST_ASSERT(IS(ATM, D_(A(x->s))));
+	TEST_ASSERT_EQUAL_INT(5, A(D_(A(x->s))));
+	TEST_ASSERT(IS(LST, D_(D_(A(x->s)))));
+	TEST_ASSERT_EQUAL_INT(2, lth(A(D_(D_(A(x->s))))));
+	TEST_ASSERT(IS(ATM, A(D_(D_(A(x->s))))));
+	TEST_ASSERT_EQUAL_INT(4, A(A(D_(D_(A(x->s))))));
+	TEST_ASSERT(IS(ATM, D_(A(D_(D_(A(x->s)))))));
+	TEST_ASSERT_EQUAL_INT(3, A(D_(A(D_(D_(A(x->s)))))));
+	TEST_ASSERT(IS(ATM, D_(D_(D_(A(x->s))))));
+	TEST_ASSERT_EQUAL_INT(2, A(D_(D_(D_(A(x->s))))));
+	TEST_ASSERT(IS(ATM, D_(D_(D_(D_(A(x->s)))))));
+	TEST_ASSERT_EQUAL_INT(1, A(D_(D_(D_(D_(A(x->s)))))));
+}
+
 void test_empty() {
 	C size = 512;
 	B block[size];
@@ -1885,6 +1925,8 @@ int main() {
 	RUN_TEST(test_cppop_1);
 	RUN_TEST(test_cspush);
 	RUN_TEST(test_cppop_2);
+
+	RUN_TEST(test_braces);
 
 	RUN_TEST(test_empty);
 
