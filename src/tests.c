@@ -6,6 +6,8 @@ void setUp() {}
 
 void tearDown() {}
 
+// TAGGED POINTER BASED TYPING INFORMATION
+
 void test_types() {
 	C p = (C)malloc(sizeof(C) * 2);
 
@@ -42,6 +44,8 @@ void test_types() {
 	TEST_ASSERT(IS(PRM, p));
 	TEST_ASSERT(!REF(p));
 }
+
+//  LIST FUNCTIONS
 
 void test_lth() {
 	C p1 = (C)malloc(sizeof(C) * 2);
@@ -120,6 +124,24 @@ void test_lst() {
 	TEST_ASSERT_EQUAL_INT(p3, lst(p3));
 }
 
+void test_rev() {
+	C p1 = (C)malloc(sizeof(C) * 2);
+	C p2 = (C)malloc(sizeof(C) * 2);
+	C p3 = (C)malloc(sizeof(C) * 2);
+
+	D(p1) = p2;
+	D(p2) = p3;
+	D(p3) = 0;
+	C l = rev(p1, 0);
+
+	TEST_ASSERT_EQUAL_INT(3, lth(l));
+	TEST_ASSERT_EQUAL_INT(p3, l);
+	TEST_ASSERT_EQUAL_INT(p2, D_(l));
+	TEST_ASSERT_EQUAL_INT(p1, D_(D_(l)));
+}
+
+// CONTEXT
+
 #define free_nodes(x)			((x->size - sizeof(X)) / (2*sizeof(C)))
 
 void test_block_size() {
@@ -151,7 +173,11 @@ void test_block_initialization() {
 	TEST_ASSERT_EQUAL_INT(0, x->s);
 	TEST_ASSERT_EQUAL_INT(0, x->r);
 	TEST_ASSERT_EQUAL_INT(0, x->cf);
+	TEST_ASSERT_EQUAL_INT(0, x->cp);
+	TEST_ASSERT_EQUAL_INT(0, x->st);
 }
+
+// LIST CREATION AND DESTRUCTION (AUTOMATIC MEMORY MANAGEMENT)
 
 void test_cns() {
 	C size = 512;
@@ -263,6 +289,8 @@ void test_rmv() {
 	TEST_ASSERT_EQUAL_INT(free_nodes(x), lth(x->f));
 }
 
+// BASIC STACK OPERATIONS
+
 void test_push() {
 	C size = 512;
 	B block[size];
@@ -297,6 +325,137 @@ void test_pop() {
 	v = pop(x);
 	TEST_ASSERT_EQUAL_INT(0, lth(x->s));
 	TEST_ASSERT_EQUAL_INT(11, v);
+}
+
+// COMPILATION PILE OPERATIONS
+
+void test_cppush() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	TEST_ASSERT_EQUAL_INT(0, x->cp);
+	TEST_ASSERT_EQUAL_INT(0, lth(x->cp));
+
+	cppush(x);
+
+	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 1, lth(x->f));
+	TEST_ASSERT_EQUAL_INT(1, lth(x->cp));
+	TEST_ASSERT(IS(LST, x->cp));
+	TEST_ASSERT_EQUAL_INT(0, lth(A(x->cp)));
+
+	cppush(x);
+
+	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 2, lth(x->f));
+	TEST_ASSERT_EQUAL_INT(2, lth(x->cp));
+	TEST_ASSERT(IS(LST, x->cp));
+	TEST_ASSERT_EQUAL_INT(0, lth(A(x->cp)));
+	TEST_ASSERT(IS(LST, D_(x->cp)));
+	TEST_ASSERT_EQUAL_INT(0, lth(A(D_(x->cp))));
+}
+
+void test_cppop_1() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	cppush(x);
+	cppop(x);
+
+	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 1, lth(x->f));
+	TEST_ASSERT_EQUAL_INT(0, lth(x->cp));
+	TEST_ASSERT_EQUAL_INT(0, x->cp);
+	TEST_ASSERT_EQUAL_INT(1, lth(x->s));
+	TEST_ASSERT(IS(LST, x->s));
+	TEST_ASSERT_EQUAL_INT(0, lth(A(x->s)));
+}
+
+void test_cspush() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	cppush(x);
+	cspush(x, cns(x, 7, T(ATM, 0)));
+
+	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 2, lth(x->f));
+	TEST_ASSERT_EQUAL_INT(1, lth(x->cp));
+	TEST_ASSERT_EQUAL_INT(1, lth(A(x->cp)));
+	TEST_ASSERT_EQUAL_INT(7, A(A(x->cp)));
+
+	cspush(x, cns(x, 11, T(ATM, 0)));
+
+	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 3, lth(x->f));
+	TEST_ASSERT_EQUAL_INT(1, lth(x->cp));
+	TEST_ASSERT_EQUAL_INT(2, lth(A(x->cp)));
+	TEST_ASSERT(IS(ATM, A(x->cp)));
+	TEST_ASSERT_EQUAL_INT(11, A(A(x->cp)));
+	TEST_ASSERT(IS(ATM, D_(A(x->cp))));
+	TEST_ASSERT_EQUAL_INT(7, A(D_(A(x->cp))));
+
+	cppush(x);
+
+	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 4, lth(x->f));
+	TEST_ASSERT_EQUAL_INT(2, lth(x->cp));
+	TEST_ASSERT_EQUAL_INT(0, lth(A(x->cp)));
+	TEST_ASSERT_EQUAL_INT(2, lth(A(D_(x->cp))));
+	TEST_ASSERT(IS(ATM, A(D_(x->cp))));
+	TEST_ASSERT_EQUAL_INT(11, A(A(D_(x->cp))));
+	TEST_ASSERT(IS(ATM, D_(A(D_(x->cp)))));
+	TEST_ASSERT_EQUAL_INT(7, A(D_(A(D_(x->cp)))));
+
+	cspush(x, cns(x, 13, T(ATM, 0)));
+
+	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 5, lth(x->f));
+	TEST_ASSERT_EQUAL_INT(2, lth(x->cp));
+	TEST_ASSERT_EQUAL_INT(1, lth(A(x->cp)));
+	TEST_ASSERT(IS(ATM, A(x->cp)));
+	TEST_ASSERT_EQUAL_INT(13, A(A(x->cp)));
+	TEST_ASSERT_EQUAL_INT(2, lth(A(D_(x->cp))));
+	TEST_ASSERT(IS(ATM, A(D_(x->cp))));
+	TEST_ASSERT_EQUAL_INT(11, A(A(D_(x->cp))));
+	TEST_ASSERT(IS(ATM, D_(A(D_(x->cp)))));
+	TEST_ASSERT_EQUAL_INT(7, A(D_(A(D_(x->cp)))));
+}
+
+void test_cppop_2() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	cppush(x);
+	cspush(x, cns(x, 7, T(ATM, 0)));
+	cspush(x, cns(x, 11, T(ATM, 0)));
+	cppush(x);
+	cspush(x, cns(x, 13, T(ATM, 0)));
+	cppop(x);
+
+	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 5, lth(x->f));
+	TEST_ASSERT_EQUAL_INT(1, lth(x->cp));
+	TEST_ASSERT_EQUAL_INT(3, lth(A(x->cp)));
+	TEST_ASSERT(IS(LST, A(x->cp)));
+	TEST_ASSERT_EQUAL_INT(1, lth(A(A(x->cp))));
+	TEST_ASSERT_EQUAL_INT(13, A(A(A(x->cp))));
+	TEST_ASSERT(IS(ATM, D_(A(x->cp))));
+	TEST_ASSERT_EQUAL_INT(11, A(D_(A(x->cp))));
+	TEST_ASSERT(IS(ATM, D_(D_(A(x->cp)))));
+	TEST_ASSERT_EQUAL_INT(7, A(D_(D_(A(x->cp)))));
+
+	cppop(x);
+
+	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 5, lth(x->f));
+	TEST_ASSERT_EQUAL_INT(0, lth(x->cp));
+	TEST_ASSERT_EQUAL_INT(0, x->cp);
+	TEST_ASSERT_EQUAL_INT(1, lth(x->s));
+	TEST_ASSERT(IS(LST, x->s));
+	TEST_ASSERT_EQUAL_INT(3, lth(A(x->s)));
+	TEST_ASSERT(IS(LST, A(x->s)));
+	TEST_ASSERT_EQUAL_INT(1, lth(A(A(x->s))));
+	TEST_ASSERT_EQUAL_INT(13, A(A(A(x->s))));
+	TEST_ASSERT(IS(ATM, D_(A(x->s))));
+	TEST_ASSERT_EQUAL_INT(11, A(D_(A(x->s))));
+	TEST_ASSERT(IS(ATM, D_(D_(A(x->s)))));
+	TEST_ASSERT_EQUAL_INT(7, A(D_(D_(A(x->s)))));
 }
 
 void test_empty() {
@@ -1697,23 +1856,35 @@ void test_find() {
 int main() {
 	UNITY_BEGIN();
 
+	// TAGGED POINTER BASED TYPING INFORMATION
 	RUN_TEST(test_types);
 
+	//  LIST FUNCTIONS
 	RUN_TEST(test_lth);
 	RUN_TEST(test_dth);
 	RUN_TEST(test_mlth);
 	RUN_TEST(test_lst);
+	RUN_TEST(test_rev);
 
+	// CONTEXT
 	RUN_TEST(test_block_size);
 	RUN_TEST(test_block_initialization);
 
+	// LIST CREATION AND DESTRUCTION (AUTOMATIC MEMORY MANAGEMENT)
 	RUN_TEST(test_cns);
 	RUN_TEST(test_rcl);
 	RUN_TEST(test_cln);
 	RUN_TEST(test_rmv);
 
+	// BASIC STACK OPERATIONS
 	RUN_TEST(test_push);
 	RUN_TEST(test_pop);
+
+	// COMPILATION PILE OPERATIONS
+	RUN_TEST(test_cppush);
+	RUN_TEST(test_cppop_1);
+	RUN_TEST(test_cspush);
+	RUN_TEST(test_cppop_2);
 
 	RUN_TEST(test_empty);
 
@@ -1761,8 +1932,6 @@ int main() {
 	//RUN_TEST(test_clear_stack);
 	//RUN_TEST(test_push_stack);
 	//RUN_TEST(test_drop_stack);
-
-	//RUN_TEST(test_rev);
 
 	RUN_TEST(test_interpreter_atom);
 	RUN_TEST(test_interpreter_primitive);

@@ -12,24 +12,12 @@ void main() {
 	B ibuf[255];
 	B* tok;
 
-	while (!x->err) {
-		printf("> ");
+	while (x->err != ERR_BYE) {
 		scanf("%s", ibuf);
-		tok = strtok(ibuf, " ");
-		while (tok != NULL) {
-			C w = find(x, tok);
-			if (w) inner(x, LAMBDA(x, A(w), 0));
-			else {
-				intmax_t num = strtoimax(tok, NULL, 10);
-				if (num == INTMAX_MAX && errno == ERANGE) {
-					x->err = -1000;
-				} else {
-					inner(x, ATOM(x, num, 0));
-				}
-			}
-			tok = strtok(NULL, " ");
+		outer(x, ibuf);
+		switch (x->err) {
+			case ERR_OVERFLOW: printf("Stack overflow\n"); x->err = 0; break;
+			case ERR_UNDERFLOW: printf("Stack underflow\n"); x->err = 0; break;
 		}
-		printf(" ok <%ld>\n", lth(x->s));
-		//printf("<%ld> %ld %ld...\n", lth(x->s), x->s ? A(x->s) : 0, D_(x->s) ? A(D_(x->s)) : 0);
 	}
 }

@@ -1,5 +1,7 @@
-#include<stdint.h>
+#include<inttypes.h>
+#include<stdio.h>
 #include<string.h>
+#include<errno.h>
 
 typedef int8_t		B;
 typedef intptr_t	C;		// 16, 32 or 64 bits depending on system
@@ -28,10 +30,11 @@ C lth(C p) { C c = 0; while (p) { c++; p = D_(p); } return c; }
 C dth(C p) { C c = 0; while (p) { c += REF(p) ? dth(A(p)) + 1 : 1; p = D_(p); } return c; }
 C mlth(C p, C n) { C c = 0; while (p && c < n) { c++; p = D_(p); } return c == n; }
 C lst(C p) { if (!p) return 0; while (D_(p)) { p = D_(p); } return p; }
+C rev(C p, C l) { C t; return p ? (t = D_(p), R(p, l), rev(t, p)) : l; }
 
 typedef struct {
 		B* here;
-		C there, size, f, s, r, cf, dict, err;
+		C there, size, f, s, r, cf, cp, dict, err, st;
 	} X;
 
 #define ALIGN(addr, bound)	((((C)addr) + (bound - 1)) & ~(bound - 1))
@@ -47,6 +50,9 @@ typedef void (*FUNC)(X*);
 #define ERR_UNDERFLOW						-3
 #define ERR_BYE									-5
 
+#define ST_INTERPRETING					0
+#define ST_COMPILING						1
+
 X* init(B* block, C size) {
 		if (size < sC + 2*sP) return 0;
 		X* x = (X*)block;	
@@ -60,7 +66,7 @@ X* init(B* block, C size) {
 			D(p) = p == x->there ? 0 : p - 2*sC;
 		}
 	
-		x->err = x->dict = x->s = x->r = x->cf = 0;
+		x->err = x->dict = x->s = x->r = x->cf = x->cp = x->st = 0;
 	
 		return x;
 	}
@@ -73,6 +79,13 @@ void rmv(X* x, C l) { while (l) { if (REF(l)) {	rmv(x, A(l)); } l = rcl(x, l); }
 void push(X* x, C t, C v) { C p = cns(x, v, T(t, x->s)); if (p) x->s = p; }
 C pop(X* x) { C v = A(x->s); x->s = rcl(x, x->s); return v; }
 
+void cppush(X* x) { C s = cns(x, 0, T(LST, x->cp)); if (s) x->cp = s; }
+void cspush(X* x, C p) { R(p, A(x->cp)); A(x->cp) = p; }
+void cppop(X* x) {
+		if (D_(x->cp)) { C t = A(D_(x->cp));	A(D_(x->cp)) = x->cp;	x->cp = D_(x->cp); R(A(x->cp), t);
+		} else { R(x->cp, x->s); x->s = x->cp; x->cp = 0;	}
+	}
+
 #define O(x)				if (!x->f) { x->err = ERR_OVERFLOW; return; }
 #define On(x, l)		if (!mlth(x->f, dth(l))) { x->err = ERR_OVERFLOW; return; }
 #define U(x)				if (!x->s) { x->err = ERR_UNDERFLOW; return; }
@@ -81,6 +94,9 @@ C pop(X* x) { C v = A(x->s); x->s = rcl(x, x->s); return v; }
 #define OU2(x)			O(x); U2(x);
 
 #define W(n)				void n(X* x)
+
+W(_lbrace) { x->st = ST_COMPILING; cppush(x); }
+W(_rbrace) { x->st = ST_INTERPRETING; cppop(x); }
 
 W(_empty) { O(x); push(x, LST, 0); }
 
@@ -183,9 +199,10 @@ W(_align) { push(x, ATM, ALIGN(x->here, sC) - ((C)x->here)); _allot(x); }
 B* Cstr(X* x, B* s, C l) { *(C*)allot(x, sC) = l; B* h = allot(x, l + 1); strcpy(h, s); return h; }
 
 #define NFA(w)					((B*)(A(A(w))))
-#define DFA(w)					(A(A(w)) + count(A(A(w))) + 1)
+#define DFA(w)					(NFA(w) + count(NFA(w)) + 1)
 #define XT(w)						(D_(A(w)))	
 #define BODY(w)					(A(XT(w)))
+#define IMMEDIATE(w)		(*(NFA(w) - sC - 1))
 
 C header(X* x, B* n) {
 		*allot(x, 1) = 0;
@@ -198,8 +215,24 @@ C reveal(X* x, C h) {	R(h, x->dict); x->dict = h;	return h; }
 
 W(_bye) { x->err = ERR_BYE; }
 
+void dump_list(C p) {
+	if (p) {
+		dump_list(D_(p));
+		switch (_D(p)) {
+			case ATM: printf("%ld ", A(p)); break;
+			case LST: printf("{ "); dump_list(A(p)); printf("} "); break;
+		}
+	}
+}
+
+W(_dump_stack) {
+	printf("<%ld> ", lth(x->s));
+	dump_list(x->s);
+	printf("\n");
+}
+
 X* bootstrap(X* x) {
-		reveal(x, body(x, header(x, "[]"), PRIMITIVE(x, &_empty, 0)));
+		reveal(x, body(x, header(x, "{}"), PRIMITIVE(x, &_empty, 0)));
 		reveal(x, body(x, header(x, "join"), PRIMITIVE(x, &_join, 0)));
 		reveal(x, body(x, header(x, "quote"), PRIMITIVE(x, &_quote, 0)));
 		reveal(x, body(x, header(x, "dup"), PRIMITIVE(x, &_dup, 0)));
@@ -223,6 +256,9 @@ X* bootstrap(X* x) {
 		reveal(x, body(x, header(x, "allot"), PRIMITIVE(x, &_allot, 0)));
 		reveal(x, body(x, header(x, "align"), PRIMITIVE(x, &_align, 0)));
 		reveal(x, body(x, header(x, "bye"), PRIMITIVE(x, &_bye, 0)));
+		reveal(x, body(x, header(x, ".s"), PRIMITIVE(x, &_dump_stack, 0)));
+		reveal(x, body(x, header(x, "{"), PRIMITIVE(x, &_lbrace, 0)));
+		reveal(x, body(x, header(x, "}"), PRIMITIVE(x, &_rbrace, 0)));
 		return x;
 	}
 
@@ -231,6 +267,31 @@ C find(X* x, B* w) {
 		return 0;
 	}
 
+void outer(X* x, B* s) {
+		B* tok = strtok(s, " ");
+		while (tok != NULL) {
+			C w = find(x, tok);
+			if (w) {
+				if (x->st == ST_INTERPRETING || IMMEDIATE(w)) {
+					inner(x, LAMBDA(x, A(w), 0));
+				} else {
+					cspush(x, LAMBDA(x, A(w), 0));
+				}
+			} else {
+				intmax_t num = strtoimax(tok, NULL, 10);
+				if (num == INTMAX_MAX && errno == ERANGE) {
+					x->err = -1000;
+				} else {
+					if (x->st == ST_INTERPRETING) {
+						inner(x, ATOM(x, num, 0));
+					} else {
+						cspush(x, ATOM(x, num, 0));
+					}
+				}
+			}
+			tok = strtok(NULL, " ");
+		}
+	}
 ////void _rev(X* x) {	C s = K(x);	K(x) = 0;	while (s) { C t = D(s); D(s) = K(x); K(x) = s; s = t; } }
 ////// Source code for getch is taken from:
 ////// Crossline readline (https://github.com/jcwangxp/Crossline).
