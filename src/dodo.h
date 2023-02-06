@@ -33,8 +33,8 @@ C lst(C p) { if (!p) return 0; while (D_(p)) { p = D_(p); } return p; }
 C rev(C p, C l) { C t; return p ? (t = D_(p), R(p, l), rev(t, p)) : l; }
 
 typedef struct {
-		B* here;
-		C there, size, f, s, r, cf, cp, dict, err, st;
+		B* here, * ibuf;
+		C there, size, f, s, r, cf, cp, d, err, st, in;
 	} X;
 
 #define ALIGN(addr, bound)	((((C)addr) + (bound - 1)) & ~(bound - 1))
@@ -66,7 +66,8 @@ X* init(B* block, C size) {
 			D(p) = p == x->there ? 0 : p - 2*sC;
 		}
 	
-		x->err = x->dict = x->s = x->r = x->cf = x->cp = x->st = 0;
+		x->err = x->d = x->s = x->r = x->cf = x->cp = x->st = x->in = 0;
+		x->ibuf = 0;
 	
 		return x;
 	}
@@ -198,7 +199,7 @@ W(_align) { push(x, ATM, ALIGN(x->here, sC) - ((C)x->here)); _allot(x); }
 
 #define count(s)				(*((C*)(s - sC)))
 
-B* Cstr(X* x, B* s, C l) { *(C*)allot(x, sC) = l; B* h = allot(x, l + 1); strcpy(h, s); return h; }
+B* allot_str(X* x, C l) { *(C*)allot(x, sC) = l; return allot(x, l + 1); }
 
 #define NFA(w)					((B*)(A(A(w))))
 #define DFA(w)					(NFA(w) + count(NFA(w)) + 1)
@@ -206,14 +207,16 @@ B* Cstr(X* x, B* s, C l) { *(C*)allot(x, sC) = l; B* h = allot(x, l + 1); strcpy
 #define BODY(w)					(A(XT(w)))
 #define IMMEDIATE(w)		(*(NFA(w) - sC - 1))
 
-C header(X* x, B* n) {
+C header(X* x, B* n, C l) {
 		*allot(x, 1) = 0;
+		// TODO: Alignment of cell size of string is not checked
 		C h = cns(x, 0, T(LST, 0));
-		A(h) = ATOM(x, (C)Cstr(x, n, strlen(n)), cns(x, 0, T(LST, h)));
+		B* s = strcpy(allot_str(x, l), n);
+		A(h) = ATOM(x, (C)s, cns(x, 0, T(LST, h)));
 		return h;
 	}
 C body(X* x, C h, C l) { BODY(h) = l; return h; }
-C reveal(X* x, C h) {	R(h, x->dict); x->dict = h;	return h; }
+C reveal(X* x, C h) {	R(h, x->d); x->d = h;	return h; }
 
 W(_bye) { x->err = ERR_BYE; }
 
@@ -233,66 +236,102 @@ W(_dump_stack) {
 	printf("\n");
 }
 
+#define WORD(n, f)	reveal(x, body(x, header(x, n, strlen(n)), PRIMITIVE(x, f, 0)));
+
 X* bootstrap(X* x) {
-		reveal(x, body(x, header(x, "{}"), PRIMITIVE(x, &_empty, 0)));
-		reveal(x, body(x, header(x, "join"), PRIMITIVE(x, &_join, 0)));
-		reveal(x, body(x, header(x, "quote"), PRIMITIVE(x, &_quote, 0)));
-		reveal(x, body(x, header(x, "dup"), PRIMITIVE(x, &_dup, 0)));
-		reveal(x, body(x, header(x, "swap"), PRIMITIVE(x, &_swap, 0)));
-		reveal(x, body(x, header(x, "drop"), PRIMITIVE(x, &_drop, 0)));
-		reveal(x, body(x, header(x, "over"), PRIMITIVE(x, &_over, 0)));
-		reveal(x, body(x, header(x, "rot"), PRIMITIVE(x, &_rot, 0)));
-		reveal(x, body(x, header(x, "+"), PRIMITIVE(x, &_add, 0)));
-		reveal(x, body(x, header(x, "-"), PRIMITIVE(x, &_sub, 0)));
-		reveal(x, body(x, header(x, "*"), PRIMITIVE(x, &_mul, 0)));
-		reveal(x, body(x, header(x, "/"), PRIMITIVE(x, &_div, 0)));
-		reveal(x, body(x, header(x, "%"), PRIMITIVE(x, &_mod, 0)));
-		reveal(x, body(x, header(x, ">"), PRIMITIVE(x, &_gt, 0)));
-		reveal(x, body(x, header(x, "<"), PRIMITIVE(x, &_lt, 0)));
-		reveal(x, body(x, header(x, "="), PRIMITIVE(x, &_eq, 0)));
-		//reveal(x, body(x, header(x, "!="), PRIMITIVE(x, &_neq, 0)));
-		reveal(x, body(x, header(x, "and"), PRIMITIVE(x, &_and, 0)));
-		reveal(x, body(x, header(x, "or"), PRIMITIVE(x, &_or, 0)));
-		reveal(x, body(x, header(x, "invert"), PRIMITIVE(x, &_invert, 0)));
-		//reveal(x, body(x, header(x, "not"), PRIMITIVE(x, &_not, 0)));
-		reveal(x, body(x, header(x, "allot"), PRIMITIVE(x, &_allot, 0)));
-		reveal(x, body(x, header(x, "align"), PRIMITIVE(x, &_align, 0)));
-		reveal(x, body(x, header(x, "bye"), PRIMITIVE(x, &_bye, 0)));
-		reveal(x, body(x, header(x, ".s"), PRIMITIVE(x, &_dump_stack, 0)));
-		reveal(x, body(x, header(x, "{"), PRIMITIVE(x, &_lbrace, 0)));
-		reveal(x, body(x, header(x, "}"), PRIMITIVE(x, &_rbrace, 0)));
+		WORD("{}", &_empty);
+		WORD("join", &_join);
+		WORD("quote", &_quote);
+		WORD("dup", &_dup);
+		WORD("swap", &_swap);
+		WORD("drop", &_drop);
+		WORD("over", &_over);
+		WORD("rot", &_rot);
+		WORD("+", &_add);
+		WORD("-", &_sub);
+		WORD("*", &_mul);
+		WORD("/", &_div);
+		WORD("%", &_mod);
+		WORD(">", &_gt);
+		WORD("<", &_lt);
+		WORD("=", &_eq);
+		WORD("and", &_and);
+		WORD("or", &_or);
+		WORD("invert", &_invert);
+		WORD("allot", &_allot);
+		WORD("align", &_align);
+		WORD("bye", &_bye);
+		WORD(".s", &_dump_stack);
+		WORD("{", &_lbrace);
+		WORD("}", &_rbrace);
 		return x;
 	}
 
-C find(X* x, B* w) { 
-		for (C h = x->dict; h; h = D_(h)) if (!strcmp(w, NFA(h))) return XT(h); 
-		return 0;
+W(_parse_name) { 
+	C l = 0;
+	while (*(x->ibuf + x->in) != 0 && *(x->ibuf + x->in) == ' ') { x->in++; }
+	push(x, ATM, (C)(x->ibuf + x->in));
+	while (*(x->ibuf + x->in) != 0 && *(x->ibuf + x->in) != ' ') { x->in++; l++; }
+	push(x, ATM, l);
+}
+
+C find(X* x, B* w, C l) { 
+	for (C h = x->d; h; h = D_(h)) if (!strncmp(w, NFA(h), l)) return XT(h);	
+	return 0;	
+}
+
+W(_find_name) { 
+	C l = pop(x); 
+	C a = pop(x); 
+	C w = find(x, (B*)a, l);
+	if (w && IMMEDIATE(D_(w))) {
+		push(x, ATM, XT(w));
+		push(x, ATM, 1);
+	} else if (w && !IMMEDIATE(D_(w))) {
+		push(x, ATM, XT(w));
+		push(x, ATM, -1);
+	} else {
+		push(x, ATM, a);
+		push(x, ATM, l);
+		push(x, ATM, 0);
 	}
+}
 
 void outer(X* x, B* s) {
-		B* tok = strtok(s, " ");
-		while (tok != NULL) {
-			C w = find(x, tok);
-			if (w) {
-				if (x->st == ST_INTERPRETING || IMMEDIATE(w)) {
-					inner(x, LAMBDA(x, A(w), 0));
-				} else {
-					cspush(x, LAMBDA(x, A(w), 0));
-				}
+		x->ibuf = s;
+		while (1) {
+			_parse_name(x);
+			_find_name(x);
+			C f = pop(x);
+			if (f) {
+				
 			} else {
-				intmax_t num = strtoimax(tok, NULL, 10);
-				if (num == INTMAX_MAX && errno == ERANGE) {
-					x->err = -1000;
-				} else {
-					if (x->st == ST_INTERPRETING) {
-						inner(x, ATOM(x, num, 0));
-					} else {
-						cspush(x, ATOM(x, num, 0));
-					}
-				}
+				// WORD NOT FOUND
 			}
-			tok = strtok(NULL, " ");
 		}
+		//B* tok = strtok(s, " ");
+		//while (tok)
+		//	C w = find(x, tok, strlen(tok));
+		//	if (w) {
+		//		if (x->st == ST_INTERPRETING || IMMEDIATE(w)) {
+		//			inner(x, LAMBDA(x, A(w), 0));
+		//		} else {
+		//			cspush(x, LAMBDA(x, A(w), 0));
+		//		}
+		//	} else {
+		//		intmax_t num = strtoimax(tok, NULL, 10);
+		//		if (num == INTMAX_MAX && errno == ERANGE) {
+		//			x->err = -1000;
+		//		} else {
+		//			if (x->st == ST_INTERPRETING) {
+		//				inner(x, ATOM(x, num, 0));
+		//			} else {
+		//				cspush(x, ATOM(x, num, 0));
+		//			}
+		//		}
+		//	}
+		//	tok = strtok(NULL, " ");
+		//}
 	}
 
 
@@ -326,6 +365,6 @@ void outer(X* x, B* s) {
 //////#define IS_IMMEDIATE(w)		(TYPE(w->ref) & 1)
 //////
 //////void _immediate(X* x) {
-//////	x->dict->ref = AS(1, REF(x->dict));
+//////	x->d->ref = AS(1, REF(x->d));
 //////}
 

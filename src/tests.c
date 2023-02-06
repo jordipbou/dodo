@@ -169,12 +169,14 @@ void test_block_initialization() {
 	TEST_ASSERT_EQUAL_INT(ALIGN(((B*)x) + size - 2*sizeof(C) - 1, 2*sizeof(C)), TOP(x));
 	TEST_ASSERT_EQUAL_INT(TOP(x), x->f);
 
-	TEST_ASSERT_EQUAL_INT(0, x->dict);
+	TEST_ASSERT_EQUAL_INT(0, x->d);
 	TEST_ASSERT_EQUAL_INT(0, x->s);
 	TEST_ASSERT_EQUAL_INT(0, x->r);
 	TEST_ASSERT_EQUAL_INT(0, x->cf);
 	TEST_ASSERT_EQUAL_INT(0, x->cp);
 	TEST_ASSERT_EQUAL_INT(0, x->st);
+	TEST_ASSERT_EQUAL_PTR(0, x->ibuf);
+	TEST_ASSERT_EQUAL_INT(0, x->in);
 }
 
 // LIST CREATION AND DESTRUCTION (AUTOMATIC MEMORY MANAGEMENT)
@@ -1458,7 +1460,7 @@ void test_interpreter_lambda() {
 	TEST_ASSERT_EQUAL_INT(25, A(x->s));
 }
 
-void test_interpreter_jump_1() {
+void test_interpreter_jump() {
 	C size = 512;
 	B block[size];
 	X* x = init(block, size);
@@ -1471,22 +1473,6 @@ void test_interpreter_jump_1() {
 
 	TEST_ASSERT_EQUAL_INT(1, lth(x->s));
 	TEST_ASSERT_EQUAL_INT(25, A(x->s));
-}
-
-void test_interpreter_jump_2() {
-	C size = 512;
-	B block[size];
-	X* x = init(block, size);
-
-	C code = PRIMITIVE(x, &_dup, PRIMITIVE(x, &_mul, 0));
-	C jump = JUMP(x, code, PRIMITIVE(x, &_dup, 0));
-
-	push(x, ATM, 5);
-	inner(x, jump);
-
-	TEST_ASSERT_EQUAL_INT(2, lth(x->s));
-	TEST_ASSERT_EQUAL_INT(25, A(x->s));
-	TEST_ASSERT_EQUAL_INT(25, A(D_(x->s)));
 }
 
 void test_allot() {
@@ -1589,18 +1575,19 @@ void test_align() {
 	TEST_ASSERT_EQUAL_INT(0, x->err);
 }
 
-void test_Cstr() {
+void test_allot_str() {
 	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
 	B* here = x->here;
 
-	B* str = Cstr(x, "test string", 11);
+	B* s = allot_str(x, 11);
+	strncpy(s, "test string", 11);
 
-	TEST_ASSERT_EQUAL_PTR(here + sizeof(C), str);
-	TEST_ASSERT_EQUAL_STRING("test string", str);
-	TEST_ASSERT_EQUAL_INT(11, count(str));
+	TEST_ASSERT_EQUAL_PTR(here + sizeof(C), s);
+	TEST_ASSERT_EQUAL_STRING("test string", s);
+	TEST_ASSERT_EQUAL_INT(11, count(s));
 	TEST_ASSERT_EQUAL_PTR(here + sizeof(C) + 12, x->here);
 }
 
@@ -1611,7 +1598,7 @@ void test_header() {
 
 	B* here = x->here;
 
-	C h = header(x, "test");
+	C h = header(x, "test", 4);
 
 	TEST_ASSERT_EQUAL_PTR(here + 1 + sizeof(C) + 4 + 1, x->here);
 	TEST_ASSERT_EQUAL_PTR(here + 1 + sizeof(C), NFA(h));
@@ -1625,7 +1612,7 @@ void test_body() {
 	B block[size];
 	X* x = init(block, size);
 
-	C h = header(x, "test");
+	C h = header(x, "test", 4);
 
 	C w = body(x, h, ATOM(x, 11, ATOM(x, 7, 0)));
 
@@ -1641,21 +1628,21 @@ void test_reveal() {
 	B block[size];
 	X* x = init(block, size);
 
-	C h = header(x, "test1");
-	C h2 = header(x, "test2");
+	C h = header(x, "test1", 5);
+	C h2 = header(x, "test2", 5);
 
 	C d = reveal(x, h);
 
 	TEST_ASSERT_EQUAL_INT(h, d);
-	TEST_ASSERT_EQUAL_INT(h, x->dict);
-	TEST_ASSERT_EQUAL_INT(1, lth(x->dict));
+	TEST_ASSERT_EQUAL_INT(h, x->d);
+	TEST_ASSERT_EQUAL_INT(1, lth(x->d));
 
 	d = reveal(x, h2);
 
 	TEST_ASSERT_EQUAL_INT(h2, d);
-	TEST_ASSERT_EQUAL_INT(h2, x->dict);
-	TEST_ASSERT_EQUAL_INT(2, lth(x->dict));
-	TEST_ASSERT_EQUAL_INT(h, D_(x->dict));
+	TEST_ASSERT_EQUAL_INT(h2, x->d);
+	TEST_ASSERT_EQUAL_INT(2, lth(x->d));
+	TEST_ASSERT_EQUAL_INT(h, D_(x->d));
 }
 
 void test_find() {
@@ -1663,17 +1650,135 @@ void test_find() {
 	B block[size];
 	X* x = bootstrap(init(block, size));
 
-	C xt = find(x, "+");
+	C xt = find(x, "+", 1);
 
 	TEST_ASSERT_EQUAL_PTR(&_add, (FUNC)A(A(xt)));
 
-	xt = find(x, "allot");
+	xt = find(x, "allot", 5);
 
 	TEST_ASSERT_EQUAL_PTR(&_allot, (FUNC)A(A(xt)));
 
-	xt = find(x, "test");
+	xt = find(x, "test", 4);
 
 	TEST_ASSERT_EQUAL_INT(0, xt);
+}
+
+void test_parse_name() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+	B* str = "   test  ";
+
+	x->ibuf = str;
+
+	_parse_name(x);
+
+	C len = pop(x);
+	C addr = pop(x);
+
+	TEST_ASSERT_EQUAL_INT(4, len);
+	TEST_ASSERT_EQUAL_INT((C)str + 3, addr);
+
+	_parse_name(x);
+
+	len = pop(x);
+	addr = pop(x);
+
+	TEST_ASSERT_EQUAL_INT(0, len);
+	TEST_ASSERT_EQUAL_INT((C)str + 9, addr);
+
+	B* str2 = "";
+	x->ibuf = str2;
+	x->in = 0;
+
+	_parse_name(x);
+
+	len = pop(x);
+	addr = pop(x);
+
+	TEST_ASSERT_EQUAL_INT(0, len);
+	TEST_ASSERT_EQUAL_INT((C)str2, addr);
+
+	B* str3 = ": name    word1 ;";
+	x->ibuf = str3;
+	x->in = 0;
+
+	_parse_name(x);
+
+	len = pop(x);
+	addr = pop(x);
+
+	TEST_ASSERT_EQUAL_INT(1, len);
+	TEST_ASSERT_EQUAL_INT((C)str3, addr);
+
+	_parse_name(x);
+
+	len = pop(x);
+	addr = pop(x);
+
+	TEST_ASSERT_EQUAL_INT(4, len);
+	TEST_ASSERT_EQUAL_INT((C)str3 + 2, addr);
+
+	_parse_name(x);
+
+	len = pop(x);
+	addr = pop(x);
+
+	TEST_ASSERT_EQUAL_INT(5, len);
+	TEST_ASSERT_EQUAL_INT((C)str3 + 10, addr);
+
+	_parse_name(x);
+
+	len = pop(x);
+	addr = pop(x);
+
+	TEST_ASSERT_EQUAL_INT(1, len);
+	TEST_ASSERT_EQUAL_INT((C)str3 + 16, addr);
+
+	_parse_name(x);
+
+	len = pop(x);
+	addr = pop(x),
+
+	TEST_ASSERT_EQUAL_INT(0, len);
+	TEST_ASSERT_EQUAL_INT((C)str3 + 17, addr);
+
+	_parse_name(x);
+
+	len = pop(x);
+	addr = pop(x),
+
+	TEST_ASSERT_EQUAL_INT(0, len);
+	TEST_ASSERT_EQUAL_INT((C)str3 + 17, addr);
+}
+
+void test_find_name() {
+	C size = 4096;
+	B block[size];
+	X* x = bootstrap(init(block, size));
+
+	push(x, ATM, (C)"dup");
+	push(x, ATM, 3);
+
+	_find_name(x);
+
+	C imm = pop(x);
+	C xt = pop(x);
+
+	TEST_ASSERT_EQUAL_INT(-1, imm);
+	TEST_ASSERT_EQUAL_INT(XT(find(x, "dup", 3)), xt);
+
+	B* str = "  join ";
+	x->ibuf = str;
+
+	_parse_name(x);
+	_find_name(x);
+
+	imm = pop(x);
+	xt = pop(x);
+
+	TEST_ASSERT_EQUAL_INT(-1, imm);
+	TEST_ASSERT_EQUAL_INT(XT(find(x, "join", 4)), xt);
 }
 
 ////void test_clear_stack() {
@@ -1843,7 +1948,7 @@ void test_find() {
 //////////	TEST_ASSERT_EQUAL_INT(((B*)REF(REF(w))) + 4, DFA(w));
 //////////	TEST_ASSERT_EQUAL_INT(0, CFA(w));
 //////////
-//////////	TEST_ASSERT_NULL(ctx->dict);
+//////////	TEST_ASSERT_NULL(ctx->d);
 //////////
 //////////	PAIR* cfa = cns(ctx, ATM, 7, cns(ctx, ATM, 13, 0));
 //////////	body(ctx, w, cfa);
@@ -1854,8 +1959,8 @@ void test_find() {
 //////////
 //////////	reveal(ctx, w);
 //////////
-//////////	TEST_ASSERT_EQUAL_PTR(w, ctx->dict);
-//////////	TEST_ASSERT_NULL(NEXT(ctx->dict));
+//////////	TEST_ASSERT_EQUAL_PTR(w, ctx->d);
+//////////	TEST_ASSERT_NULL(NEXT(ctx->d));
 //////////
 //////////	TEST_ASSERT_FALSE(IS_IMMEDIATE(w));
 //////////
@@ -1878,10 +1983,10 @@ void test_find() {
 ////////////	TEST_ASSERT_EQUAL_PTR(test, find(ctx, "test", 4));
 ////////////	TEST_ASSERT_EQUAL_PTR(0, find(ctx, "nop", 3));
 ////////////
-////////////	TEST_ASSERT_EQUAL_PTR(test, ctx->dict);
-////////////	TEST_ASSERT_EQUAL_PTR(swap, NEXT(ctx->dict));
-////////////	TEST_ASSERT_EQUAL_PTR(dup, NEXT(NEXT(ctx->dict)));
-////////////	TEST_ASSERT_EQUAL_PTR(0, NEXT(NEXT(NEXT(ctx->dict))));
+////////////	TEST_ASSERT_EQUAL_PTR(test, ctx->d);
+////////////	TEST_ASSERT_EQUAL_PTR(swap, NEXT(ctx->d));
+////////////	TEST_ASSERT_EQUAL_PTR(dup, NEXT(NEXT(ctx->d)));
+////////////	TEST_ASSERT_EQUAL_PTR(0, NEXT(NEXT(NEXT(ctx->d))));
 ////////////}
 ////////////
 ////////////void test_dodo_initialization() {
@@ -2013,19 +2118,20 @@ int main() {
 	RUN_TEST(test_interpreter_recursion);
 	RUN_TEST(test_interpreter_list);
 	RUN_TEST(test_interpreter_lambda);
-	RUN_TEST(test_interpreter_jump_1);
-	RUN_TEST(test_interpreter_jump_2);
+	RUN_TEST(test_interpreter_jump);
 
 	RUN_TEST(test_allot);
 	RUN_TEST(test_align);
 
-	RUN_TEST(test_Cstr);
+	RUN_TEST(test_allot_str);
 
 	RUN_TEST(test_header);
 	RUN_TEST(test_body);
 	RUN_TEST(test_reveal);
 
+	RUN_TEST(test_parse_name);
 	RUN_TEST(test_find);
+	RUN_TEST(test_find_name);
 
 //	//RUN_TEST(test_stack_to_list);
 //
