@@ -1458,6 +1458,37 @@ void test_interpreter_lambda() {
 	TEST_ASSERT_EQUAL_INT(25, A(x->s));
 }
 
+void test_interpreter_jump_1() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	C code = PRIMITIVE(x, &_dup, PRIMITIVE(x, &_mul, 0));
+	C jump = JUMP(x, code, 0);
+
+	push(x, ATM, 5);
+	inner(x, jump);
+
+	TEST_ASSERT_EQUAL_INT(1, lth(x->s));
+	TEST_ASSERT_EQUAL_INT(25, A(x->s));
+}
+
+void test_interpreter_jump_2() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	C code = PRIMITIVE(x, &_dup, PRIMITIVE(x, &_mul, 0));
+	C jump = JUMP(x, code, PRIMITIVE(x, &_dup, 0));
+
+	push(x, ATM, 5);
+	inner(x, jump);
+
+	TEST_ASSERT_EQUAL_INT(2, lth(x->s));
+	TEST_ASSERT_EQUAL_INT(25, A(x->s));
+	TEST_ASSERT_EQUAL_INT(25, A(D_(x->s)));
+}
+
 void test_allot() {
 	C size = 1024;
 	B block[size];
@@ -1982,6 +2013,8 @@ int main() {
 	RUN_TEST(test_interpreter_recursion);
 	RUN_TEST(test_interpreter_list);
 	RUN_TEST(test_interpreter_lambda);
+	RUN_TEST(test_interpreter_jump_1);
+	RUN_TEST(test_interpreter_jump_2);
 
 	RUN_TEST(test_allot);
 	RUN_TEST(test_align);

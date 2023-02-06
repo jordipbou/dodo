@@ -137,6 +137,7 @@ W(_not) { U(x); A(x->s) = !A(x->s); }
 #define LIST(x, l, d)							cns(x, l, T(LST, d))
 #define PRIMITIVE(x, p, d)				cns(x, (C)p, T(PRM, d))
 #define RECURSION(x, d)						PRIMITIVE(x, 0, d)
+#define JUMP(x, j, d)							cns(x, ATOM(x, j, 0), T(JMP, d))
 #define LAMBDA(x, w, d)						cns(x, cns(x, cns(x, w, T(LST, 0)), T(LST, 0)), T(JMP, d))
 C BRANCH(X* x, C t, C f, C d) {
 		if (t) R(lst(t), d); else t = d;
@@ -153,8 +154,9 @@ void inner(X* x, C xt) {
 				case LST: 
 					push(x, LST, cln(x, A(ip))); ip = D_(ip); break;
 				case JMP:
-					if (D_(A(ip))) { ip = pop(x) ? A(A(ip)) : A(D_(A(ip))); } /* BRANCH */
-					else { ip = D_(ip) ? (inner(x, A(A(A(ip)))), D_(ip)) : A(A(A(ip))); } /* LAMBDA */
+					if (IS(ATM, A(ip))) { ip = A(A(ip)); } /* JUMP */
+					else if (D_(A(ip))) { ip = pop(x) ? A(A(ip)) : A(D_(A(ip))); } /* BRANCH */
+					else { ip = D_(ip) ? (inner(x, A(A(A(ip)))), D_(ip)) : A(A(A(ip))); } /* CALL */
 					break;
 				case PRM: 
 					if (A(ip)) { ((FUNC)A(ip))(x); ip = D_(ip); }
@@ -292,7 +294,8 @@ void outer(X* x, B* s) {
 			tok = strtok(NULL, " ");
 		}
 	}
-////void _rev(X* x) {	C s = K(x);	K(x) = 0;	while (s) { C t = D(s); D(s) = K(x); K(x) = s; s = t; } }
+
+
 ////// Source code for getch is taken from:
 ////// Crossline readline (https://github.com/jcwangxp/Crossline).
 ////// It's a fantastic readline cross-platform replacement, but only getch was
