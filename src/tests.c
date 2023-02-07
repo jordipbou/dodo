@@ -1709,6 +1709,7 @@ void test_parse_name() {
 	addr = pop(x);
 
 	TEST_ASSERT_EQUAL_INT(1, len);
+	TEST_ASSERT(!strncmp(":", addr, len));
 	TEST_ASSERT_EQUAL_INT((C)str3, addr);
 
 	_parse_name(x);
@@ -1717,6 +1718,7 @@ void test_parse_name() {
 	addr = pop(x);
 
 	TEST_ASSERT_EQUAL_INT(4, len);
+	TEST_ASSERT(!strncmp("name", addr, len));
 	TEST_ASSERT_EQUAL_INT((C)str3 + 2, addr);
 
 	_parse_name(x);
@@ -1725,6 +1727,7 @@ void test_parse_name() {
 	addr = pop(x);
 
 	TEST_ASSERT_EQUAL_INT(5, len);
+	TEST_ASSERT(!strncmp("word1", addr, len));
 	TEST_ASSERT_EQUAL_INT((C)str3 + 10, addr);
 
 	_parse_name(x);
@@ -1733,6 +1736,7 @@ void test_parse_name() {
 	addr = pop(x);
 
 	TEST_ASSERT_EQUAL_INT(1, len);
+	TEST_ASSERT(!strncmp(";", addr, len));
 	TEST_ASSERT_EQUAL_INT((C)str3 + 16, addr);
 
 	_parse_name(x);
@@ -1766,7 +1770,7 @@ void test_find_name() {
 	C xt = pop(x);
 
 	TEST_ASSERT_EQUAL_INT(-1, imm);
-	TEST_ASSERT_EQUAL_INT(XT(find(x, "dup", 3)), xt);
+	TEST_ASSERT_EQUAL_INT(find(x, "dup", 3), xt);
 
 	B* str = "  join ";
 	x->ibuf = str;
@@ -1778,7 +1782,20 @@ void test_find_name() {
 	xt = pop(x);
 
 	TEST_ASSERT_EQUAL_INT(-1, imm);
-	TEST_ASSERT_EQUAL_INT(XT(find(x, "join", 4)), xt);
+	TEST_ASSERT_EQUAL_INT(find(x, "join", 4), xt);
+}
+
+void test_to_number() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	x->ibuf = "256";
+	_parse_name(x);
+	_to_number(x);
+	C n = pop(x);
+
+	TEST_ASSERT_EQUAL_INT(256, n);
 }
 
 ////void test_clear_stack() {
@@ -2132,6 +2149,7 @@ int main() {
 	RUN_TEST(test_parse_name);
 	RUN_TEST(test_find);
 	RUN_TEST(test_find_name);
+	RUN_TEST(test_to_number);
 
 //	//RUN_TEST(test_stack_to_list);
 //

@@ -269,9 +269,9 @@ X* bootstrap(X* x) {
 
 W(_parse_name) { 
 	C l = 0;
-	while (*(x->ibuf + x->in) != 0 && *(x->ibuf + x->in) == ' ') { x->in++; }
+	while (*(x->ibuf + x->in) != 0 && isspace(*(x->ibuf + x->in))) { x->in++; }
 	push(x, ATM, (C)(x->ibuf + x->in));
-	while (*(x->ibuf + x->in) != 0 && *(x->ibuf + x->in) != ' ') { x->in++; l++; }
+	while (*(x->ibuf + x->in) != 0 && !isspace(*(x->ibuf + x->in))) { x->in++; l++; }
 	push(x, ATM, l);
 }
 
@@ -285,10 +285,10 @@ W(_find_name) {
 	C a = pop(x); 
 	C w = find(x, (B*)a, l);
 	if (w && IMMEDIATE(D_(w))) {
-		push(x, ATM, XT(w));
+		push(x, ATM, w);
 		push(x, ATM, 1);
 	} else if (w && !IMMEDIATE(D_(w))) {
-		push(x, ATM, XT(w));
+		push(x, ATM, w);
 		push(x, ATM, -1);
 	} else {
 		push(x, ATM, a);
@@ -297,20 +297,42 @@ W(_find_name) {
 	}
 }
 
+W(_to_number) {
+	C l = pop(x);
+	C a = pop(x);
+	intmax_t num = strtoimax((B*)a, NULL, 10);
+	if (num == INTMAX_MAX && errno == ERANGE) {
+		x->err = -1000;
+	} else {
+		push(x, ATM, num);
+	}
+}
+
 void outer(X* x, B* s) {
 		x->ibuf = s;
+		x->in = 0;
 		while (1) {
 			_parse_name(x);
+			C l = pop(x);
+			if (l == 0) { pop(x); return; }
+			push(x, ATM, l);
 			_find_name(x);
 			C f = pop(x);
 			if (f) {
-				
+				C w = pop(x);
+				if (x->st == ST_INTERPRETING || f == 1) {
+					inner(x, A(w));
+				} else {
+					// TODO: Compile!!
+					//inner(x, A(w));
+				}
 			} else {
-				// WORD NOT FOUND
+				_to_number(x);
+				// TODO: If compiling, move it to cs
 			}
 		}
 		//B* tok = strtok(s, " ");
-		//while (tok)
+		//while (tok) {
 		//	C w = find(x, tok, strlen(tok));
 		//	if (w) {
 		//		if (x->st == ST_INTERPRETING || IMMEDIATE(w)) {

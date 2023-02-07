@@ -13,7 +13,7 @@ void main() {
 	B* tok;
 
 	while (x->err != ERR_BYE) {
-		scanf("%s", ibuf);
+		gets(ibuf);
 		outer(x, ibuf);
 		switch (x->err) {
 			case ERR_OVERFLOW: printf("Stack overflow\n"); x->err = 0; break;
