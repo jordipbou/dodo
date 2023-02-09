@@ -5,48 +5,42 @@
 #include<ctype.h>
 
 typedef int8_t		B;
-typedef intptr_t	C;		// 16, 32 or 64 bits depending on system
-
-#define sC									sizeof(C)
-#define sP									(2*sC)
-
-#define A(p)								(*((C*)p))
-#define D(p)								(*(((C*)p) + 1))
-#define D_(p)								(D(p) & -4)	
-#define _D(p)								(D(p) & 3)
-#define T(t, c)							((c & -4) | t)
-#define R(p, a)							(D(p) = T(_D(p), a))
-
-#define ATM									0
-#define LST									1
-#define PRM									2
-#define JMP									3
-
-#define IS(t, p)						((_D(p) & 3) == t)
-#define ARE(x, t1, t2)			IS(t1, x->s) && IS(t2, D_(x->s))
-
-#define REF(p)							(_D(p) & 1)
-
-C lth(C p) { C c = 0; while (p) { c++; p = D_(p); } return c; }
-C dth(C p) { C c = 0; while (p) { c += REF(p) ? dth(A(p)) + 1 : 1; p = D_(p); } return c; }
-C mlth(C p, C n) { C c = 0; while (p && c < n) { c++; p = D_(p); } return c == n; }
-C lst(C p) { if (!p) return 0; while (D_(p)) { p = D_(p); } return p; }
-C rev(C p, C l) { C t; return p ? (t = D_(p), R(p, l), rev(t, p)) : l; }
-
+typedef intptr_t	C;				// 16, 32 or 64 bits depending on system
 typedef struct {
-		B* here, * ibuf;
-		C there, size, f, s, r, cp, d, err, comp, ts, tl;
-	} X;
-
-#define TK(x)								(x->ibuf + x->ts)
-
-#define ALIGN(addr, bound)	((((C)addr) + (bound - 1)) & ~(bound - 1))
-#define RESERVED(x)					((x->there) - ((C)x->here))
-
-#define BOTTOM(x)						(((B*)x) + sizeof(X))
-#define TOP(x)							(ALIGN(((B*)x) + x->size - sP - 1, sP))
-
+	B* here, * ibuf;
+	C there, size, free, stack, rstack, cpile, dict, err, comp, tkst, tkln;
+} X;
 typedef void (*FUNC)(X*);
+
+#define A(p)										(*((C*)p))
+#define D(p)										(*(((C*)p) + 1))
+#define D_(p)										(D(p) & -4)	
+#define _D(p)										(D(p) & 3)
+#define T(t, c)									((c & -4) | t)
+#define R(p, a)									(D(p) = T(_D(p), a))
+
+#define ATM											0
+#define LST											1
+#define PRM											2
+#define JMP											3
+
+#define REF(p)									(_D(p) & 1)
+
+C length(C p) { C c = 0; while (p) { c++; p = D_(p); } return c; }
+C depth(C p) { C c = 0; while (p) { c += REF(p) ? depth(A(p)) + 1 : 1; p = D_(p); } return c; }
+C mlength(C p, C n) { C c = 0; while (p && c < n) { c++; p = D_(p); } return c == n; }
+C last(C p) { if (!p) return 0; while (D_(p)) { p = D_(p); } return p; }
+
+#define F(x)										x->free
+#define S(x)										x->stack
+#define P(x)										x->cpile
+#define TK(x)										(x->ibuf + x->tkst)
+
+#define NFA(w)									((B*)(A(A(w))))
+#define DFA(w)									(NFA(w) + count(NFA(w)) + 1)
+#define XT(w)										(D_(A(w)))	
+#define BODY(w)									(A(XT(w)))
+#define IMMEDIATE(w)						(*(NFA(w) - sizeof(C) - 1))
 
 #define ERR_NOT_ENOUGH_MEMORY		-1
 #define ERR_OVERFLOW						-2
@@ -54,139 +48,102 @@ typedef void (*FUNC)(X*);
 #define ERR_UNDEFINED_WORD			-4
 #define ERR_BYE									-5
 
-#define ST_INTERPRETING					0
-#define ST_COMPILING						1
-
-X* init(B* block, C size) {
-		if (size < sC + 2*sP) return 0;
-		X* x = (X*)block;	
-		x->size = size;
-		x->here = BOTTOM(x);
-		x->there = ALIGN(BOTTOM(x), 2*sC);
-		x->f = TOP(x);
-	
-		for (C p = x->there; p <= x->f; p += 2*sC) {
-			A(p) = p == x->f ? 0 : p + 2*sC;
-			D(p) = p == x->there ? 0 : p - 2*sC;
-		}
-	
-		x->err = x->d = x->s = x->r = x->cp = x->comp = x->ts = x->tl = 0;
-		x->ibuf = 0;
-	
-		return x;
-	}
-
-C cns(X* x, C a, C d) { C p; return x->f ? (p = x->f, x->f = D(x->f), A(p) = a, D(p) = d, p) : 0; }
-C rcl(X* x, C l) { C r; return l ? (r = D_(l), D(l) = x->f, A(l) = 0, x->f = l, r) : 0; }
+C cns(X* x, C a, C d) { C p; return F(x) ? (p = F(x), F(x) = D(F(x)), A(p) = a, D(p) = d, p) : 0; }
+C rcl(X* x, C l) { C r; return l ? (r = D_(l), D(l) = F(x), A(l) = 0, F(x) = l, r) : 0; }
 C cln(X* x, C l) { return l ? cns(x, REF(l) ? cln(x, A(l)) : A(l), T(_D(l), cln(x, D_(l)))) : 0; }
 void rmv(X* x, C l) { while (l) { if (REF(l)) {	rmv(x, A(l)); } l = rcl(x, l); } }
 
-void push(X* x, C t, C v) { C p = cns(x, v, T(t, x->s)); if (p) x->s = p; }
-C pop(X* x) { C v = A(x->s); x->s = rcl(x, x->s); return v; }
+void push(X* x, C t, C v) { C p = cns(x, v, T(t, S(x))); if (p) S(x) = p; }
+C pop(X* x) { C v = A(S(x)); S(x) = rcl(x, S(x)); return v; }
 
-void cppush(X* x) { C s = cns(x, 0, T(LST, x->cp)); if (s) x->cp = s; }
-void cspush(X* x, C p) { R(p, A(x->cp)); A(x->cp) = p; }
-void cppop(X* x) {
-		if (D_(x->cp)) { C t = A(D_(x->cp));	A(D_(x->cp)) = x->cp;	x->cp = D_(x->cp); R(A(x->cp), t);
-		} else { R(x->cp, x->s); x->s = x->cp; x->cp = 0;	}
-	}
-
-#define O(x)				if (!x->f) { x->err = ERR_OVERFLOW; return; }
-#define On(x, l)		if (!mlth(x->f, dth(l))) { x->err = ERR_OVERFLOW; return; }
-#define U(x)				if (!x->s) { x->err = ERR_UNDERFLOW; return; }
-#define U2(x)				if (!x->s || !D_(x->s)) { x->err = ERR_UNDERFLOW; return; }
-#define U3(x)				if (!x->s || !D_(x->s) || !D_(D_(x->s))) { x->err = ERR_UNDERFLOW; return; }
-#define OU2(x)			O(x); U2(x);
-
-#define W(n)				void n(X* x)
-
-W(_lbrace) { x->comp = ST_COMPILING; cppush(x); }
-W(_rbrace) { cppop(x); x->comp = x->cp != 0; }
-
-W(_empty) { O(x); push(x, LST, 0); }
-
-W(jAA) { OU2(x); C l = x->s; x->s = D_(D_(x->s)); R(D_(l), 0); push(x, LST, l); }
-W(jAL) { OU2(x); C l = D_(x->s); D(x->s) = T(ATM, A(D_(x->s))); A(l) = x->s; x->s = l; }
-W(jLA) { OU2(x); C t = D_(D_(x->s)); C l = lst(A(x->s)); R(l, D_(x->s)); R(D_(l), 0); R(x->s, t); }
-W(jLL) { OU2(x); C t = D_(x->s); C l = lst(A(x->s)); R(l, A(D_(x->s))); R(x->s, rcl(x, t)); }
-W(_join) { REF(D_(x->s)) ? (REF(x->s) ? jLL(x) : jAL(x)) : (REF(x->s) ? jLA(x) : jAA(x)); }
-W(_quote) { U(x); C t = x->s; x->s = D_(x->s); R(t, 0); push(x, LST, t); }
-
-W(dupA) { U(x); O(x); push(x, _D(x->s), A(x->s)); }
-W(dupL) { U(x); On(x, A(x->s)); push(x, _D(x->s), cln(x, A(x->s))); }
-W(_dup) { REF(x->s) ? dupL(x) : dupA(x); }
-W(_swap) { U2(x); C t = D_(x->s); R(x->s, D_(D_(x->s))); R(t, x->s); x->s = t; }
-W(_drop) { U(x); if (REF(x->s)) rmv(x, A(x->s)); pop(x); }
-W(overV) { O(x); push(x, _D(D_(x->s)), A(D_(x->s))); }
-W(overR) { On(x, A(D_(x->s))); push(x, _D(D_(x->s)), cln(x, A(D_(x->s)))); } 
-W(_over) { U2(x); REF(D_(x->s)) ? overR(x) : overV(x); }
-W(_rot) { C t = D_(D_(x->s)); R(D_(x->s), D_(D_(D_(x->s)))); R(t, x->s); x->s = t; }
-
-W(_add) { U2(x); A(D_(x->s)) = A(D_(x->s)) + A(x->s); pop(x); }
-W(_sub) { U2(x); A(D_(x->s)) = A(D_(x->s)) - A(x->s); pop(x); }
-W(_mul) { U2(x); A(D_(x->s)) = A(D_(x->s)) * A(x->s); pop(x); }
-W(_div) { U2(x); A(D_(x->s)) = A(D_(x->s)) / A(x->s); pop(x); }
-W(_mod) { U2(x); A(D_(x->s)) = A(D_(x->s)) % A(x->s); pop(x); }
-
-W(_gt) { U2(x); A(D_(x->s)) = A(D_(x->s)) > A(x->s); pop(x); }
-W(_lt) { U2(x); A(D_(x->s)) = A(D_(x->s)) < A(x->s); pop(x); }
-W(_eq) { U2(x); A(D_(x->s)) = A(D_(x->s)) == A(x->s); pop(x); }
-W(_neq) { U2(x); A(D_(x->s)) = A(D_(x->s)) != A(x->s); pop(x); }
-
-W(_and) { U2(x); A(D_(x->s)) = A(D_(x->s)) & A(x->s); pop(x); }
-W(_or) { U2(x); A(D_(x->s)) = A(D_(x->s)) | A(x->s); pop(x); }
-W(_invert) { U(x); A(x->s) = ~A(x->s); }
-W(_not) { U(x); A(x->s) = !A(x->s); }
-
-#define ATOM(x, n, d)							cns(x, n, T(ATM, d))
-#define LIST(x, l, d)							cns(x, l, T(LST, d))
-#define PRIMITIVE(x, p, d)				cns(x, (C)p, T(PRM, d))
-#define RECURSION(x, d)						PRIMITIVE(x, 0, d)
-#define JUMP(x, j, d)							cns(x, ATOM(x, j, 0), T(JMP, d))
-#define LAMBDA(x, w, d)						cns(x, cns(x, cns(x, w, T(LST, 0)), T(LST, 0)), T(JMP, d))
-#define CALL(x, xt, d)						cns(x, cns(x, xt, T(LST, 0)), T(JMP, d))
-C BRANCH(X* x, C t, C f, C d) {
-		if (t) R(lst(t), d); else t = d;
-		if (f) R(lst(f), d); else f = d;
-		return cns(x, cns(x, t, T(LST, cns(x, f, T(LST, 0)))), T(JMP, d));
-	}
+void cppush(X* x) { C s = cns(x, 0, T(LST, P(x))); if (s) P(x) = s; }
+void cspush(X* x, C p) { R(p, A(P(x))); A(P(x)) = p; }
+#define STACK_TO_LIST	C t = A(D_(P(x)));	A(D_(P(x))) = P(x);	P(x) = D_(P(x)); R(A(P(x)), t);
+#define TO_DATA_STACK	R(P(x), S(x)); S(x) = P(x); P(x) = 0;
+void cppop(X* x) { if ( D_(P(x)) ) { STACK_TO_LIST } else { TO_DATA_STACK } }
 
 void inner(X* x, C xlist) {
 		C ip = xlist;
 		while(!x->err && ip) {
 			switch(_D(ip)) {
 				case ATM: 
-					push(x, ATM, A(ip)); ip = D_(ip); break;
+					push(x, ATM, A(ip)); 
+					ip = D_(ip); 
+					break;
 				case LST: 
-					push(x, LST, cln(x, A(ip))); ip = D_(ip); break;
+					push(x, LST, cln(x, A(ip))); 
+					ip = D_(ip); 
+					break;
 				case JMP:
-					if (IS(ATM, A(ip))) { ip = A(A(ip)); } /* JUMP */
-					else if (D_(A(ip))) { ip = pop(x) ? A(A(ip)) : A(D_(A(ip))); } /* BRANCH */
-					else { ip = D_(ip) ? (inner(x, A(A(A(ip)))), D_(ip)) : A(A(A(ip))); } /* CALL */
+					if (_D(A(ip)) == ATM) { 
+						ip = A(A(ip)); /* JUMP */
+					} else if (D_(A(ip))) { 
+						ip = pop(x) ? A(A(ip)) : A(D_(A(ip))); /* BRANCH */
+					} else { 
+						ip = D_(ip) ? (inner(x, A(A(A(ip)))), D_(ip)) : A(A(A(ip))); /* CALL */
+					}
 					break;
 				case PRM: 
-					if (A(ip)) { ((FUNC)A(ip))(x); ip = D_(ip); }
-					else { ip = D_(ip) ? (inner(x, xlist), D_(ip)) : xlist; } /* RECURSION */
+					if (A(ip)) { 
+						((FUNC)A(ip))(x); ip = D_(ip); /* PRIMITIVE */
+					} else { 
+						ip = D_(ip) ? (inner(x, xlist), D_(ip)) : xlist; /* RECURSION */
+					}
 					break;
 			}
 		}
 	}
+
+void compile(X* x, C xt) { 
+	if (IMMEDIATE(D_(xt))) {
+		inner(x, A(xt));
+	} else {
+		cspush(x, cns(x, cns(x, xt, T(LST, 0)), T(JMP, 0))); 
+	}
+}
+
+C number(X* x) { 
+	char* endptr;
+	intmax_t n = strtoimax(TK(x), &endptr, 10);
+	if (n == 0 && endptr == (char*)TK(x)) { x->err = ERR_UNDEFINED_WORD; return 0; } 
+	else { x->comp ? cspush(x, cns(x, n, T(ATM, 0))) : push(x, ATM, n); return 1; }
+}
+
+C word(X* x, C w) { x->comp ? compile(x, XT(w)) : inner(x, BODY(w)); return 1; }
+
+#define NOT_WORDS_NAME strncmp(NFA(w), n, l)
+C find(X* x, B* n, C l) { C w = x->dict; while (w && NOT_WORDS_NAME) { w = D_(w); } return w; }
+
+#define SPACES(x) while (*TK(x) != 0 && isspace(*TK(x))) { x->tkst++; }
+#define TOKEN(x) while (*(TK(x) + x->tkln) != 0 && !isspace(*(TK(x) + x->tkln))) { x->tkln++; }
+#define RST_TKN(x) x->tkst += x->tkln; x->tkln = 0
+C parse(X* x) { RST_TKN(x); SPACES(x); TOKEN(x); return x->tkln; }
+
+#define RST	x->ibuf = s; x->tkst = 0; x->tkln = 0;
+#define FIND(x) find(x, TK(x), x->tkln)
+void outer(X* x, B* s) { C w; RST; while (parse(x) ? (w = FIND(x)) ? word(x, w) : number(x) : 0); }
+
+#define ALIGN(addr, bound)	((((C)addr) + (bound - 1)) & ~(bound - 1))
+#define RESERVED(x)					((x->there) - ((C)x->here))
+
+#define BOTTOM(x)						(((B*)x) + sizeof(X))
+#define TOP(x)							(ALIGN(((B*)x) + x->size - (2*sizeof(C)) - 1, (2*sizeof(C))))
 
 B* allot(X* x, C b) {
 		B* here = x->here;
 		if (!b) { return 0;
 		} else if (b < 0) { 
 			x->here = (x->here + b) > BOTTOM(x) ? x->here + b : BOTTOM(x);
-			while (x->there - sP >= ALIGN(x->here, sP)) { 
+			while (x->there - (2*sizeof(C)) >= ALIGN(x->here, (2*sizeof(C)))) { 
 				C t = x->there;
-				x->there -= sP;
+				x->there -= (2*sizeof(C));
 				A(x->there) = t;
 				D(x->there) = 0;
 				D(t) = x->there;
 			}
 		} else {
 			C p = x->there;
-			while(A(p) == (p + sP) && p < (C)(x->here + b) && p < TOP(x)) { p = A(p);	}
+			while(A(p) == (p + (2*sizeof(C))) && p < (C)(x->here + b) && p < TOP(x)) { p = A(p);	}
 			if (p >= (C)(here + b)) {
 				x->there = p;
 				D(x->there) = 0;
@@ -199,50 +156,94 @@ B* allot(X* x, C b) {
 		return here;
 	}
 
-W(_allot) { allot(x, pop(x)); }
-W(_align) { push(x, ATM, ALIGN(x->here, sC) - ((C)x->here)); _allot(x); }
+#define count(s)				(*((C*)(s - sizeof(C))))
 
-#define count(s)				(*((C*)(s - sC)))
-
-B* allot_str(X* x, C l) { *(C*)allot(x, sC) = l; return allot(x, l + 1); }
-
-#define NFA(w)					((B*)(A(A(w))))
-#define DFA(w)					(NFA(w) + count(NFA(w)) + 1)
-#define XT(w)						(D_(A(w)))	
-#define BODY(w)					(A(XT(w)))
-#define IMMEDIATE(w)		(*(NFA(w) - sC - 1))
+B* allot_str(X* x, C l) { *(C*)allot(x, sizeof(C)) = l; return allot(x, l + 1); }
 
 C header(X* x, B* n, C l) {
-		*allot(x, 1) = 0;
-		// TODO: Alignment of cell size of string is not checked
-		C h = cns(x, 0, T(LST, 0));
-		B* s = strcpy(allot_str(x, l), n);
-		A(h) = ATOM(x, (C)s, cns(x, 0, T(LST, h)));
-		return h;
-	}
-C body(X* x, C h, C l) { BODY(h) = l; return h; }
-C reveal(X* x, C h) {	R(h, x->d); x->d = h;	return h; }
-
-void compile(X* x, C xt) { IMMEDIATE(D_(xt)) ? inner(x, A(xt)) : cspush(x, CALL(x, xt, 0)); }
-C number(X* x) { 
-	char* endptr;
-	intmax_t n = strtoimax(TK(x), &endptr, 10);
-	if (n == 0 && endptr == (char*)TK(x)) { x->err = ERR_UNDEFINED_WORD; return 0; } 
-	else { x->comp ? cspush(x, ATOM(x, n, 0)) : push(x, ATM, n); return 1; }
+	*allot(x, 1) = 0;
+	// TODO: Alignment of cell size of string is not checked
+	C h = cns(x, 0, T(LST, 0));
+	B* s = strcpy(allot_str(x, l), n);
+	A(h) = cns(x, (C)s, T(ATM, cns(x, 0, T(LST, h))));
+	return h;
 }
-C word(X* x, C w) { x->comp ? compile(x, XT(w)) : inner(x, BODY(w)); return 1; }
 
-#define NOT_WORDS_NAME strncmp(NFA(w), n, l)
-C find(X* x, B* n, C l) { C w = x->d; while (w && NOT_WORDS_NAME) { w = D_(w); } return w; }
+C body(X* x, C h, C l) { BODY(h) = l; return h; }
 
-#define SPACES(x) while (*TK(x) != 0 && isspace(*TK(x))) { x->ts++; }
-#define TOKEN(x) while (*(TK(x) + x->tl) != 0 && !isspace(*(TK(x) + x->tl))) { x->tl++; }
-#define RST_TKN(x) x->ts += x->tl; x->tl = 0
-C parse(X* x) { RST_TKN(x); SPACES(x); TOKEN(x); return x->tl; }
+C reveal(X* x, C h) {	R(h, x->dict); x->dict = h;	return h; }
 
-#define RST	x->ibuf = s; x->ts = 0; x->tl = 0;
-#define FIND(x) find(x, TK(x), x->tl)
-void outer(X* x, B* s) { C w; RST; while (parse(x) ? (w = FIND(x)) ? word(x, w) : number(x) : 0); }
+X* init(B* block, C size) {
+		if (size < sizeof(C) + 2*(2*sizeof(C))) return 0;
+		X* x = (X*)block;	
+		x->size = size;
+		x->here = BOTTOM(x);
+		x->there = ALIGN(BOTTOM(x), 2*sizeof(C));
+		x->free = TOP(x);
+	
+		for (C p = x->there; p <= x->free; p += 2*sizeof(C)) {
+			A(p) = p == F(x) ? 0 : p + 2*sizeof(C);
+			D(p) = p == x->there ? 0 : p - 2*sizeof(C);
+		}
+	
+		x->err = x->comp = 0;
+		x->dict = 0;
+		x->stack = x->rstack = P(x) = 0;
+		x->tkst = x->tkln = 0;
+		x->ibuf = 0;
+	
+		return x;
+	}
+
+#define O(x)				if (!F(x)) { x->err = ERR_OVERFLOW; return; }
+#define On(x, l)		if (!mlength(F(x), depth(l))) { x->err = ERR_OVERFLOW; return; }
+#define U(x)				if (!S(x)) { x->err = ERR_UNDERFLOW; return; }
+#define U2(x)				if (!S(x) || !D_(S(x))) { x->err = ERR_UNDERFLOW; return; }
+#define U3(x)				if (!S(x) || !D_(S(x)) || !D_(D_(S(x)))) { x->err = ERR_UNDERFLOW; return; }
+#define OU2(x)			O(x); U2(x);
+
+#define W(n)				void n(X* x)
+
+W(_lbrace) { x->comp = 1; cppush(x); }
+W(_rbrace) { cppop(x); x->comp = P(x) != 0; }
+
+W(_empty) { O(x); push(x, LST, 0); }
+
+W(jAA) { OU2(x); C l = S(x); S(x) = D_(D_(S(x))); R(D_(l), 0); push(x, LST, l); }
+W(jAL) { OU2(x); C l = D_(S(x)); D(S(x)) = T(ATM, A(D_(S(x)))); A(l) = S(x); S(x) = l; }
+W(jLA) { OU2(x); C t = D_(D_(S(x))); C l = last(A(S(x))); R(l, D_(S(x))); R(D_(l), 0); R(S(x), t); }
+W(jLL) { OU2(x); C t = D_(S(x)); C l = last(A(S(x))); R(l, A(D_(S(x)))); R(S(x), rcl(x, t)); }
+W(_join) { REF(D_(S(x))) ? (REF(S(x)) ? jLL(x) : jAL(x)) : (REF(S(x)) ? jLA(x) : jAA(x)); }
+W(_quote) { U(x); C t = S(x); S(x) = D_(S(x)); R(t, 0); push(x, LST, t); }
+
+W(dupA) { U(x); O(x); push(x, _D(S(x)), A(S(x))); }
+W(dupL) { U(x); On(x, A(S(x))); push(x, _D(S(x)), cln(x, A(S(x)))); }
+W(_dup) { REF(S(x)) ? dupL(x) : dupA(x); }
+W(_swap) { U2(x); C t = D_(S(x)); R(S(x), D_(D_(S(x)))); R(t, S(x)); S(x) = t; }
+W(_drop) { U(x); if (REF(S(x))) rmv(x, A(S(x))); pop(x); }
+W(overV) { O(x); push(x, _D(D_(S(x))), A(D_(S(x)))); }
+W(overR) { On(x, A(D_(S(x)))); push(x, _D(D_(S(x))), cln(x, A(D_(S(x))))); } 
+W(_over) { U2(x); REF(D_(S(x))) ? overR(x) : overV(x); }
+W(_rot) { C t = D_(D_(S(x))); R(D_(S(x)), D_(D_(D_(S(x))))); R(t, S(x)); S(x) = t; }
+
+W(_add) { U2(x); A(D_(S(x))) = A(D_(S(x))) + A(S(x)); pop(x); }
+W(_sub) { U2(x); A(D_(S(x))) = A(D_(S(x))) - A(S(x)); pop(x); }
+W(_mul) { U2(x); A(D_(S(x))) = A(D_(S(x))) * A(S(x)); pop(x); }
+W(_div) { U2(x); A(D_(S(x))) = A(D_(S(x))) / A(S(x)); pop(x); }
+W(_mod) { U2(x); A(D_(S(x))) = A(D_(S(x))) % A(S(x)); pop(x); }
+
+W(_gt) { U2(x); A(D_(S(x))) = A(D_(S(x))) > A(S(x)); pop(x); }
+W(_lt) { U2(x); A(D_(S(x))) = A(D_(S(x))) < A(S(x)); pop(x); }
+W(_eq) { U2(x); A(D_(S(x))) = A(D_(S(x))) == A(S(x)); pop(x); }
+W(_neq) { U2(x); A(D_(S(x))) = A(D_(S(x))) != A(S(x)); pop(x); }
+
+W(_and) { U2(x); A(D_(S(x))) = A(D_(S(x))) & A(S(x)); pop(x); }
+W(_or) { U2(x); A(D_(S(x))) = A(D_(S(x))) | A(S(x)); pop(x); }
+W(_invert) { U(x); A(S(x)) = ~A(S(x)); }
+W(_not) { U(x); A(S(x)) = !A(S(x)); }
+
+W(_allot) { allot(x, pop(x)); }
+W(_align) { push(x, ATM, ALIGN(x->here, sizeof(C)) - ((C)x->here)); _allot(x); }
 
 void dump_list(C p) {
 	if (p) {
@@ -257,12 +258,12 @@ void dump_list(C p) {
 W(_bye) { x->err = ERR_BYE; }
 
 W(_dump_stack) {
-	printf("<%ld> ", lth(x->s));
-	dump_list(x->s);
+	printf("<%ld> ", length(S(x)));
+	dump_list(S(x));
 	printf("\n");
 }
 
-#define WORD(n, f)	(reveal(x, body(x, header(x, n, strlen(n)), PRIMITIVE(x, f, 0))))
+#define WORD(n, f)	(reveal(x, body(x, header(x, n, strlen(n)), cns(x, (C)f, T(PRM, 0)))))
 
 X* bootstrap(X* x) {
 		WORD("{}", &_empty);
@@ -324,6 +325,6 @@ X* bootstrap(X* x) {
 //////#define IS_IMMEDIATE(w)		(TYPE(w->ref) & 1)
 //////
 //////void _immediate(X* x) {
-//////	x->d->ref = AS(1, REF(x->d));
+//////	x->dict->ref = AS(1, REF(x->dict));
 //////}
 
