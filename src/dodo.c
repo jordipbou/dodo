@@ -1,4 +1,5 @@
 #include<stdio.h>
+#include<stdlib.h>
 #include<string.h>
 #include<inttypes.h>
 #include<errno.h>
@@ -12,12 +13,15 @@ void main() {
 	B ibuf[255];
 	B* tok;
 
-	while (x->err != ERR_BYE) {
-		gets(ibuf);
+	while (1) {
+		fgets(ibuf, 255, stdin);
 		outer(x, ibuf);
 		switch (x->err) {
+			case 0: printf("ok\n"); break;
 			case ERR_OVERFLOW: printf("Stack overflow\n"); x->err = 0; break;
 			case ERR_UNDERFLOW: printf("Stack underflow\n"); x->err = 0; break;
+			case ERR_UNDEFINED_WORD: printf("Undefined word\n"); x->err = 0; break;
+			case ERR_BYE: exit(0); break;
 		}
 	}
 }

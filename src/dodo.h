@@ -2,6 +2,7 @@
 #include<stdio.h>
 #include<string.h>
 #include<errno.h>
+#include<ctype.h>
 
 typedef int8_t		B;
 typedef intptr_t	C;		// 16, 32 or 64 bits depending on system
@@ -34,8 +35,10 @@ C rev(C p, C l) { C t; return p ? (t = D_(p), R(p, l), rev(t, p)) : l; }
 
 typedef struct {
 		B* here, * ibuf;
-		C there, size, f, s, r, cf, cp, d, err, st, in;
+		C there, size, f, s, r, cp, d, err, comp, ts, tl;
 	} X;
+
+#define TK(x)								(x->ibuf + x->ts)
 
 #define ALIGN(addr, bound)	((((C)addr) + (bound - 1)) & ~(bound - 1))
 #define RESERVED(x)					((x->there) - ((C)x->here))
@@ -48,6 +51,7 @@ typedef void (*FUNC)(X*);
 #define ERR_NOT_ENOUGH_MEMORY		-1
 #define ERR_OVERFLOW						-2
 #define ERR_UNDERFLOW						-3
+#define ERR_UNDEFINED_WORD			-4
 #define ERR_BYE									-5
 
 #define ST_INTERPRETING					0
@@ -66,7 +70,7 @@ X* init(B* block, C size) {
 			D(p) = p == x->there ? 0 : p - 2*sC;
 		}
 	
-		x->err = x->d = x->s = x->r = x->cf = x->cp = x->st = x->in = 0;
+		x->err = x->d = x->s = x->r = x->cp = x->comp = x->ts = x->tl = 0;
 		x->ibuf = 0;
 	
 		return x;
@@ -96,8 +100,8 @@ void cppop(X* x) {
 
 #define W(n)				void n(X* x)
 
-W(_lbrace) { x->st = ST_COMPILING; cppush(x); }
-W(_rbrace) { cppop(x); x->st = x->cp != 0; }
+W(_lbrace) { x->comp = ST_COMPILING; cppush(x); }
+W(_rbrace) { cppop(x); x->comp = x->cp != 0; }
 
 W(_empty) { O(x); push(x, LST, 0); }
 
@@ -140,14 +144,15 @@ W(_not) { U(x); A(x->s) = !A(x->s); }
 #define RECURSION(x, d)						PRIMITIVE(x, 0, d)
 #define JUMP(x, j, d)							cns(x, ATOM(x, j, 0), T(JMP, d))
 #define LAMBDA(x, w, d)						cns(x, cns(x, cns(x, w, T(LST, 0)), T(LST, 0)), T(JMP, d))
+#define CALL(x, xt, d)						cns(x, cns(x, xt, T(LST, 0)), T(JMP, d))
 C BRANCH(X* x, C t, C f, C d) {
 		if (t) R(lst(t), d); else t = d;
 		if (f) R(lst(f), d); else f = d;
 		return cns(x, cns(x, t, T(LST, cns(x, f, T(LST, 0)))), T(JMP, d));
 	}
 
-void inner(X* x, C xt) {
-		C ip = xt;
+void inner(X* x, C xlist) {
+		C ip = xlist;
 		while(!x->err && ip) {
 			switch(_D(ip)) {
 				case ATM: 
@@ -161,7 +166,7 @@ void inner(X* x, C xt) {
 					break;
 				case PRM: 
 					if (A(ip)) { ((FUNC)A(ip))(x); ip = D_(ip); }
-					else { ip = D_(ip) ? (inner(x, xt), D_(ip)) : xt; } /* RECURSION */
+					else { ip = D_(ip) ? (inner(x, xlist), D_(ip)) : xlist; } /* RECURSION */
 					break;
 			}
 		}
@@ -218,7 +223,26 @@ C header(X* x, B* n, C l) {
 C body(X* x, C h, C l) { BODY(h) = l; return h; }
 C reveal(X* x, C h) {	R(h, x->d); x->d = h;	return h; }
 
-W(_bye) { x->err = ERR_BYE; }
+void compile(X* x, C xt) { IMMEDIATE(D_(xt)) ? inner(x, A(xt)) : cspush(x, CALL(x, xt, 0)); }
+C number(X* x) { 
+	char* endptr;
+	intmax_t n = strtoimax(TK(x), &endptr, 10);
+	if (n == 0 && endptr == (char*)TK(x)) { x->err = ERR_UNDEFINED_WORD; return 0; } 
+	else { x->comp ? cspush(x, ATOM(x, n, 0)) : push(x, ATM, n); return 1; }
+}
+C word(X* x, C w) { x->comp ? compile(x, XT(w)) : inner(x, BODY(w)); return 1; }
+
+#define NOT_WORDS_NAME strncmp(NFA(w), n, l)
+C find(X* x, B* n, C l) { C w = x->d; while (w && NOT_WORDS_NAME) { w = D_(w); } return w; }
+
+#define SPACES(x) while (*TK(x) != 0 && isspace(*TK(x))) { x->ts++; }
+#define TOKEN(x) while (*(TK(x) + x->tl) != 0 && !isspace(*(TK(x) + x->tl))) { x->tl++; }
+#define RST_TKN(x) x->ts += x->tl; x->tl = 0
+C parse(X* x) { RST_TKN(x); SPACES(x); TOKEN(x); return x->tl; }
+
+#define RST	x->ibuf = s; x->ts = 0; x->tl = 0;
+#define FIND(x) find(x, TK(x), x->tl)
+void outer(X* x, B* s) { C w; RST; while (parse(x) ? (w = FIND(x)) ? word(x, w) : number(x) : 0); }
 
 void dump_list(C p) {
 	if (p) {
@@ -230,13 +254,15 @@ void dump_list(C p) {
 	}
 }
 
+W(_bye) { x->err = ERR_BYE; }
+
 W(_dump_stack) {
 	printf("<%ld> ", lth(x->s));
 	dump_list(x->s);
 	printf("\n");
 }
 
-#define WORD(n, f)	reveal(x, body(x, header(x, n, strlen(n)), PRIMITIVE(x, f, 0)));
+#define WORD(n, f)	(reveal(x, body(x, header(x, n, strlen(n)), PRIMITIVE(x, f, 0))))
 
 X* bootstrap(X* x) {
 		WORD("{}", &_empty);
@@ -262,100 +288,11 @@ X* bootstrap(X* x) {
 		WORD("align", &_align);
 		WORD("bye", &_bye);
 		WORD(".s", &_dump_stack);
-		WORD("{", &_lbrace);
-		WORD("}", &_rbrace);
+		// TODO: These two should be immediate words ???
+		IMMEDIATE(WORD("{", &_lbrace)) = 1;
+		IMMEDIATE(WORD("}", &_rbrace)) = 1;
 		return x;
 	}
-
-W(_parse_name) { 
-	C l = 0;
-	while (*(x->ibuf + x->in) != 0 && isspace(*(x->ibuf + x->in))) { x->in++; }
-	push(x, ATM, (C)(x->ibuf + x->in));
-	while (*(x->ibuf + x->in) != 0 && !isspace(*(x->ibuf + x->in))) { x->in++; l++; }
-	push(x, ATM, l);
-}
-
-C find(X* x, B* w, C l) { 
-	for (C h = x->d; h; h = D_(h)) if (!strncmp(w, NFA(h), l)) return XT(h);	
-	return 0;	
-}
-
-W(_find_name) { 
-	C l = pop(x); 
-	C a = pop(x); 
-	C w = find(x, (B*)a, l);
-	if (w && IMMEDIATE(D_(w))) {
-		push(x, ATM, w);
-		push(x, ATM, 1);
-	} else if (w && !IMMEDIATE(D_(w))) {
-		push(x, ATM, w);
-		push(x, ATM, -1);
-	} else {
-		push(x, ATM, a);
-		push(x, ATM, l);
-		push(x, ATM, 0);
-	}
-}
-
-W(_to_number) {
-	C l = pop(x);
-	C a = pop(x);
-	intmax_t num = strtoimax((B*)a, NULL, 10);
-	if (num == INTMAX_MAX && errno == ERANGE) {
-		x->err = -1000;
-	} else {
-		push(x, ATM, num);
-	}
-}
-
-void outer(X* x, B* s) {
-		x->ibuf = s;
-		x->in = 0;
-		while (1) {
-			_parse_name(x);
-			C l = pop(x);
-			if (l == 0) { pop(x); return; }
-			push(x, ATM, l);
-			_find_name(x);
-			C f = pop(x);
-			if (f) {
-				C w = pop(x);
-				if (x->st == ST_INTERPRETING || f == 1) {
-					inner(x, A(w));
-				} else {
-					// TODO: Compile!!
-					//inner(x, A(w));
-				}
-			} else {
-				_to_number(x);
-				// TODO: If compiling, move it to cs
-			}
-		}
-		//B* tok = strtok(s, " ");
-		//while (tok) {
-		//	C w = find(x, tok, strlen(tok));
-		//	if (w) {
-		//		if (x->st == ST_INTERPRETING || IMMEDIATE(w)) {
-		//			inner(x, LAMBDA(x, A(w), 0));
-		//		} else {
-		//			cspush(x, LAMBDA(x, A(w), 0));
-		//		}
-		//	} else {
-		//		intmax_t num = strtoimax(tok, NULL, 10);
-		//		if (num == INTMAX_MAX && errno == ERANGE) {
-		//			x->err = -1000;
-		//		} else {
-		//			if (x->st == ST_INTERPRETING) {
-		//				inner(x, ATOM(x, num, 0));
-		//			} else {
-		//				cspush(x, ATOM(x, num, 0));
-		//			}
-		//		}
-		//	}
-		//	tok = strtok(NULL, " ");
-		//}
-	}
-
 
 ////// Source code for getch is taken from:
 ////// Crossline readline (https://github.com/jcwangxp/Crossline).

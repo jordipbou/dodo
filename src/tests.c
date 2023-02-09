@@ -172,11 +172,11 @@ void test_block_initialization() {
 	TEST_ASSERT_EQUAL_INT(0, x->d);
 	TEST_ASSERT_EQUAL_INT(0, x->s);
 	TEST_ASSERT_EQUAL_INT(0, x->r);
-	TEST_ASSERT_EQUAL_INT(0, x->cf);
 	TEST_ASSERT_EQUAL_INT(0, x->cp);
-	TEST_ASSERT_EQUAL_INT(0, x->st);
+	TEST_ASSERT_EQUAL_INT(0, x->comp);
 	TEST_ASSERT_EQUAL_PTR(0, x->ibuf);
-	TEST_ASSERT_EQUAL_INT(0, x->in);
+	TEST_ASSERT_EQUAL_INT(0, x->ts);
+	TEST_ASSERT_EQUAL_INT(0, x->tl);
 }
 
 // LIST CREATION AND DESTRUCTION (AUTOMATIC MEMORY MANAGEMENT)
@@ -1583,7 +1583,7 @@ void test_allot_str() {
 	B* here = x->here;
 
 	B* s = allot_str(x, 11);
-	strncpy(s, "test string", 11);
+	strcpy(s, "test string");
 
 	TEST_ASSERT_EQUAL_PTR(here + sizeof(C), s);
 	TEST_ASSERT_EQUAL_STRING("test string", s);
@@ -1650,153 +1650,153 @@ void test_find() {
 	B block[size];
 	X* x = bootstrap(init(block, size));
 
-	C xt = find(x, "+", 1);
+	C w = find(x, "+", 1);
 
-	TEST_ASSERT_EQUAL_PTR(&_add, (FUNC)A(A(xt)));
+	TEST_ASSERT_EQUAL_PTR(&_add, A(BODY(w)));
 
-	xt = find(x, "allot", 5);
+	w = find(x, "allot", 5);
 
-	TEST_ASSERT_EQUAL_PTR(&_allot, (FUNC)A(A(xt)));
+	TEST_ASSERT_EQUAL_PTR(&_allot, A(BODY(w)));
 
-	xt = find(x, "test", 4);
+	w = find(x, "test", 4);
 
-	TEST_ASSERT_EQUAL_INT(0, xt);
+	TEST_ASSERT_EQUAL_INT(0, w);
 }
 
-void test_parse_name() {
-	C size = 512;
-	B block[size];
-	X* x = init(block, size);
-	B* str = "   test  ";
+//void test_parse_name() {
+//	C size = 512;
+//	B block[size];
+//	X* x = init(block, size);
+//	B* str = "   test  ";
+//
+//	x->ibuf = str;
+//
+//	_parse_name(x);
+//
+//	C len = pop(x);
+//	C addr = pop(x);
+//
+//	TEST_ASSERT_EQUAL_INT(4, len);
+//	TEST_ASSERT_EQUAL_INT((C)str + 3, addr);
+//
+//	_parse_name(x);
+//
+//	len = pop(x);
+//	addr = pop(x);
+//
+//	TEST_ASSERT_EQUAL_INT(0, len);
+//	TEST_ASSERT_EQUAL_INT((C)str + 9, addr);
+//
+//	B* str2 = "";
+//	x->ibuf = str2;
+//	x->in = 0;
+//
+//	_parse_name(x);
+//
+//	len = pop(x);
+//	addr = pop(x);
+//
+//	TEST_ASSERT_EQUAL_INT(0, len);
+//	TEST_ASSERT_EQUAL_INT((C)str2, addr);
+//
+//	B* str3 = ": name    word1 ;";
+//	x->ibuf = str3;
+//	x->in = 0;
+//
+//	_parse_name(x);
+//
+//	len = pop(x);
+//	addr = pop(x);
+//
+//	TEST_ASSERT_EQUAL_INT(1, len);
+//	TEST_ASSERT(!strncmp(":", (B*)addr, len));
+//	TEST_ASSERT_EQUAL_INT((C)str3, addr);
+//
+//	_parse_name(x);
+//
+//	len = pop(x);
+//	addr = pop(x);
+//
+//	TEST_ASSERT_EQUAL_INT(4, len);
+//	TEST_ASSERT(!strncmp("name", (B*)addr, len));
+//	TEST_ASSERT_EQUAL_INT((C)str3 + 2, addr);
+//
+//	_parse_name(x);
+//
+//	len = pop(x);
+//	addr = pop(x);
+//
+//	TEST_ASSERT_EQUAL_INT(5, len);
+//	TEST_ASSERT(!strncmp("word1", (B*)addr, len));
+//	TEST_ASSERT_EQUAL_INT((C)str3 + 10, addr);
+//
+//	_parse_name(x);
+//
+//	len = pop(x);
+//	addr = pop(x);
+//
+//	TEST_ASSERT_EQUAL_INT(1, len);
+//	TEST_ASSERT(!strncmp(";", (B*)addr, len));
+//	TEST_ASSERT_EQUAL_INT((C)str3 + 16, addr);
+//
+//	_parse_name(x);
+//
+//	len = pop(x);
+//	addr = pop(x),
+//
+//	TEST_ASSERT_EQUAL_INT(0, len);
+//	TEST_ASSERT_EQUAL_INT((C)str3 + 17, addr);
+//
+//	_parse_name(x);
+//
+//	len = pop(x);
+//	addr = pop(x),
+//
+//	TEST_ASSERT_EQUAL_INT(0, len);
+//	TEST_ASSERT_EQUAL_INT((C)str3 + 17, addr);
+//}
 
-	x->ibuf = str;
-
-	_parse_name(x);
-
-	C len = pop(x);
-	C addr = pop(x);
-
-	TEST_ASSERT_EQUAL_INT(4, len);
-	TEST_ASSERT_EQUAL_INT((C)str + 3, addr);
-
-	_parse_name(x);
-
-	len = pop(x);
-	addr = pop(x);
-
-	TEST_ASSERT_EQUAL_INT(0, len);
-	TEST_ASSERT_EQUAL_INT((C)str + 9, addr);
-
-	B* str2 = "";
-	x->ibuf = str2;
-	x->in = 0;
-
-	_parse_name(x);
-
-	len = pop(x);
-	addr = pop(x);
-
-	TEST_ASSERT_EQUAL_INT(0, len);
-	TEST_ASSERT_EQUAL_INT((C)str2, addr);
-
-	B* str3 = ": name    word1 ;";
-	x->ibuf = str3;
-	x->in = 0;
-
-	_parse_name(x);
-
-	len = pop(x);
-	addr = pop(x);
-
-	TEST_ASSERT_EQUAL_INT(1, len);
-	TEST_ASSERT(!strncmp(":", addr, len));
-	TEST_ASSERT_EQUAL_INT((C)str3, addr);
-
-	_parse_name(x);
-
-	len = pop(x);
-	addr = pop(x);
-
-	TEST_ASSERT_EQUAL_INT(4, len);
-	TEST_ASSERT(!strncmp("name", addr, len));
-	TEST_ASSERT_EQUAL_INT((C)str3 + 2, addr);
-
-	_parse_name(x);
-
-	len = pop(x);
-	addr = pop(x);
-
-	TEST_ASSERT_EQUAL_INT(5, len);
-	TEST_ASSERT(!strncmp("word1", addr, len));
-	TEST_ASSERT_EQUAL_INT((C)str3 + 10, addr);
-
-	_parse_name(x);
-
-	len = pop(x);
-	addr = pop(x);
-
-	TEST_ASSERT_EQUAL_INT(1, len);
-	TEST_ASSERT(!strncmp(";", addr, len));
-	TEST_ASSERT_EQUAL_INT((C)str3 + 16, addr);
-
-	_parse_name(x);
-
-	len = pop(x);
-	addr = pop(x),
-
-	TEST_ASSERT_EQUAL_INT(0, len);
-	TEST_ASSERT_EQUAL_INT((C)str3 + 17, addr);
-
-	_parse_name(x);
-
-	len = pop(x);
-	addr = pop(x),
-
-	TEST_ASSERT_EQUAL_INT(0, len);
-	TEST_ASSERT_EQUAL_INT((C)str3 + 17, addr);
-}
-
-void test_find_name() {
-	C size = 4096;
-	B block[size];
-	X* x = bootstrap(init(block, size));
-
-	push(x, ATM, (C)"dup");
-	push(x, ATM, 3);
-
-	_find_name(x);
-
-	C imm = pop(x);
-	C xt = pop(x);
-
-	TEST_ASSERT_EQUAL_INT(-1, imm);
-	TEST_ASSERT_EQUAL_INT(find(x, "dup", 3), xt);
-
-	B* str = "  join ";
-	x->ibuf = str;
-
-	_parse_name(x);
-	_find_name(x);
-
-	imm = pop(x);
-	xt = pop(x);
-
-	TEST_ASSERT_EQUAL_INT(-1, imm);
-	TEST_ASSERT_EQUAL_INT(find(x, "join", 4), xt);
-}
-
-void test_to_number() {
-	C size = 512;
-	B block[size];
-	X* x = init(block, size);
-
-	x->ibuf = "256";
-	_parse_name(x);
-	_to_number(x);
-	C n = pop(x);
-
-	TEST_ASSERT_EQUAL_INT(256, n);
-}
+//void test_find_name() {
+//	C size = 4096;
+//	B block[size];
+//	X* x = bootstrap(init(block, size));
+//
+//	push(x, ATM, (C)"dup");
+//	push(x, ATM, 3);
+//
+//	_find_name(x);
+//
+//	C imm = pop(x);
+//	C xt = pop(x);
+//
+//	TEST_ASSERT_EQUAL_INT(-1, imm);
+//	TEST_ASSERT_EQUAL_INT(find(x, "dup", 3), xt);
+//
+//	B* str = "  join ";
+//	x->ibuf = str;
+//
+//	_parse_name(x);
+//	_find_name(x);
+//
+//	imm = pop(x);
+//	xt = pop(x);
+//
+//	TEST_ASSERT_EQUAL_INT(-1, imm);
+//	TEST_ASSERT_EQUAL_INT(find(x, "join", 4), xt);
+//}
+//
+//void test_to_number() {
+//	C size = 512;
+//	B block[size];
+//	X* x = init(block, size);
+//
+//	x->ibuf = "256";
+//	_parse_name(x);
+//	_to_number(x);
+//	C n = pop(x);
+//
+//	TEST_ASSERT_EQUAL_INT(256, n);
+//}
 
 ////void test_clear_stack() {
 ////	C size = 512;
@@ -2146,10 +2146,10 @@ int main() {
 	RUN_TEST(test_body);
 	RUN_TEST(test_reveal);
 
-	RUN_TEST(test_parse_name);
+	//RUN_TEST(test_parse_name);
 	RUN_TEST(test_find);
-	RUN_TEST(test_find_name);
-	RUN_TEST(test_to_number);
+	//RUN_TEST(test_find_name);
+	//RUN_TEST(test_to_number);
 
 //	//RUN_TEST(test_stack_to_list);
 //
