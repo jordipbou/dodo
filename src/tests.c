@@ -542,6 +542,75 @@ void test_align() {
 	TEST_ASSERT_EQUAL_INT(0, result);
 }
 
+// WORD DEFINITIONS
+
+void test_header() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	BYTE* here = ctx->here;
+
+	CELL h = header(ctx, "test", 4);
+
+	TEST_ASSERT_EQUAL_PTR(here + sizeof(CELL) + 4 + 1, ctx->here);
+	TEST_ASSERT_EQUAL_PTR(here + sizeof(CELL), NFA(h));
+	TEST_ASSERT_EQUAL_PTR(ctx->here, DFA(h));
+	TEST_ASSERT_EQUAL_INT(0, XT(h));
+}
+
+void test_body() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	CELL h = header(ctx, "test", 4);
+
+	CELL w = body(ctx, h, cons(ctx, 11, AS(ATOM, cons(ctx, 7, AS(ATOM, 0)))));
+
+	execute(ctx, XT(w));
+
+	TEST_ASSERT_EQUAL_INT(2, length(ctx->stack));
+	TEST_ASSERT_EQUAL_INT(7, CAR(ctx->stack));
+	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(ctx->stack)));
+}
+
+void test_reveal() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	CELL h = header(ctx, "test1", 5);
+	CELL h2 = header(ctx, "test2", 5);
+
+	CELL d = reveal(ctx, h);
+
+	TEST_ASSERT_EQUAL_INT(h, d);
+	TEST_ASSERT_EQUAL_INT(h, ctx->latest);
+	TEST_ASSERT_EQUAL_INT(1, length(ctx->latest));
+
+	d = reveal(ctx, h2);
+
+	TEST_ASSERT_EQUAL_INT(h2, d);
+	TEST_ASSERT_EQUAL_INT(h2, ctx->latest);
+	TEST_ASSERT_EQUAL_INT(2, length(ctx->latest));
+	TEST_ASSERT_EQUAL_INT(h, NEXT(ctx->latest));
+}
+
+void test_immediate() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	CELL h = reveal(ctx, header(ctx, "test1", 5));
+
+	TEST_ASSERT_EQUAL_INT(0, IMMEDIATE(ctx->latest));
+
+	immediate(h);
+
+	TEST_ASSERT_EQUAL_INT(1, IMMEDIATE(ctx->latest));
+}
+
 //void test_execute_xt_2() {
 //	CELL size = 512;
 //	BYTE block[size];
@@ -1791,60 +1860,6 @@ void test_align() {
 //	TEST_ASSERT_EQUAL_PTR(here + sizeof(C) + 12,CTX* ctx->here);
 //}
 //
-//void test_header() {
-//	CELL size = 512;
-//	BYTE block[size];
-//	X*CTX* ctx = init(block, size);
-//
-//	B* here =CTX* ctx->here;
-//
-//	C h = header(x, "test", 4);
-//
-//	TEST_ASSERT_EQUAL_PTR(here + 1 + sizeof(C) + 4 + 1,CTX* ctx->here);
-//	TEST_ASSERT_EQUAL_PTR(here + 1 + sizeof(C), NFA(h));
-//	TEST_ASSERT_EQUAL_PTR(x->here, DFA(h));
-//	TEST_ASSERT_EQUAL_INT(0, BODY(h));
-//	TEST_ASSERT_EQUAL_INT(h, NEXT(XT(h)));
-//}
-//
-//void test_body() {
-//	CELL size = 512;
-//	BYTE block[size];
-//	X*CTX* ctx = init(block, size);
-//
-//	C h = header(x, "test", 4);
-//
-//	C w = body(x, h, ATOM(x, 11, ATOM(x, 7, 0)));
-//
-//	inner(x, LAMBDA(x, BODY(w), 0));
-//
-//	TEST_ASSERT_EQUAL_INT(2, length(x->stack));
-//	TEST_ASSERT_EQUAL_INT(7, A(x->stack));
-//	TEST_ASSERT_EQUAL_INT(11, A(NEXT(x->stack)));
-//}
-//
-//void test_reveal() {
-//	CELL size = 512;
-//	BYTE block[size];
-//	X*CTX* ctx = init(block, size);
-//
-//	C h = header(x, "test1", 5);
-//	C h2 = header(x, "test2", 5);
-//
-//	C d = reveal(x, h);
-//
-//	TEST_ASSERT_EQUAL_INT(h, d);
-//	TEST_ASSERT_EQUAL_INT(h,CTX* ctx->dict);
-//	TEST_ASSERT_EQUAL_INT(1, length(x->dict));
-//
-//	d = reveal(x, h2);
-//
-//	TEST_ASSERT_EQUAL_INT(h2, d);
-//	TEST_ASSERT_EQUAL_INT(h2,CTX* ctx->dict);
-//	TEST_ASSERT_EQUAL_INT(2, length(x->dict));
-//	TEST_ASSERT_EQUAL_INT(h, NEXT(x->dict));
-//}
-//
 ////void test_to_number() {
 ////	CELL size = 512;
 ////	BYTE block[size];
@@ -2140,6 +2155,12 @@ int main() {
 	RUN_TEST(test_allot);
 	RUN_TEST(test_align);
 
+	// WORD DEFINITIONS
+	RUN_TEST(test_header);
+	RUN_TEST(test_body);
+	RUN_TEST(test_reveal);
+	RUN_TEST(test_immediate);
+
 //	RUN_TEST(test_mlength);
 //	RUN_TEST(test_last);
 //
@@ -2204,10 +2225,6 @@ int main() {
 //
 //
 //	RUN_TEST(test_allot_str);
-//
-//	RUN_TEST(test_header);
-//	RUN_TEST(test_body);
-//	RUN_TEST(test_reveal);
 //
 //	RUN_TEST(test_find);
 //	//RUN_TEST(test_to_number);

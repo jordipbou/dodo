@@ -148,9 +148,9 @@ CELL execute(CTX* ctx, CELL xlist) {
 
 // END OF CORE - Everything above this line is the bare minimum
 
-#define NFA(word)								(CAR(word))
-#define DFA(word)								(0)	// TODO: Address after zero ended word's name string
-#define XT(word)								(NEXT(NFA(word)))
+#define NFA(word)								(CAR(CAR(word)))
+#define DFA(word)								(NFA(word) + *((CELL*)(NFA(word) - sizeof(CELL))) + 1)
+#define XT(word)								(NEXT(CAR(word)))
 #define IMMEDIATE(word)					(TYPE(word) == CALL)
 
 CELL parse_token(CTX* ctx) {
@@ -166,7 +166,7 @@ CELL parse_token(CTX* ctx) {
 
 CELL find_token(CTX* ctx) {
 	CELL word = ctx->latest;
-	while (word && strncmp((BYTE*)CAR(NFA(word)), ctx->tib + ctx->token, ctx->in - ctx->token)) {
+	while (word && strncmp((BYTE*)NFA(word), ctx->tib + ctx->token, ctx->in - ctx->token)) {
 		word = NEXT(word);
 	}
 	return word;
@@ -242,6 +242,34 @@ CELL align(CTX* ctx) {
 
 // END OF CONTIGUOUS MEMORY
 
+CELL header(CTX* ctx, BYTE* name, CELL length) {
+	BYTE* str = ctx->here;
+	if (ctx->free == 0 || NEXT(ctx->free) == 0) {	return ERR_STACK_OVERFLOW; }
+	if ((allot(ctx, length + sizeof(CELL) + 1)) != 0) { return ERR_NOT_ENOUGH_MEMORY; }
+	*((CELL*)str) = length;
+	str += sizeof(CELL);
+	strcpy(str, name);
+	return cons(ctx, cons(ctx, (CELL)str, AS(ATOM, 0)), AS(LIST, 0));
+}
+
+CELL body(CTX* ctx, CELL word, CELL list) {
+	CDR(CAR(word)) = AS(ATOM, list);	
+	return word;
+}
+
+CELL reveal(CTX* ctx, CELL word) {
+	CDR(word) = AS(LIST, ctx->latest);
+	ctx->latest = word;
+	return word;
+}
+
+CELL immediate(CELL word) {
+	CDR(word) = AS(CALL, NEXT(word));
+	return word;
+}
+
+// END OF WORD DEFINITION
+
 CELL _add(CTX* ctx) {
 	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
 	CAR(NEXT(ctx->stack)) = CAR(NEXT(ctx->stack)) + CAR(ctx->stack);
@@ -292,30 +320,6 @@ CELL _add(CTX* ctx) {
 //
 //	ctx->ip = NEXT(ctx->ip);
 //	return 0;
-//}
-
-//CELL header(CTX* ctx, BYTE* name, CELL length) {
-//	// TODO: Error management, required free cells: 3, required memory: length + sizeof(CELL) + 1
-//	BYTE* str;
-//	CELL word, xt, nfa;
-//	if ((word = cons(ctx, 0, AS(LIST, 0))) == 0) { return ERR_STACK_OVERFLOW; }
-//	if ((str = allot(ctx, length + sizeof(CELL) + 1)) == 0) { return ERR_NOT_ENOUGH_MEMORY; }
-//	*((CELL*)str) = length;
-//	str += sizeof(CELL);
-//	strcpy(str, name);
-//	if ((xt = cons(ctx, 0, AS(XT, word))) == 0) { return ERR_STACK_OVERFLOW; }
-//	if ((nfa = cons(ctx, (CELL)str, AS(ATOM, xt))) == 0) { return ERR_STACK_OVERFLOW; }
-//	CAR(word) = nfa;
-//	return word;
-//}
-//
-//C header(X* x, B* n, C l) {
-//	*allot(x, 1) = 0;
-//	// TODO: Alignment of cell size of string is not checked
-//	C h = cns(x, 0, T(LST, 0));
-//	B* s = strcpy(allot_str(x, l), n);
-//	A(h) = cns(x, (C)s, T(ATM, cns(x, 0, T(LST, h))));
-//	return h;
 //}
 
 // Source code for getch is taken from:
