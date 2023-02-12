@@ -421,6 +421,37 @@ void test_parse_token() {
 	TEST_ASSERT_EQUAL_INT((CELL)str3 + 17, ctx->tib + ctx->token);
 }
 
+void test_find_token() {
+	CELL size = 4096;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	ctx->latest =	
+		cons(ctx, cons(ctx, (CELL)"test", AS(ATOM, 0)), AS(LIST,
+		cons(ctx, cons(ctx, (CELL)"dup", AS(ATOM, 0)), AS(CALL,
+		cons(ctx, cons(ctx, (CELL)"join", AS(ATOM, 0)), AS(LIST, 0))))));
+
+	ctx->tib = "dup";
+	ctx->token = 0;
+	ctx->in = 3;
+
+	CELL word = find_token(ctx);
+
+	TEST_ASSERT_NOT_EQUAL_INT(0, word);
+	TEST_ASSERT_EQUAL_INT(1, IMMEDIATE(word));
+	TEST_ASSERT_EQUAL_INT(NEXT(ctx->latest), word);
+
+	ctx->tib = "   join  ";
+	ctx->token = 0;
+	ctx->in = 0;
+
+	parse_token(ctx);
+	word = find_token(ctx);
+
+	TEST_ASSERT_EQUAL_INT(0, IMMEDIATE(word));
+	TEST_ASSERT_EQUAL_INT(NEXT(NEXT(ctx->latest)), word);
+}
+
 //void test_execute_xt_2() {
 //	CELL size = 512;
 //	BYTE block[size];
@@ -1824,53 +1855,6 @@ void test_parse_token() {
 //	TEST_ASSERT_EQUAL_INT(h, NEXT(x->dict));
 //}
 //
-//void test_find() {
-//	CELL size = 2048;
-//	BYTE block[size];
-//	X*CTX* ctx = bootstrap(init(block, size));
-//
-//	C w = find(x, "+", 1);
-//
-//	TEST_ASSERT_EQUAL_PTR(&_add, A(BODY(w)));
-//
-//	w = find(x, "allot", 5);
-//
-//	TEST_ASSERT_EQUAL_PTR(&_allot, A(BODY(w)));
-//
-//	w = find(x, "test", 4);
-//
-//	TEST_ASSERT_EQUAL_INT(0, w);
-//}
-//
-////void test_find_name() {
-////	CELL size = 4096;
-////	BYTE block[size];
-////	X*CTX* ctx = bootstrap(init(block, size));
-////
-////	push(x, ATM, (C)"dup");
-////	push(x, ATM, 3);
-////
-////	_find_name(ctx);
-////
-////	C imm = pop(ctx);
-////	CCTX* ctxt = pop(ctx);
-////
-////	TEST_ASSERT_EQUAL_INT(-1, imm);
-////	TEST_ASSERT_EQUAL_INT(find(x, "dup", 3),CTX* ctxt);
-////
-////	B* str = "  join ";
-////	x->ibuf = str;
-////
-////	parse_token(ctx);
-////	_find_name(ctx);
-////
-////	imm = pop(ctx);
-////	xt = pop(ctx);
-////
-////	TEST_ASSERT_EQUAL_INT(-1, imm);
-////	TEST_ASSERT_EQUAL_INT(find(x, "join", 4),CTX* ctxt);
-////}
-////
 ////void test_to_number() {
 ////	CELL size = 512;
 ////	BYTE block[size];
@@ -2160,6 +2144,7 @@ int main() {
 
 	// PARSING
 	RUN_TEST(test_parse_token);
+	RUN_TEST(test_find_token);
 	
 
 //	RUN_TEST(test_mlength);
@@ -2234,7 +2219,6 @@ int main() {
 //	RUN_TEST(test_reveal);
 //
 //	RUN_TEST(test_find);
-//	//RUN_TEST(test_find_name);
 //	//RUN_TEST(test_to_number);
 //
 ////	//RUN_TEST(test_stack_to_list);
