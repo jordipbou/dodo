@@ -524,6 +524,24 @@ void test_allot() {
 	TEST_ASSERT_EQUAL_INT(free_nodes(ctx), FREE(ctx));
 }
 
+void test_align() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	// This ensures here will be aligned with a pair 
+	CELL result = allot(ctx, RESERVED(ctx));
+
+	// And this ensures that it will not be aligned
+	result = allot(ctx, 1);
+	TEST_ASSERT_NOT_EQUAL_INT(ALIGN(ctx->here, sizeof(CELL)), ctx->here);
+	TEST_ASSERT_EQUAL_INT(0, result);
+
+	result = align(ctx);
+	TEST_ASSERT_EQUAL_INT(ALIGN(ctx->here, sizeof(CELL)), ctx->here);
+	TEST_ASSERT_EQUAL_INT(0, result);
+}
+
 //void test_execute_xt_2() {
 //	CELL size = 512;
 //	BYTE block[size];
@@ -1757,25 +1775,6 @@ void test_allot() {
 //	return cons(x, cons(x, t, T(LST, cons(x, f, T(LST, 0)))), T(JMP, d));
 //}
 //
-//void test_align() {
-//	CELL size = 512;
-//	BYTE block[size];
-//	X*CTX* ctx = init(block, size);
-//
-//	// This ensures here will be aligned with a pair 
-//	push(x, ATM, RESERVED(ctx));
-//	_allot(ctx);
-//
-//	push(x, ATM, 1);
-//	_allot(ctx);
-//	TEST_ASSERT_NOT_EQUAL_INT(ALIGN(x->here, sizeof(C)),CTX* ctx->here);
-//	TEST_ASSERT_EQUAL_INT(0,CTX* ctx->err);
-//
-//	_align(ctx);
-//	TEST_ASSERT_EQUAL_INT(ALIGN(x->here, sizeof(C)),CTX* ctx->here);
-//	TEST_ASSERT_EQUAL_INT(0,CTX* ctx->err);
-//}
-//
 //void test_allot_str() {
 //	CELL size = 512;
 //	BYTE block[size];
@@ -2139,6 +2138,7 @@ int main() {
 
 	// CONTIGUOUS MEMORY
 	RUN_TEST(test_allot);
+	RUN_TEST(test_align);
 
 //	RUN_TEST(test_mlength);
 //	RUN_TEST(test_last);
@@ -2202,7 +2202,6 @@ int main() {
 //	//RUN_TEST(test_push_stack);
 //	//RUN_TEST(test_drop_stack);
 //
-//	RUN_TEST(test_align);
 //
 //	RUN_TEST(test_allot_str);
 //
