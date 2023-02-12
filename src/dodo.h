@@ -27,6 +27,7 @@ typedef CELL (*FUNC)(CTX*);
 #define ERR_UNDEFINED_WORD			-3
 #define ERR_NOT_ENOUGH_MEMORY		-4
 
+#define FREE(ctx)						(length(ctx->free) - 1)
 #define ALIGN(addr, bound)	((((CELL)addr) + (bound - 1)) & ~(bound - 1))
 #define RESERVED(ctx)				((ctx->there) - ((CELL)ctx->here))
 
@@ -126,7 +127,7 @@ CELL execute(CTX* ctx, CELL xlist) {
 				ctx->ip = NEXT(ctx->ip); 
 				break;
 			case LIST:
-				if (length(ctx->free) < (depth(CAR(ctx->ip)) + 1)) { return ERR_STACK_OVERFLOW; }
+				if (FREE(ctx) < (depth(CAR(ctx->ip)) + 1)) { return ERR_STACK_OVERFLOW; }
 				ctx->stack = cons(ctx, clone(ctx, CAR(ctx->ip)), AS(LIST, ctx->stack));
 				ctx->ip = NEXT(ctx->ip);
 				break;
@@ -186,7 +187,7 @@ CELL evaluate(CTX* ctx, BYTE* str) {
 				}
 			} else {
 				if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
-				ctx->compiled = cons(ctx, XT(word), AS(CALL, ctx->compiled));
+				CAR(ctx->compiled) = cons(ctx, XT(word), AS(CALL, CAR(ctx->compiled)));
 			}
 		} else {
 			intmax_t number = strtoimax(ctx->tib + ctx->token, &endptr, 10);
@@ -195,7 +196,7 @@ CELL evaluate(CTX* ctx, BYTE* str) {
 			} else {
 				if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
 				if (ctx->compiling) {
-					ctx->compiled = cons(ctx, number, AS(ATOM, ctx->compiled));
+					CAR(ctx->compiled) = cons(ctx, number, AS(ATOM, CAR(ctx->compiled)));
 				} else {
 					ctx->stack = cons(ctx, number, AS(ATOM, ctx->stack));
 				}
@@ -204,6 +205,88 @@ CELL evaluate(CTX* ctx, BYTE* str) {
 	} while (1);
 }
 
+// END OF EVALUATOR (Outer interpreter)
+
+CELL allot(CTX* ctx, CELL bytes) {
+ 	BYTE* here = ctx->here;
+ 	if (!bytes) { 
+		return 0;
+ 	} else if (bytes < 0) { 
+ 		ctx->here = (ctx->here + bytes) > BOTTOM(ctx) ? ctx->here + bytes : BOTTOM(ctx);
+ 		while (ctx->there - (2*sizeof(CELL)) >= ALIGN(ctx->here, (2*sizeof(CELL)))) { 
+ 			CELL t = ctx->there;
+ 			ctx->there -= (2*sizeof(CELL));
+ 			CAR(ctx->there) = t;
+ 			CDR(ctx->there) = 0;
+ 			CDR(t) = ctx->there;
+ 		}
+ 	} else {
+ 		CELL p = ctx->there;
+ 		while(CAR(p) == (p + (2*sizeof(CELL))) && p < (CELL)(ctx->here + bytes) && p < TOP(ctx)) { 
+			p = CAR(p);	
+		}
+ 		if (p >= (CELL)(here + bytes)) {
+ 			ctx->there = p;
+ 			CDR(ctx->there) = 0;
+ 			ctx->here += bytes;
+ 		} else {
+ 			return ERR_NOT_ENOUGH_MEMORY;
+ 		}
+ 	}
+ 	return 0;
+}
+
+CELL _add(CTX* ctx) {
+	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
+	CAR(NEXT(ctx->stack)) = CAR(NEXT(ctx->stack)) + CAR(ctx->stack);
+	ctx->stack = reclaim(ctx, ctx->stack);
+
+	ctx->ip = NEXT(ctx->ip); 
+	return 0;
+}
+
+//
+//
+//void dump_list(CELL pair) {
+//	if (pair) {
+//		dump_list(NEXT(pair));
+//		switch (TYPE(pair)) {
+//			case ATOM: printf("%ld ", CAR(pair)); break;
+//			case LIST: printf("{ "); dump_list(CAR(pair)); printf("} "); break;
+//			case PRIM: printf("%p ", CAR(pair)); break;
+//			case CALL: printf("%p ", CAR(pair)); break;
+//		}
+//	}
+//}
+//
+//CELL _dump_stack(CTX* ctx) {
+//	printf("<%ld> ", length(ctx->stack));
+//	dump_list(ctx->stack);
+//	printf("\n");
+//}
+//
+//CELL _lbrace(CTX* ctx) {
+//	ctx->compiling = 1;
+//	ctx->compiled = cons(ctx, 0, AS(LIST, ctx->compiled));
+//
+//	ctx->ip = NEXT(ctx->ip);
+//	return 0;
+//}
+//
+//CELL _rbrace(CTX* ctx) {
+//	CELL list = CAR(ctx->compiled);
+//	CAR(ctx->compiled) = 0;
+//	ctx->compiled = reclaim(ctx, ctx->compiled);
+//	if (ctx->compiled == 0) {
+//		ctx->stack = cons(ctx, list, AS(LIST, ctx->stack));
+//		ctx->compiling = 0;
+//	} else {
+//		CAR(ctx->compiled) = cons(ctx, list, AS(LIST, CAR(ctx->compiled)));
+//	}
+//
+//	ctx->ip = NEXT(ctx->ip);
+//	return 0;
+//}
 
 //#define PUSH(ctx, value, type, next) \
 //	if ((result = cons(ctx, value, AS(type, next))) != 0) { \
@@ -213,33 +296,6 @@ CELL evaluate(CTX* ctx, BYTE* str) {
 //	}
 //
 //// TODO: Doing this!!!!
-//CELL allot(CTX* ctx, CELL bytes) {
-// 	B* here = x->here;
-// 	if (!b) { return 0;
-// 	} else if (b < 0) { 
-// 		x->here = (x->here + b) > BOTTOM(x) ? x->here + b : BOTTOM(x);
-// 		while (x->there - (2*sizeof(C)) >= ALIGN(x->here, (2*sizeof(C)))) { 
-// 			C t = x->there;
-// 			x->there -= (2*sizeof(C));
-// 			A(x->there) = t;
-// 			D(x->there) = 0;
-// 			D(t) = x->there;
-// 		}
-// 	} else {
-// 		C p = x->there;
-// 		while(A(p) == (p + (2*sizeof(C))) && p < (C)(x->here + b) && p < TOP(x)) { p = A(p);	}
-// 		if (p >= (C)(here + b)) {
-// 			x->there = p;
-// 			D(x->there) = 0;
-// 			x->here += b;
-// 		} else {
-// 			x->err = ERR_NOT_ENOUGH_MEMORY;
-// 			return 0;
-// 		}
-// 	}
-// 	return here;
-//}
-//
 //CELL header(CTX* ctx, BYTE* name, CELL length) {
 //	// TODO: Error management, required free cells: 3, required memory: length + sizeof(CELL) + 1
 //	BYTE* str;
