@@ -19,8 +19,8 @@ typedef CELL (*FUNC)(CTX*);
 
 #define ATOM										0
 #define LIST										1
-#define PRIMITIVE								2
-//#define XT											3
+#define PRIM										2
+#define CALL										3
 
 #define ERR_STACK_OVERFLOW			-1
 #define ERR_STACK_UNDERFLOW			-2
@@ -112,8 +112,8 @@ CELL execute(CTX* ctx, CELL xlist) {
 	ctx->ip = xlist;
 	do {
 		if (ctx->ip == 0) {
-			if (ctx->rstack != 0) {
-				ctx->ip = NEXT(CAR(ctx->rstack));
+			if (ctx->rstack) {
+				ctx->ip = CAR(ctx->rstack);
 				ctx->rstack = reclaim(ctx, ctx->rstack);
 			} else {
 				return 0;
@@ -130,88 +130,87 @@ CELL execute(CTX* ctx, CELL xlist) {
 				ctx->stack = cons(ctx, clone(ctx, CAR(ctx->ip)), AS(LIST, ctx->stack));
 				ctx->ip = NEXT(ctx->ip);
 				break;
-			case PRIMITIVE:
-				// Some cases of primitives (like jump or call) could be implemented here without
-				// needing to call another function and without needing to use another type (XT)
+			case PRIM:
 				result = ((FUNC)CAR(ctx->ip))(ctx);
 				if (result != 0) { return result; }
 				break;
-			//case XT:
-			//	if (NEXT(ctx->ip) != 0) {
-			//		if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
-			//		ctx->rstack = cons(ctx, ctx->ip, AS(ATOM, ctx->rstack));
-			//	}
-			//	ctx->ip = CAR(CAR(ctx->ip));
-			//	break;
+			case CALL:
+				if (NEXT(ctx->ip) != 0) {
+					if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
+					ctx->rstack = cons(ctx, NEXT(ctx->ip), AS(ATOM, ctx->rstack));
+				}
+				ctx->ip = CAR(ctx->ip);
+				break;
 		}
 	} while (1);
 }
 
 // END OF CORE - Everything above this line is the bare minimum
 
-//#define NFA(word)								(CAR(word))
-//#define DFA(word)								(0)	// TODO: Address after zero ended word's name string
-//#define CFA(word)								(NEXT(NFA(word)))
-//#define BODY(word)							(CAR(CFA(word)))
-//#define IMMEDIATE(word)					(IS(XT, word))
-//
+#define NFA(word)								(CAR(word))
+#define DFA(word)								(0)	// TODO: Address after zero ended word's name string
+#define XT(word)								(NEXT(NFA(word)))
+#define IMMEDIATE(word)					(TYPE(word) == CALL)
+
+CELL parse_token(CTX* ctx) {
+	while (*(ctx->tib + ctx->in) != 0 && isspace(*(ctx->tib + ctx->in))) {
+		ctx->in++;
+	}
+	ctx->token = ctx->in;
+	while (*(ctx->tib + ctx->in) != 0 && !isspace(*(ctx->tib + ctx->in))) {
+		ctx->in++;
+	}
+	return ctx->in - ctx->token;
+}
+
+CELL find_token(CTX* ctx) {
+	CELL word = ctx->latest;
+	while (word && strncmp((BYTE*)CAR(NFA(word)), ctx->tib + ctx->token, ctx->in - ctx->token)) {
+		word = NEXT(word);
+	}
+	return word;
+}
+
+CELL evaluate(CTX* ctx, BYTE* str) {
+	CELL word, result;
+	char *endptr;
+	ctx->tib = str;
+	ctx->token = 0;
+	ctx->in = 0;
+	do {
+		if (parse_token(ctx) == 0) { return 0; }
+		if ((word = find_token(ctx)) != 0) {
+			if (!ctx->compiling || IMMEDIATE(word)) {
+				if ((result = execute(ctx, XT(word))) != 0) {
+					return result;
+				}
+			} else {
+				if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
+				ctx->compiled = cons(ctx, XT(word), AS(CALL, ctx->compiled));
+			}
+		} else {
+			intmax_t number = strtoimax(ctx->tib + ctx->token, &endptr, 10);
+			if (number == 0 && endptr == (char*)(ctx->tib + ctx->token)) {
+				return ERR_UNDEFINED_WORD;
+			} else {
+				if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
+				if (ctx->compiling) {
+					ctx->compiled = cons(ctx, number, AS(ATOM, ctx->compiled));
+				} else {
+					ctx->stack = cons(ctx, number, AS(ATOM, ctx->stack));
+				}
+			}
+		}
+	} while (1);
+}
+
+
 //#define PUSH(ctx, value, type, next) \
 //	if ((result = cons(ctx, value, AS(type, next))) != 0) { \
 //		return ERR_STACK_OVERFLOW; \
 //	} else { \
 //		next = result; \
 //	}
-//
-//CELL find_token(CTX* ctx) {
-//	CELL word = ctx->latest;
-//	while (word && strncmp((BYTE*)CAR(NFA(word)), ctx->tib + ctx->token, ctx->in - ctx->token)) {
-//		word = NEXT(word);
-//	}
-//	return word;
-//}
-//
-//CELL parse_token(CTX* ctx) {
-//	while (*(ctx->tib + ctx->in) != 0 && isspace(*(ctx->tib + ctx->in))) {
-//		ctx->in++;
-//	}
-//	ctx->token = ctx->in;
-//	while (*(ctx->tib + ctx->in) != 0 && !isspace(*(ctx->tib + ctx->in))) {
-//		ctx->in++;
-//	}
-//	return ctx->in - ctx->token;
-//}
-//
-//CELL evaluate(CTX* ctx, BYTE* str) {
-//	CELL word, result;
-//	char *endptr;
-//	ctx->tib = str;
-//	ctx->token = 0;
-//	ctx->in = 0;
-//	do {
-//		if (parse_token(ctx) == 0) { 
-//			return 0; 
-//		} else if ((word = find_token(ctx)) != 0) {
-//			if (!ctx->compiling || IMMEDIATE(word)) {
-//				if ((result = execute(ctx, BODY(word))) != 0) {
-//					return result;
-//				}
-//			} else {
-//				PUSH(ctx, CFA(word), XT, CAR(ctx->compiled));
-//			}
-//		} else {
-//			intmax_t number = strtoimax(ctx->tib + ctx->token, &endptr, 10);
-//			if (number == 0 && endptr == (char*)(ctx->tib + ctx->token)) {
-//				return ERR_UNDEFINED_WORD;
-//			} else {
-//				if (ctx->compiling) {
-//					PUSH(ctx, number, ATOM, CAR(ctx->compiled));
-//				} else {
-//					PUSH(ctx, number, ATOM, ctx->stack);
-//				}
-//			}
-//		}
-//	} while (1);
-//}
 //
 //// TODO: Doing this!!!!
 //CELL allot(CTX* ctx, CELL bytes) {

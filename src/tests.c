@@ -95,7 +95,7 @@ void test_clone() {
 
 	CELL list = 
 		cons(ctx, 7, AS(ATOM, 
-		cons(ctx, 11, AS(PRIMITIVE, 
+		cons(ctx, 11, AS(PRIM, 
 		cons(ctx, 
 			cons(ctx, 13, AS(ATOM,
 			cons(ctx, 17, AS(ATOM, 0)))), AS(LIST,
@@ -105,7 +105,7 @@ void test_clone() {
 	TEST_ASSERT_EQUAL_INT(4, length(list));
 	TEST_ASSERT_EQUAL(ATOM, TYPE(list));
 	TEST_ASSERT_EQUAL_INT(7, CAR(list));
-	TEST_ASSERT_EQUAL(PRIMITIVE, TYPE(NEXT(list)));
+	TEST_ASSERT_EQUAL(PRIM, TYPE(NEXT(list)));
 	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(list)));
 	TEST_ASSERT_EQUAL(LIST, TYPE(NEXT(NEXT(list))));
 	TEST_ASSERT_EQUAL_INT(2, length(NEXT(NEXT(list))));
@@ -122,7 +122,7 @@ void test_clone() {
 	TEST_ASSERT_EQUAL_INT(4, length(c));
 	TEST_ASSERT_EQUAL(ATOM, TYPE(c));
 	TEST_ASSERT_EQUAL_INT(7, CAR(c));
-	TEST_ASSERT_EQUAL(PRIMITIVE, TYPE(NEXT(c)));
+	TEST_ASSERT_EQUAL(PRIM, TYPE(NEXT(c)));
 	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(c)));
 	TEST_ASSERT_EQUAL(LIST, TYPE(NEXT(NEXT(c))));
 	TEST_ASSERT_EQUAL_INT(2, length(NEXT(NEXT(c))));
@@ -235,7 +235,7 @@ void test_depth() {
 	CDR(p1) = AS(ATOM, p2);
 	CDR(p2) = AS(LIST, p3);
 	CAR(p2) = p4;
-	CDR(p3) = AS(PRIMITIVE, 0);
+	CDR(p3) = AS(PRIM, 0);
 	CDR(p4) = p5;
 	CDR(p5) = 0;
 
@@ -313,8 +313,8 @@ void test_execute_primitive() {
 	CELL xlist = 
 		cons(ctx, 13, AS(ATOM, 
 		cons(ctx, 7, AS(ATOM, 
-		cons(ctx, (CELL)&test_add, AS(PRIMITIVE, 
-		cons(ctx, (CELL)&test_dup, AS(PRIMITIVE, 0))))))));
+		cons(ctx, (CELL)&test_add, AS(PRIM, 
+		cons(ctx, (CELL)&test_dup, AS(PRIM, 0))))))));
 
 	execute(ctx, xlist);
 
@@ -323,6 +323,53 @@ void test_execute_primitive() {
 	TEST_ASSERT_EQUAL_INT(20, CAR(NEXT(ctx->stack)));
 }
 
+void test_call() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	CELL xt = 
+		cons(ctx, (CELL)&test_dup, AS(PRIM, 
+		cons(ctx, (CELL)&test_add, AS(PRIM, 0))));
+	CELL call = cons(ctx, xt, AS(CALL, 0));
+
+	ctx->stack = cons(ctx, 5, AS(ATOM, ctx->stack));
+
+	execute(ctx, call);
+
+	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
+	TEST_ASSERT_EQUAL_INT(10, CAR(ctx->stack));
+
+	call = cons(ctx, xt, AS(CALL, cons(ctx, 13, AS(ATOM, 0))));
+
+	execute(ctx, call);
+
+	TEST_ASSERT_EQUAL_INT(2, length(ctx->stack));
+	TEST_ASSERT_EQUAL_INT(13, CAR(ctx->stack));
+	TEST_ASSERT_EQUAL_INT(20, CAR(NEXT(ctx->stack)));
+}
+
+//void test_execute_xt_2() {
+//	CELL size = 512;
+//	BYTE block[size];
+//	CTX* ctx = init(block, size);
+//
+//	CELL xt = 
+//		cons(ctx, 
+//			cons(ctx, (CELL)&test_dup, AS(PRIM, 
+//			cons(ctx, (CELL)&test_add, AS(PRIM, 0)))), 
+//		AS(LIST, 0));
+//	CELL call = cons(ctx, xt, AS(XT, cons(ctx, 11, AS(ATOM, 0))));
+//
+//	ctx->stack = cons(ctx, 5, AS(ATOM, ctx->stack));
+//
+//	execute(ctx, call);
+//
+//	TEST_ASSERT_EQUAL_INT(2, length(ctx->stack));
+//	TEST_ASSERT_EQUAL_INT(11, CAR(ctx->stack));
+//	TEST_ASSERT_EQUAL_INT(10, CAR(NEXT(ctx->stack)));
+//}
+
 //void test_execute_xt() {
 //	CELL size = 512;
 //	BYTE block[size];
@@ -330,8 +377,8 @@ void test_execute_primitive() {
 //
 //	CELL xt = 
 //		cons(ctx, 
-//			cons(ctx, (CELL)&test_dup, AS(PRIMITIVE, 
-//			cons(ctx, (CELL)&test_add, AS(PRIMITIVE, 0)))), 
+//			cons(ctx, (CELL)&test_dup, AS(PRIM, 
+//			cons(ctx, (CELL)&test_add, AS(PRIM, 0)))), 
 //		AS(LIST, 0));
 //	CELL call = cons(ctx, xt, AS(XT, 0));
 //
@@ -350,8 +397,8 @@ void test_execute_primitive() {
 //
 //	CELL xt = 
 //		cons(ctx, 
-//			cons(ctx, (CELL)&test_dup, AS(PRIMITIVE, 
-//			cons(ctx, (CELL)&test_add, AS(PRIMITIVE, 0)))), 
+//			cons(ctx, (CELL)&test_dup, AS(PRIM, 
+//			cons(ctx, (CELL)&test_add, AS(PRIM, 0)))), 
 //		AS(LIST, 0));
 //	CELL call = cons(ctx, xt, AS(XT, cons(ctx, 11, AS(ATOM, 0))));
 //
@@ -411,17 +458,17 @@ void test_execute_primitive() {
 //	X*CTX* ctx = init(block, size);
 //
 //	C code = 
-//		PRIMITIVE(x, &_dup,
+//		PRIM(x, &_dup,
 //		ATOM(x, 0,
-//		PRIMITIVE(x, &_gt,
+//		PRIM(x, &_gt,
 //		BRANCH(x,
 //			// True branch
 //			ATOM(x, 1,
-//			PRIMITIVE(x, &_sub,
-//			PRIMITIVE(x, &_swap,
+//			PRIM(x, &_sub,
+//			PRIM(x, &_swap,
 //			ATOM(x, 2,
-//			PRIMITIVE(x, &_add,
-//			PRIMITIVE(x, &_swap,
+//			PRIM(x, &_add,
+//			PRIM(x, &_swap,
 //			RECURSION(x, 0))))))),
 //			// False branch
 //			0,
@@ -440,7 +487,7 @@ void test_execute_primitive() {
 //	BYTE block[size];
 //	X*CTX* ctx = init(block, size);
 //
-//	C code = PRIMITIVE(x, &_dup, PRIMITIVE(x, &_mul, 0));
+//	C code = PRIM(x, &_dup, PRIM(x, &_mul, 0));
 //	C jump = JUMP(x, code, 0);
 //
 //	push(x, ATM, 5);
@@ -1524,8 +1571,8 @@ void test_execute_primitive() {
 //
 //#define ATOM(x, n, d)							cons(x, n, T(ATM, d))
 //#define LIST(x, l, d)							cons(x, l, T(LST, d))
-//#define PRIMITIVE(x, p, d)				cons(x, (C)p, T(PRM, d))
-//#define RECURSION(x, d)						PRIMITIVE(x, 0, d)
+//#define PRIM(x, p, d)				cons(x, (C)p, T(PRM, d))
+//#define RECURSION(x, d)						PRIM(x, 0, d)
 //#define JUMP(x, j, d)							cons(x, ATOM(x, j, 0), T(JMP, d))
 //#define LAMBDA(x, w, d)						cons(x, cons(x, cons(x, w, T(LST, 0)), T(LST, 0)), T(JMP, d))
 //#define CALL(x,CTX* ctxt, d)						cons(x, cons(x,CTX* ctxt, T(LST, 0)), T(JMP, d))
@@ -2136,6 +2183,9 @@ int main() {
 //	RUN_TEST(test_interpreter_recursion);
 //	RUN_TEST(test_interpreter_jump);
 //
+
+	RUN_TEST(test_call);
+	//RUN_TEST(test_call_2);
 
 //	RUN_TEST(test_mlength);
 //	RUN_TEST(test_last);
