@@ -349,6 +349,78 @@ void test_call() {
 	TEST_ASSERT_EQUAL_INT(20, CAR(NEXT(ctx->stack)));
 }
 
+// PARSING
+
+void test_parse_token() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+	BYTE* str = "   test  ";
+
+	ctx->tib = str;
+	ctx->token = 0;
+	ctx->in = 0;
+
+	parse_token(ctx);
+
+	TEST_ASSERT_EQUAL_INT(4, ctx->in - ctx->token);
+	TEST_ASSERT_EQUAL_INT((CELL)str + 3, ctx->tib + ctx->token);
+
+	parse_token(ctx);
+
+	TEST_ASSERT_EQUAL_INT(0, ctx->in - ctx->token);
+	TEST_ASSERT_EQUAL_INT((CELL)str + 9, ctx->tib + ctx->token);
+
+	BYTE* str2 = "";
+	ctx->tib = str2;
+	ctx->token = 0;
+	ctx->in = 0;
+
+	parse_token(ctx);
+
+	TEST_ASSERT_EQUAL_INT(0, ctx->in - ctx->token);
+	TEST_ASSERT_EQUAL_INT((CELL)str2, ctx->tib + ctx->token);
+
+	BYTE* str3 = ": name    word1 ;";
+	ctx->tib = str3;
+	ctx->token = 0;
+	ctx->in = 0;
+
+	parse_token(ctx);
+
+	TEST_ASSERT_EQUAL_INT(1, ctx->in - ctx->token);
+	TEST_ASSERT(!strncmp(":", ctx->tib + ctx->token, ctx->in - ctx->token));
+	TEST_ASSERT_EQUAL_INT((CELL)str3, ctx->tib + ctx->token);
+
+	parse_token(ctx);
+
+	TEST_ASSERT_EQUAL_INT(4, ctx->in - ctx->token);
+	TEST_ASSERT(!strncmp("name", ctx->tib + ctx->token, ctx->in - ctx->token));
+	TEST_ASSERT_EQUAL_INT((CELL)str3 + 2, ctx->tib + ctx->token);
+
+	parse_token(ctx);
+
+	TEST_ASSERT_EQUAL_INT(5, ctx->in - ctx->token);
+	TEST_ASSERT(!strncmp("word1", ctx->tib + ctx->token, ctx->in - ctx->token));
+	TEST_ASSERT_EQUAL_INT((CELL)str3 + 10, ctx->tib + ctx->token);
+
+	parse_token(ctx);
+
+	TEST_ASSERT_EQUAL_INT(1, ctx->in - ctx->token);
+	TEST_ASSERT(!strncmp(";", ctx->tib + ctx->token, ctx->in - ctx->token));
+	TEST_ASSERT_EQUAL_INT((CELL)str3 + 16, ctx->tib + ctx->token);
+
+	parse_token(ctx);
+
+	TEST_ASSERT_EQUAL_INT(0, ctx->in - ctx->token);
+	TEST_ASSERT_EQUAL_INT((CELL)str3 + 17, ctx->tib + ctx->token);
+
+	parse_token(ctx);
+
+	TEST_ASSERT_EQUAL_INT(0, ctx->in - ctx->token);
+	TEST_ASSERT_EQUAL_INT((CELL)str3 + 17, ctx->tib + ctx->token);
+}
+
 //void test_execute_xt_2() {
 //	CELL size = 512;
 //	BYTE block[size];
@@ -422,7 +494,7 @@ void test_call() {
 //	inner(x, code);
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT_EQUAL_INT(7, A(x->stack));
-//	pop(x);
+//	pop(ctx);
 //
 //	push(x, ATM, 0);
 //	inner(x, code);
@@ -442,8 +514,8 @@ void test_call() {
 //	TEST_ASSERT_EQUAL_INT(2, length(x->stack));
 //	TEST_ASSERT_EQUAL_INT(21, A(x->stack));
 //	TEST_ASSERT_EQUAL_INT(7, A(NEXT(x->stack)));
-//	pop(x);
-//	pop(x);
+//	pop(ctx);
+//	pop(ctx);
 //
 //	push(x, ATM, 0);
 //	inner(x, code);
@@ -565,10 +637,10 @@ void test_call() {
 //	push(x, ATM, 7);
 //
 //	TEST_ASSERT_EQUAL_INT(2, length(x->stack));
-//	C v = pop(x);
+//	C v = pop(ctx);
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT_EQUAL_INT(7, v);
-//	v = pop(x);
+//	v = pop(ctx);
 //	TEST_ASSERT_EQUAL_INT(0, length(x->stack));
 //	TEST_ASSERT_EQUAL_INT(11, v);
 //}
@@ -583,16 +655,16 @@ void test_call() {
 //	TEST_ASSERT_EQUAL_INT(0,CTX* ctx->cpile);
 //	TEST_ASSERT_EQUAL_INT(0, length(x->cpile));
 //
-//	cppush(x);
+//	cppush(ctx);
 //
-//	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 1, length(x->free));
+//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 1, length(x->free));
 //	TEST_ASSERT_EQUAL_INT(1, length(x->cpile));
 //	TEST_ASSERT(IS(LST,CTX* ctx->cpile));
 //	TEST_ASSERT_EQUAL_INT(0, length(A(x->cpile)));
 //
-//	cppush(x);
+//	cppush(ctx);
 //
-//	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 2, length(x->free));
+//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 2, length(x->free));
 //	TEST_ASSERT_EQUAL_INT(2, length(x->cpile));
 //	TEST_ASSERT(IS(LST,CTX* ctx->cpile));
 //	TEST_ASSERT_EQUAL_INT(0, length(A(x->cpile)));
@@ -605,10 +677,10 @@ void test_call() {
 //	BYTE block[size];
 //	X*CTX* ctx = init(block, size);
 //
-//	cppush(x);
-//	cppop(x);
+//	cppush(ctx);
+//	cppop(ctx);
 //
-//	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 1, length(x->free));
+//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 1, length(x->free));
 //	TEST_ASSERT_EQUAL_INT(0, length(x->cpile));
 //	TEST_ASSERT_EQUAL_INT(0,CTX* ctx->cpile);
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
@@ -621,17 +693,17 @@ void test_call() {
 //	BYTE block[size];
 //	X*CTX* ctx = init(block, size);
 //
-//	cppush(x);
+//	cppush(ctx);
 //	cspush(x, cons(x, 7, T(ATM, 0)));
 //
-//	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 2, length(x->free));
+//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 2, length(x->free));
 //	TEST_ASSERT_EQUAL_INT(1, length(x->cpile));
 //	TEST_ASSERT_EQUAL_INT(1, length(A(x->cpile)));
 //	TEST_ASSERT_EQUAL_INT(7, A(A(x->cpile)));
 //
 //	cspush(x, cons(x, 11, T(ATM, 0)));
 //
-//	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 3, length(x->free));
+//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 3, length(x->free));
 //	TEST_ASSERT_EQUAL_INT(1, length(x->cpile));
 //	TEST_ASSERT_EQUAL_INT(2, length(A(x->cpile)));
 //	TEST_ASSERT(IS(ATM, A(x->cpile)));
@@ -639,9 +711,9 @@ void test_call() {
 //	TEST_ASSERT(IS(ATM, NEXT(A(x->cpile))));
 //	TEST_ASSERT_EQUAL_INT(7, A(NEXT(A(x->cpile))));
 //
-//	cppush(x);
+//	cppush(ctx);
 //
-//	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 4, length(x->free));
+//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 4, length(x->free));
 //	TEST_ASSERT_EQUAL_INT(2, length(x->cpile));
 //	TEST_ASSERT_EQUAL_INT(0, length(A(x->cpile)));
 //	TEST_ASSERT_EQUAL_INT(2, length(A(NEXT(x->cpile))));
@@ -652,7 +724,7 @@ void test_call() {
 //
 //	cspush(x, cons(x, 13, T(ATM, 0)));
 //
-//	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 5, length(x->free));
+//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 5, length(x->free));
 //	TEST_ASSERT_EQUAL_INT(2, length(x->cpile));
 //	TEST_ASSERT_EQUAL_INT(1, length(A(x->cpile)));
 //	TEST_ASSERT(IS(ATM, A(x->cpile)));
@@ -669,14 +741,14 @@ void test_call() {
 //	BYTE block[size];
 //	X*CTX* ctx = init(block, size);
 //
-//	cppush(x);
+//	cppush(ctx);
 //	cspush(x, cons(x, 7, T(ATM, 0)));
 //	cspush(x, cons(x, 11, T(ATM, 0)));
-//	cppush(x);
+//	cppush(ctx);
 //	cspush(x, cons(x, 13, T(ATM, 0)));
-//	cppop(x);
+//	cppop(ctx);
 //
-//	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 5, length(x->free));
+//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 5, length(x->free));
 //	TEST_ASSERT_EQUAL_INT(1, length(x->cpile));
 //	TEST_ASSERT_EQUAL_INT(3, length(A(x->cpile)));
 //	TEST_ASSERT(IS(LST, A(x->cpile)));
@@ -687,9 +759,9 @@ void test_call() {
 //	TEST_ASSERT(IS(ATM, NEXT(NEXT(A(x->cpile)))));
 //	TEST_ASSERT_EQUAL_INT(7, A(NEXT(NEXT(A(x->cpile)))));
 //
-//	cppop(x);
+//	cppop(ctx);
 //
-//	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 5, length(x->free));
+//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 5, length(x->free));
 //	TEST_ASSERT_EQUAL_INT(0, length(x->cpile));
 //	TEST_ASSERT_EQUAL_INT(0,CTX* ctx->cpile);
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
@@ -709,18 +781,18 @@ void test_call() {
 //	BYTE block[size];
 //	X*CTX* ctx = init(block, size);
 //
-//	_lbrace(x);
+//	_lbrace(ctx);
 //	cspush(x, cons(x, 1, T(ATM, 0)));
 //	cspush(x, cons(x, 2, T(ATM, 0)));
-//	_lbrace(x);
+//	_lbrace(ctx);
 //	cspush(x, cons(x, 3, T(ATM, 0)));
 //	cspush(x, cons(x, 4, T(ATM, 0)));
-//	_rbrace(x);
+//	_rbrace(ctx);
 //	cspush(x, cons(x, 5, T(ATM, 0)));
-//	_lbrace(x);
+//	_lbrace(ctx);
 //	cspush(x, cons(x, 6, T(ATM, 0)));
-//	_rbrace(x);
-//	_rbrace(x);
+//	_rbrace(ctx);
+//	_rbrace(ctx);
 //
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT_EQUAL_INT(0,CTX* ctx->cpile);
@@ -749,7 +821,7 @@ void test_call() {
 //	BYTE block[size];
 //	X*CTX* ctx = init(block, size);
 //
-//	_empty(x);
+//	_empty(ctx);
 //
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT(IS(LST,CTX* ctx->stack));
@@ -763,7 +835,7 @@ void test_call() {
 //
 //	push(x, ATM, 11);
 //	push(x, ATM, 7);
-//	_join(x);
+//	_join(ctx);
 //
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT(IS(LST,CTX* ctx->stack));
@@ -781,7 +853,7 @@ void test_call() {
 //
 //	push(x, ATM, 11);
 //	push(x, ATM, 7);
-//	_join(x);
+//	_join(ctx);
 //
 //	TEST_ASSERT_EQUAL_INT(2, length(x->stack));
 //	TEST_ASSERT(IS(LST,CTX* ctx->stack));
@@ -796,9 +868,9 @@ void test_call() {
 //	BYTE block[size];
 //	X*CTX* ctx = init(block, size);
 //
-//	_empty(x);
+//	_empty(ctx);
 //	push(x, ATM, 7);
-//	_join(x);
+//	_join(ctx);
 //
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT(IS(LST,CTX* ctx->stack));
@@ -813,9 +885,9 @@ void test_call() {
 //
 //	push(x, ATM, 13);
 //
-//	_empty(x);
+//	_empty(ctx);
 //	push(x, ATM, 7);
-//	_join(x);
+//	_join(ctx);
 //
 //	TEST_ASSERT_EQUAL_INT(2, length(x->stack));
 //	TEST_ASSERT(IS(LST,CTX* ctx->stack));
@@ -831,9 +903,9 @@ void test_call() {
 //
 //	push(x, ATM, 13);
 //	push(x, ATM, 11);
-//	_join(x);
+//	_join(ctx);
 //	push(x, ATM, 7);
-//	_join(x);
+//	_join(ctx);
 //
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT(IS(LST,CTX* ctx->stack));
@@ -852,9 +924,9 @@ void test_call() {
 //
 //	push(x, ATM, 13);
 //	push(x, ATM, 11);
-//	_join(x);
+//	_join(ctx);
 //	push(x, ATM, 7);
-//	_join(x);
+//	_join(ctx);
 //
 //	TEST_ASSERT_EQUAL_INT(2, length(x->stack));
 //	TEST_ASSERT(IS(LST,CTX* ctx->stack));
@@ -874,8 +946,8 @@ void test_call() {
 //	push(x, ATM, 13);
 //	push(x, ATM, 11);
 //	push(x, ATM, 7);
-//	_join(x);
-//	_join(x);
+//	_join(ctx);
+//	_join(ctx);
 //
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT(IS(LST,CTX* ctx->stack));
@@ -895,8 +967,8 @@ void test_call() {
 //	push(x, ATM, 13);
 //	push(x, ATM, 11);
 //	push(x, ATM, 7);
-//	_join(x);
-//	_join(x);
+//	_join(ctx);
+//	_join(ctx);
 //
 //	TEST_ASSERT_EQUAL_INT(2, length(x->stack));
 //	TEST_ASSERT(IS(LST,CTX* ctx->stack));
@@ -915,11 +987,11 @@ void test_call() {
 //
 //	push(x, ATM, 17);
 //	push(x, ATM, 13);
-//	_join(x);
+//	_join(ctx);
 //	push(x, ATM, 11);
 //	push(x, ATM, 7);
-//	_join(x);
-//	_join(x);
+//	_join(ctx);
+//	_join(ctx);
 //
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT(IS(LST,CTX* ctx->stack));
@@ -939,11 +1011,11 @@ void test_call() {
 //
 //	push(x, ATM, 17);
 //	push(x, ATM, 13);
-//	_join(x);
+//	_join(ctx);
 //	push(x, ATM, 11);
 //	push(x, ATM, 7);
-//	_join(x);
-//	_join(x);
+//	_join(ctx);
+//	_join(ctx);
 //
 //	TEST_ASSERT_EQUAL_INT(2, length(x->stack));
 //	TEST_ASSERT(IS(LST,CTX* ctx->stack));
@@ -962,7 +1034,7 @@ void test_call() {
 //	X*CTX* ctx = init(block, size);
 //
 //	push(x, ATM, 7);
-//	_quote(x);
+//	_quote(ctx);
 //
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT(IS(LST,CTX* ctx->stack));
@@ -978,7 +1050,7 @@ void test_call() {
 //	push(x, ATM, 11);
 //
 //	push(x, ATM, 7);
-//	_quote(x);
+//	_quote(ctx);
 //
 //	TEST_ASSERT_EQUAL_INT(2, length(x->stack));
 //	TEST_ASSERT(IS(LST,CTX* ctx->stack));
@@ -995,8 +1067,8 @@ void test_call() {
 //
 //	push(x, ATM, 11);
 //	push(x, ATM, 7);
-//	_join(x);
-//	_quote(x);
+//	_join(ctx);
+//	_quote(ctx);
 //
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT(IS(LST,CTX* ctx->stack));
@@ -1016,8 +1088,8 @@ void test_call() {
 //
 //	push(x, ATM, 11);
 //	push(x, ATM, 7);
-//	_join(x);
-//	_quote(x);
+//	_join(ctx);
+//	_quote(ctx);
 //
 //	TEST_ASSERT_EQUAL_INT(2, length(x->stack));
 //	TEST_ASSERT(IS(LST,CTX* ctx->stack));
@@ -1036,20 +1108,20 @@ void test_call() {
 //	X*CTX* ctx = init(block, size);
 //
 //	push(x, ATM, 7);
-//	_dup(x);
+//	_dup(ctx);
 //
 //	TEST_ASSERT_EQUAL_INT(2, length(x->stack));
-//	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 2, length(x->free));
+//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 2, length(x->free));
 //	TEST_ASSERT(IS(ATM,CTX* ctx->stack));
 //	TEST_ASSERT(IS(ATM, NEXT(x->stack)));
 //	TEST_ASSERT_EQUAL_INT(7, A(x->stack));
 //	TEST_ASSERT_EQUAL_INT(7, A(NEXT(x->stack)));
 //
 //	push(x, ATM, 11);
-//	_dup(x);
+//	_dup(ctx);
 //
 //	TEST_ASSERT_EQUAL_INT(4, length(x->stack));
-//	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 4, length(x->free));
+//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 4, length(x->free));
 //	TEST_ASSERT(IS(ATM,CTX* ctx->stack));
 //	TEST_ASSERT(IS(ATM, NEXT(x->stack)));
 //	TEST_ASSERT_EQUAL_INT(11, A(x->stack));
@@ -1067,11 +1139,11 @@ void test_call() {
 //
 //	push(x, ATM, 7);
 //	push(x, ATM, 11);
-//	_join(x);
-//	_quote(x);
+//	_join(ctx);
+//	_quote(ctx);
 //
 //	// ((11, 7))
-//	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 4, length(x->free));
+//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 4, length(x->free));
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT(IS(LST,CTX* ctx->stack));
 //	TEST_ASSERT_EQUAL_INT(1, length(A(x->stack)));
@@ -1084,11 +1156,11 @@ void test_call() {
 //
 //	push(x, ATM, 13);
 //	push(x, ATM, 17);
-//	_join(x);
+//	_join(ctx);
 //
 //	// (17, 13)
 //	// ((11, 7))
-//	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 7, length(x->free));
+//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 7, length(x->free));
 //	TEST_ASSERT_EQUAL_INT(2, length(x->stack));
 //	TEST_ASSERT(IS(LST,CTX* ctx->stack));
 //	TEST_ASSERT_EQUAL_INT(2, length(A(x->stack)));
@@ -1097,10 +1169,10 @@ void test_call() {
 //	TEST_ASSERT(IS(ATM, NEXT(A(x->stack))));
 //	TEST_ASSERT_EQUAL_INT(13, A(NEXT(A(x->stack))));
 //
-//	_join(x);
+//	_join(ctx);
 //
 //	// (17, 13, (11, 7))
-//	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 6, length(x->free));
+//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 6, length(x->free));
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT(IS(LST,CTX* ctx->stack));
 //	TEST_ASSERT_EQUAL_INT(3, length(A(x->stack)));
@@ -1115,9 +1187,9 @@ void test_call() {
 //	TEST_ASSERT(IS(ATM, NEXT(A(NEXT(NEXT(A(x->stack)))))));
 //	TEST_ASSERT_EQUAL_INT(7, A(NEXT(A(NEXT(NEXT(A(x->stack)))))));
 //
-//	_dup(x);
+//	_dup(ctx);
 //
-//	TEST_ASSERT_EQUAL_INT(free_nodes(x) - 12, length(x->free));
+//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 12, length(x->free));
 //	TEST_ASSERT_EQUAL_INT(2, length(x->stack));
 //
 //	TEST_ASSERT(IS(LST,CTX* ctx->stack));
@@ -1161,8 +1233,8 @@ void test_call() {
 //
 //	push(x, ATM, 11);
 //	push(x, ATM, 7);
-//	_quote(x);
-//	_swap(x);
+//	_quote(ctx);
+//	_swap(ctx);
 //	TEST_ASSERT_EQUAL_INT(2, length(x->stack));
 //	TEST_ASSERT(IS(ATM,CTX* ctx->stack));
 //	TEST_ASSERT_EQUAL_INT(11, A(x->stack));
@@ -1179,8 +1251,8 @@ void test_call() {
 //	push(x, ATM, 13);
 //	push(x, ATM, 11);
 //	push(x, ATM, 7);
-//	_quote(x);
-//	_swap(x);
+//	_quote(ctx);
+//	_swap(ctx);
 //	TEST_ASSERT_EQUAL_INT(3, length(x->stack));
 //	TEST_ASSERT(IS(ATM,CTX* ctx->stack));
 //	TEST_ASSERT_EQUAL_INT(11, A(x->stack));
@@ -1197,21 +1269,21 @@ void test_call() {
 //	X*CTX* ctx = init(block, size);
 //
 //	push(x, ATM, 7);
-//	_drop(x);
+//	_drop(ctx);
 //
 //	TEST_ASSERT_EQUAL_INT(0, length(x->stack));
-//	TEST_ASSERT_EQUAL_INT(free_nodes(x), length(x->free));
+//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx), length(x->free));
 //
 //	push(x, ATM, 13);
 //	push(x, ATM, 11);
-//	_join(x);
-//	_quote(x);
+//	_join(ctx);
+//	_quote(ctx);
 //	push(x, ATM, 7);
-//	_join(x);
-//	_drop(x);
+//	_join(ctx);
+//	_drop(ctx);
 //
 //	TEST_ASSERT_EQUAL_INT(0, length(x->stack));
-//	TEST_ASSERT_EQUAL_INT(free_nodes(x), length(x->free));
+//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx), length(x->free));
 //}
 //
 //void test_over() {
@@ -1221,18 +1293,18 @@ void test_call() {
 //
 //	push(x, ATM, 11);
 //	push(x, ATM, 7);
-//	_over(x);
+//	_over(ctx);
 //	TEST_ASSERT_EQUAL_INT(3, length(x->stack));
 //	TEST_ASSERT_EQUAL_INT(11, A(x->stack));
 //	TEST_ASSERT_EQUAL_INT(7, A(NEXT(x->stack)));
 //	TEST_ASSERT_EQUAL_INT(11, A(NEXT(NEXT(x->stack))));
-//	pop(x); pop(x); pop(x);
+//	pop(ctx); pop(ctx); pop(ctx);
 //
 //	push(x, ATM, 13);
 //	push(x, ATM, 11);
-//	_join(x);
+//	_join(ctx);
 //	push(x, ATM, 7);
-//	_over(x);
+//	_over(ctx);
 //	TEST_ASSERT_EQUAL_INT(3, length(x->stack));
 //	TEST_ASSERT(IS(LST,CTX* ctx->stack));
 //	TEST_ASSERT_EQUAL_INT(2, length(A(x->stack)));
@@ -1252,7 +1324,7 @@ void test_call() {
 //	push(x, ATM, 13);
 //	push(x, ATM, 11);
 //	push(x, ATM, 7);
-//	_rot(x);
+//	_rot(ctx);
 //	TEST_ASSERT_EQUAL_INT(3, length(x->stack));
 //	TEST_ASSERT_EQUAL_INT(13, A(x->stack));
 //	TEST_ASSERT_EQUAL_INT(7, A(NEXT(x->stack)));
@@ -1266,7 +1338,7 @@ void test_call() {
 //
 //	push(x, ATM, 7);
 //	push(x, ATM, 11);
-//	_add(x);
+//	_add(ctx);
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT_EQUAL_INT(18, A(x->stack));
 //}
@@ -1278,7 +1350,7 @@ void test_call() {
 //
 //	push(x, ATM, 11);
 //	push(x, ATM, 7);
-//	_sub(x);
+//	_sub(ctx);
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT_EQUAL_INT(4, A(x->stack));
 //}
@@ -1290,7 +1362,7 @@ void test_call() {
 //
 //	push(x, ATM, 11);
 //	push(x, ATM, 7);
-//	_mul(x);
+//	_mul(ctx);
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT_EQUAL_INT(77, A(x->stack));
 //}
@@ -1302,7 +1374,7 @@ void test_call() {
 //
 //	push(x, ATM, 77);
 //	push(x, ATM, 11);
-//	_div(x);
+//	_div(ctx);
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT_EQUAL_INT(7, A(x->stack));
 //}
@@ -1314,7 +1386,7 @@ void test_call() {
 //
 //	push(x, ATM, 11);
 //	push(x, ATM, 7);
-//	_mod(x);
+//	_mod(ctx);
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT_EQUAL_INT(4, A(x->stack));
 //}
@@ -1326,24 +1398,24 @@ void test_call() {
 //
 //	push(x, ATM, 13);
 //	push(x, ATM, 7);
-//	_gt(x);
+//	_gt(ctx);
 //	TEST_ASSERT_EQUAL_INT(1, A(x->stack));
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
-//	pop(x);
+//	pop(ctx);
 //
 //	push(x, ATM, 7);
 //	push(x, ATM, 13);
-//	_gt(x);
+//	_gt(ctx);
 //	TEST_ASSERT_EQUAL_INT(0, A(x->stack));
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
-//	pop(x);
+//	pop(ctx);
 //
 //	push(x, ATM, 7);
 //	push(x, ATM, 7);
-//	_gt(x);
+//	_gt(ctx);
 //	TEST_ASSERT_EQUAL_INT(0, A(x->stack));
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
-//	pop(x);
+//	pop(ctx);
 //}
 //
 //void test_lt() {
@@ -1353,24 +1425,24 @@ void test_call() {
 //
 //	push(x, ATM, 13);
 //	push(x, ATM, 7);
-//	_lt(x);
+//	_lt(ctx);
 //	TEST_ASSERT_EQUAL_INT(0, A(x->stack));
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
-//	pop(x);
+//	pop(ctx);
 //
 //	push(x, ATM, 7);
 //	push(x, ATM, 13);
-//	_lt(x);
+//	_lt(ctx);
 //	TEST_ASSERT_EQUAL_INT(1, A(x->stack));
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
-//	pop(x);
+//	pop(ctx);
 //
 //	push(x, ATM, 7);
 //	push(x, ATM, 7);
-//	_lt(x);
+//	_lt(ctx);
 //	TEST_ASSERT_EQUAL_INT(0, A(x->stack));
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
-//	pop(x);
+//	pop(ctx);
 //}
 //
 //void test_eq() {
@@ -1380,24 +1452,24 @@ void test_call() {
 //
 //	push(x, ATM, 13),
 //	push(x, ATM, 7);
-//	_eq(x);
+//	_eq(ctx);
 //	TEST_ASSERT_EQUAL_INT(0, A(x->stack));
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
-//	pop(x);
+//	pop(ctx);
 //
 //	push(x, ATM, 7);
 //	push(x, ATM, 13);
-//	_eq(x);
+//	_eq(ctx);
 //	TEST_ASSERT_EQUAL_INT(0, A(x->stack));
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
-//	pop(x);
+//	pop(ctx);
 //
 //	push(x, ATM, 7);
 //	push(x, ATM, 7);
-//	_eq(x);
+//	_eq(ctx);
 //	TEST_ASSERT_EQUAL_INT(1, A(x->stack));
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
-//	pop(x);
+//	pop(ctx);
 //}
 //
 //void test_neq() {
@@ -1407,24 +1479,24 @@ void test_call() {
 //
 //	push(x, ATM, 13);
 //	push(x, ATM, 7);
-//	_neq(x);
+//	_neq(ctx);
 //	TEST_ASSERT_EQUAL_INT(1, A(x->stack));
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
-//	pop(x);
+//	pop(ctx);
 //
 //	push(x, ATM, 7);
 //	push(x, ATM, 13);
-//	_neq(x);
+//	_neq(ctx);
 //	TEST_ASSERT_EQUAL_INT(1, A(x->stack));
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
-//	pop(x);
+//	pop(ctx);
 //
 //	push(x, ATM, 7);
 //	push(x, ATM, 7);
-//	_neq(x);
+//	_neq(ctx);
 //	TEST_ASSERT_EQUAL_INT(0, A(x->stack));
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
-//	pop(x);
+//	pop(ctx);
 //}
 //
 //void test_and() {
@@ -1434,38 +1506,38 @@ void test_call() {
 //
 //	push(x, ATM, 7);
 //	push(x, ATM, 11);
-//	_and(x);
+//	_and(ctx);
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT_EQUAL_INT(3, A(x->stack));
-//	pop(x);
+//	pop(ctx);
 //
 //	push(x, ATM, 0);
 //	push(x, ATM, 0);
-//	_and(x);
+//	_and(ctx);
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT_EQUAL_INT(0, A(x->stack));
-//	pop(x);
+//	pop(ctx);
 //
 //	push(x, ATM, 0);
 //	push(x, ATM, -1);
-//	_and(x);
+//	_and(ctx);
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT_EQUAL_INT(0, A(x->stack));
-//	pop(x);
+//	pop(ctx);
 //
 //	push(x, ATM, -1);
 //	push(x, ATM, 0);
-//	_and(x);
+//	_and(ctx);
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT_EQUAL_INT(0, A(x->stack));
-//	pop(x);
+//	pop(ctx);
 //
 //	push(x, ATM, -1);
 //	push(x, ATM, -1);
-//	_and(x);
+//	_and(ctx);
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT_EQUAL_INT(-1, A(x->stack));
-//	pop(x);
+//	pop(ctx);
 //}
 //
 //void test_or() {
@@ -1475,38 +1547,38 @@ void test_call() {
 //
 //	push(x, ATM, 11);
 //	push(x, ATM, 7);
-//	_or(x);
+//	_or(ctx);
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT_EQUAL_INT(15, A(x->stack));
-//	pop(x);
+//	pop(ctx);
 //
 //	push(x, ATM, 0);
 //	push(x, ATM, 0);
-//	_or(x);
+//	_or(ctx);
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT_EQUAL_INT(0, A(x->stack));
-//	pop(x);
+//	pop(ctx);
 //
 //	push(x, ATM, 0);
 //	push(x, ATM, -1);
-//	_or(x);
+//	_or(ctx);
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT_EQUAL_INT(-1, A(x->stack));
-//	pop(x);
+//	pop(ctx);
 //
 //	push(x, ATM, -1);
 //	push(x, ATM, 0);
-//	_or(x);
+//	_or(ctx);
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT_EQUAL_INT(-1, A(x->stack));
-//	pop(x);
+//	pop(ctx);
 //
 //	push(x, ATM, -1);
 //	push(x, ATM, -1);
-//	_or(x);
+//	_or(ctx);
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT_EQUAL_INT(-1, A(x->stack));
-//	pop(x);
+//	pop(ctx);
 //}
 //
 //void test_invert() {
@@ -1515,28 +1587,28 @@ void test_call() {
 //	X*CTX* ctx = init(block, size);
 //
 //	push(x, ATM, 7);
-//	_invert(x);
+//	_invert(ctx);
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT_EQUAL_INT(-8, A(x->stack));
-//	pop(x);
+//	pop(ctx);
 //
 //	push(x, ATM, 0);
-//	_invert(x);
+//	_invert(ctx);
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT_EQUAL_INT(-1, A(x->stack));
-//	pop(x);
+//	pop(ctx);
 //
 //	push(x, ATM, 1);
-//	_invert(x);
+//	_invert(ctx);
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT_EQUAL_INT(-2, A(x->stack));
-//	pop(x);
+//	pop(ctx);
 //
 //	push(x, ATM, -1);
-//	_invert(x);
+//	_invert(ctx);
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT_EQUAL_INT(0, A(x->stack));
-//	pop(x);
+//	pop(ctx);
 //}
 //
 //void test_not() {
@@ -1545,28 +1617,28 @@ void test_call() {
 //	X*CTX* ctx = init(block, size);
 //
 //	push(x, ATM, 7);
-//	_not(x);
+//	_not(ctx);
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT_EQUAL_INT(0, A(x->stack));
-//	pop(x);
+//	pop(ctx);
 //
 //	push(x, ATM, 0);
-//	_not(x);
+//	_not(ctx);
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT_EQUAL_INT(1, A(x->stack));
-//	pop(x);
+//	pop(ctx);
 //
 //	push(x, ATM, 1);
-//	_not(x);
+//	_not(ctx);
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT_EQUAL_INT(0, A(x->stack));
-//	pop(x);
+//	pop(ctx);
 //
 //	push(x, ATM, -1);
-//	_not(x);
+//	_not(ctx);
 //	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //	TEST_ASSERT_EQUAL_INT(0, A(x->stack));
-//	pop(x);
+//	pop(ctx);
 //}
 //
 //#define ATOM(x, n, d)							cons(x, n, T(ATM, d))
@@ -1589,78 +1661,78 @@ void test_call() {
 //
 //	B* here =CTX* ctx->here;
 //	push(x, ATM, 0);
-//	_allot(x);
+//	_allot(ctx);
 //	TEST_ASSERT_EQUAL_INT(0,CTX* ctx->err);
 //	TEST_ASSERT_EQUAL_INT(here,CTX* ctx->here);
 //
 //	push(x, ATM, 13);
-//	_allot(x);
+//	_allot(ctx);
 //	TEST_ASSERT_EQUAL_INT(0,CTX* ctx->err);
 //	TEST_ASSERT_EQUAL_INT(here + 13,CTX* ctx->here);
 //
 //	C fnodes = length(x->free);
 //	here =CTX* ctx->here;
-//	C reserved = RESERVED(x);
+//	C reserved = RESERVED(ctx);
 //
 //	// Ensure reserved memory is 0 to allow next tests to pass
-//	push(x, ATM, RESERVED(x));
-//	_allot(x);
+//	push(x, ATM, RESERVED(ctx));
+//	_allot(ctx);
 //	TEST_ASSERT_EQUAL_INT(0,CTX* ctx->err);
 //	TEST_ASSERT_EQUAL_PTR(here + reserved,CTX* ctx->here);
-//	TEST_ASSERT_EQUAL_INT(0, RESERVED(x));
+//	TEST_ASSERT_EQUAL_INT(0, RESERVED(ctx));
 //	TEST_ASSERT_EQUAL_INT(fnodes, length(x->free));
 //
 //	here =CTX* ctx->here;
 //
 //	push(x, ATM, 8*sizeof(C));
-//	_allot(x);
+//	_allot(ctx);
 //	TEST_ASSERT_EQUAL_INT(0,CTX* ctx->err);
 //	TEST_ASSERT_EQUAL_PTR(here + 8*sizeof(C),CTX* ctx->here);
 //	TEST_ASSERT_EQUAL_INT(fnodes - 4, length(x->free));
-//	TEST_ASSERT_EQUAL_INT(0, RESERVED(x));
+//	TEST_ASSERT_EQUAL_INT(0, RESERVED(ctx));
 //
 //	here =CTX* ctx->here;
 //
 //	push(x, ATM, 2*sizeof(C) - 3);
-//	_allot(x);
+//	_allot(ctx);
 //	TEST_ASSERT_EQUAL_INT(0,CTX* ctx->err);
 //	TEST_ASSERT_EQUAL_PTR(here + 2*sizeof(C) - 3,CTX* ctx->here);
 //	TEST_ASSERT_EQUAL_INT(fnodes - 5, length(x->free));
-//	TEST_ASSERT_EQUAL_INT(3, RESERVED(x));
+//	TEST_ASSERT_EQUAL_INT(3, RESERVED(ctx));
 //
 //	push(x, ATM, -(2*sizeof(C) - 3));
-//	_allot(x);
+//	_allot(ctx);
 //	TEST_ASSERT_EQUAL_INT(0,CTX* ctx->err);
 //	TEST_ASSERT_EQUAL_PTR(here,CTX* ctx->here);
 //	TEST_ASSERT_EQUAL_INT(fnodes - 4, length(x->free));
-//	TEST_ASSERT_EQUAL_INT(0, RESERVED(x));
+//	TEST_ASSERT_EQUAL_INT(0, RESERVED(ctx));
 //
 //	push(x, ATM, -1);
-//	_allot(x);
+//	_allot(ctx);
 //	TEST_ASSERT_EQUAL_INT(0,CTX* ctx->err);
 //	TEST_ASSERT_EQUAL_PTR(here - 1,CTX* ctx->here);
 //	TEST_ASSERT_EQUAL_INT(fnodes - 4, length(x->free));
-//	TEST_ASSERT_EQUAL_INT(1, RESERVED(x));
+//	TEST_ASSERT_EQUAL_INT(1, RESERVED(ctx));
 //
 //	here =CTX* ctx->here;
-//	reserved = RESERVED(x);
+//	reserved = RESERVED(ctx);
 //	fnodes = length(x->free);
 //
 //	push(x, ATM, 2048);
-//	_allot(x);
+//	_allot(ctx);
 //	TEST_ASSERT_EQUAL_INT(ERR_NOT_ENOUGH_MEMORY,CTX* ctx->err);
 //	TEST_ASSERT_EQUAL_PTR(here,CTX* ctx->here);
-//	TEST_ASSERT_EQUAL_INT(reserved, RESERVED(x));
+//	TEST_ASSERT_EQUAL_INT(reserved, RESERVED(ctx));
 //	TEST_ASSERT_EQUAL_INT(fnodes, length(x->free));
 //
 //	x->err = 0;
 //
 //	push(x, ATM, -2048);
-//	_allot(x);
+//	_allot(ctx);
 //	TEST_ASSERT_EQUAL_INT(0,CTX* ctx->err);
-//	TEST_ASSERT_EQUAL_PTR(BOTTOM(x),CTX* ctx->here);
+//	TEST_ASSERT_EQUAL_PTR(BOTTOM(ctx),CTX* ctx->here);
 //	TEST_ASSERT_EQUAL_INT((C)ALIGN(x->here, 2*sizeof(C)),CTX* ctx->there);
-//	TEST_ASSERT_EQUAL_INT(free_nodes(x), length(x->free));
+//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx), length(x->free));
 //}
 //
 //void test_align() {
@@ -1669,15 +1741,15 @@ void test_call() {
 //	X*CTX* ctx = init(block, size);
 //
 //	// This ensures here will be aligned with a pair 
-//	push(x, ATM, RESERVED(x));
-//	_allot(x);
+//	push(x, ATM, RESERVED(ctx));
+//	_allot(ctx);
 //
 //	push(x, ATM, 1);
-//	_allot(x);
+//	_allot(ctx);
 //	TEST_ASSERT_NOT_EQUAL_INT(ALIGN(x->here, sizeof(C)),CTX* ctx->here);
 //	TEST_ASSERT_EQUAL_INT(0,CTX* ctx->err);
 //
-//	_align(x);
+//	_align(ctx);
 //	TEST_ASSERT_EQUAL_INT(ALIGN(x->here, sizeof(C)),CTX* ctx->here);
 //	TEST_ASSERT_EQUAL_INT(0,CTX* ctx->err);
 //}
@@ -1770,99 +1842,6 @@ void test_call() {
 //	TEST_ASSERT_EQUAL_INT(0, w);
 //}
 //
-////void test_parse_name() {
-////	CELL size = 512;
-////	BYTE block[size];
-////	X*CTX* ctx = init(block, size);
-////	B* str = "   test  ";
-////
-////	x->ibuf = str;
-////
-////	_parse_name(x);
-////
-////	C len = pop(x);
-////	C addr = pop(x);
-////
-////	TEST_ASSERT_EQUAL_INT(4, len);
-////	TEST_ASSERT_EQUAL_INT((C)str + 3, addr);
-////
-////	_parse_name(x);
-////
-////	len = pop(x);
-////	addr = pop(x);
-////
-////	TEST_ASSERT_EQUAL_INT(0, len);
-////	TEST_ASSERT_EQUAL_INT((C)str + 9, addr);
-////
-////	B* str2 = "";
-////	x->ibuf = str2;
-////	x->in = 0;
-////
-////	_parse_name(x);
-////
-////	len = pop(x);
-////	addr = pop(x);
-////
-////	TEST_ASSERT_EQUAL_INT(0, len);
-////	TEST_ASSERT_EQUAL_INT((C)str2, addr);
-////
-////	B* str3 = ": name    word1 ;";
-////	x->ibuf = str3;
-////	x->in = 0;
-////
-////	_parse_name(x);
-////
-////	len = pop(x);
-////	addr = pop(x);
-////
-////	TEST_ASSERT_EQUAL_INT(1, len);
-////	TEST_ASSERT(!strncmp(":", (B*)addr, len));
-////	TEST_ASSERT_EQUAL_INT((C)str3, addr);
-////
-////	_parse_name(x);
-////
-////	len = pop(x);
-////	addr = pop(x);
-////
-////	TEST_ASSERT_EQUAL_INT(4, len);
-////	TEST_ASSERT(!strncmp("name", (B*)addr, len));
-////	TEST_ASSERT_EQUAL_INT((C)str3 + 2, addr);
-////
-////	_parse_name(x);
-////
-////	len = pop(x);
-////	addr = pop(x);
-////
-////	TEST_ASSERT_EQUAL_INT(5, len);
-////	TEST_ASSERT(!strncmp("word1", (B*)addr, len));
-////	TEST_ASSERT_EQUAL_INT((C)str3 + 10, addr);
-////
-////	_parse_name(x);
-////
-////	len = pop(x);
-////	addr = pop(x);
-////
-////	TEST_ASSERT_EQUAL_INT(1, len);
-////	TEST_ASSERT(!strncmp(";", (B*)addr, len));
-////	TEST_ASSERT_EQUAL_INT((C)str3 + 16, addr);
-////
-////	_parse_name(x);
-////
-////	len = pop(x);
-////	addr = pop(x),
-////
-////	TEST_ASSERT_EQUAL_INT(0, len);
-////	TEST_ASSERT_EQUAL_INT((C)str3 + 17, addr);
-////
-////	_parse_name(x);
-////
-////	len = pop(x);
-////	addr = pop(x),
-////
-////	TEST_ASSERT_EQUAL_INT(0, len);
-////	TEST_ASSERT_EQUAL_INT((C)str3 + 17, addr);
-////}
-//
 ////void test_find_name() {
 ////	CELL size = 4096;
 ////	BYTE block[size];
@@ -1871,10 +1850,10 @@ void test_call() {
 ////	push(x, ATM, (C)"dup");
 ////	push(x, ATM, 3);
 ////
-////	_find_name(x);
+////	_find_name(ctx);
 ////
-////	C imm = pop(x);
-////	CCTX* ctxt = pop(x);
+////	C imm = pop(ctx);
+////	CCTX* ctxt = pop(ctx);
 ////
 ////	TEST_ASSERT_EQUAL_INT(-1, imm);
 ////	TEST_ASSERT_EQUAL_INT(find(x, "dup", 3),CTX* ctxt);
@@ -1882,11 +1861,11 @@ void test_call() {
 ////	B* str = "  join ";
 ////	x->ibuf = str;
 ////
-////	_parse_name(x);
-////	_find_name(x);
+////	parse_token(ctx);
+////	_find_name(ctx);
 ////
-////	imm = pop(x);
-////	xt = pop(x);
+////	imm = pop(ctx);
+////	xt = pop(ctx);
 ////
 ////	TEST_ASSERT_EQUAL_INT(-1, imm);
 ////	TEST_ASSERT_EQUAL_INT(find(x, "join", 4),CTX* ctxt);
@@ -1898,9 +1877,9 @@ void test_call() {
 ////	X*CTX* ctx = init(block, size);
 ////
 ////	x->ibuf = "256";
-////	_parse_name(x);
-////	_to_number(x);
-////	C n = pop(x);
+////	parse_token(ctx);
+////	_to_number(ctx);
+////	C n = pop(ctx);
 ////
 ////	TEST_ASSERT_EQUAL_INT(256, n);
 ////}
@@ -1920,7 +1899,7 @@ void test_call() {
 //////	TEST_ASSERT_EQUAL_INT(2, length(x->stack));
 //////	TEST_ASSERT_EQUAL_INT(free_nodes - 2, height(x->free));
 //////
-//////	_sclear(x);
+//////	_sclear(ctx);
 //////
 //////	TEST_ASSERT_EQUAL_INT(0, length(x->stack));
 //////	TEST_ASSERT_EQUAL_INT(free_nodes, height(x->free));
@@ -1939,13 +1918,13 @@ void test_call() {
 //////	TEST_ASSERT_EQUAL_INT(free_nodes - 2, height(x->free));
 //////	TEST_ASSERT_EQUAL_INT(2, length(x->stack));
 //////
-//////	_spush(x);
+//////	_spush(ctx);
 //////
 //////	TEST_ASSERT_EQUAL_INT(free_nodes - 3, height(x->free));
-//////	TEST_ASSERT_EQUAL_INT(7, A(D(P(x))));
-//////	TEST_ASSERT_EQUAL_INT(13, A(D(D(P(x)))));
-//////	TEST_ASSERT_EQUAL_INT(2, height(P(x)));
-//////	TEST_ASSERT_EQUAL_INT(R(x), A(P(x)));
+//////	TEST_ASSERT_EQUAL_INT(7, A(D(P(ctx))));
+//////	TEST_ASSERT_EQUAL_INT(13, A(D(D(P(ctx)))));
+//////	TEST_ASSERT_EQUAL_INT(2, height(P(ctx)));
+//////	TEST_ASSERT_EQUAL_INT(R(ctx), A(P(ctx)));
 //////	TEST_ASSERT_EQUAL_INT(0, length(x->stack));
 //////}
 //////
@@ -1956,11 +1935,11 @@ void test_call() {
 //////
 //////	C free_nodes = (size - sizeof(X)) / (2*sizeof(C)) - 3;
 //////
-//////	_sdrop(x);
+//////	_sdrop(ctx);
 //////
 //////	TEST_ASSERT_EQUAL_INT(0, length(x->stack));
-//////	TEST_ASSERT_EQUAL_INT(1, length(P(x)));
-//////	TEST_ASSERT_EQUAL_INT(R(x), P(x));
+//////	TEST_ASSERT_EQUAL_INT(1, length(P(ctx)));
+//////	TEST_ASSERT_EQUAL_INT(R(ctx), P(ctx));
 //////	TEST_ASSERT_EQUAL_INT(free_nodes, height(x->free));
 //////
 //////	push(x, 13);
@@ -1970,9 +1949,9 @@ void test_call() {
 //////	TEST_ASSERT_EQUAL_INT(2, length(x->stack));
 //////	TEST_ASSERT_EQUAL_INT(7, A(x->stack));
 //////	TEST_ASSERT_EQUAL_INT(13,CTX* ctx->stack);
-//////	TEST_ASSERT_EQUAL_INT(R(x), P(x));
+//////	TEST_ASSERT_EQUAL_INT(R(ctx), P(ctx));
 //////
-//////	_spush(x);
+//////	_spush(ctx);
 //////
 //////	TEST_ASSERT_EQUAL_INT(free_nodes - 3, height(x->free));
 //////
@@ -1982,13 +1961,13 @@ void test_call() {
 //////	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //////	TEST_ASSERT_EQUAL_INT(21, A(x->stack));
 //////
-//////	_sdrop(x);
+//////	_sdrop(ctx);
 //////
 //////	TEST_ASSERT_EQUAL_INT(free_nodes - 2, height(x->free));
 //////	TEST_ASSERT_EQUAL_INT(2, length(x->stack));
 //////	TEST_ASSERT_EQUAL_INT(7, A(x->stack));
 //////	TEST_ASSERT_EQUAL_INT(13,CTX* ctx->stack);
-//////	TEST_ASSERT_EQUAL_INT(R(x), P(x));
+//////	TEST_ASSERT_EQUAL_INT(R(ctx), P(ctx));
 //////}
 //////
 //////void test_drop() {
@@ -2002,17 +1981,17 @@ void test_call() {
 //////	TEST_ASSERT_EQUAL_INT(3, length(x->stack));
 //////	TEST_ASSERT_EQUAL_INT(7, A(x->stack));
 //////	TEST_ASSERT_EQUAL_INT(13,CTX* ctx->stack);
-//////	TEST_ASSERT_EQUAL_INT(21, A(D(D(K(x)))));
-//////	_drop(x);
+//////	TEST_ASSERT_EQUAL_INT(21, A(D(D(K(ctx)))));
+//////	_drop(ctx);
 //////	TEST_ASSERT_EQUAL_INT(2, length(x->stack));
 //////	TEST_ASSERT_EQUAL_INT(13, A(x->stack));
 //////	TEST_ASSERT_EQUAL_INT(21,CTX* ctx->stack);
-//////	_drop(x);
+//////	_drop(ctx);
 //////	TEST_ASSERT_EQUAL_INT(1, length(x->stack));
 //////	TEST_ASSERT_EQUAL_INT(21, A(x->stack));
-//////	_drop(x);
+//////	_drop(ctx);
 //////	TEST_ASSERT_EQUAL_INT(0, length(x->stack));
-//////	_drop(x);
+//////	_drop(ctx);
 //////	TEST_ASSERT_EQUAL_INT(ERR_UNDERFLOW,CTX* ctx->err);
 //////}
 //////
@@ -2029,16 +2008,16 @@ void test_call() {
 //////	TEST_ASSERT_EQUAL_INT(5, length(x->stack));
 //////	TEST_ASSERT_EQUAL_INT(3, A(x->stack));
 //////	TEST_ASSERT_EQUAL_INT(5,CTX* ctx->stack);
-//////	TEST_ASSERT_EQUAL_INT(7, A(D(D(K(x)))));
-//////	TEST_ASSERT_EQUAL_INT(13, A(D(D(D(K(x))))));
-//////	TEST_ASSERT_EQUAL_INT(21, A(D(D(D(D(K(x)))))));
-//////	_rev(x);
+//////	TEST_ASSERT_EQUAL_INT(7, A(D(D(K(ctx)))));
+//////	TEST_ASSERT_EQUAL_INT(13, A(D(D(D(K(ctx))))));
+//////	TEST_ASSERT_EQUAL_INT(21, A(D(D(D(D(K(ctx)))))));
+//////	_rev(ctx);
 //////	TEST_ASSERT_EQUAL_INT(5, length(x->stack));
 //////	TEST_ASSERT_EQUAL_INT(21, A(x->stack));
 //////	TEST_ASSERT_EQUAL_INT(13,CTX* ctx->stack);
-//////	TEST_ASSERT_EQUAL_INT(7, A(D(D(K(x)))));
-//////	TEST_ASSERT_EQUAL_INT(5, A(D(D(D(K(x))))));
-//////	TEST_ASSERT_EQUAL_INT(3, A(D(D(D(D(K(x)))))));
+//////	TEST_ASSERT_EQUAL_INT(7, A(D(D(K(ctx)))));
+//////	TEST_ASSERT_EQUAL_INT(5, A(D(D(D(K(ctx))))));
+//////	TEST_ASSERT_EQUAL_INT(3, A(D(D(D(D(K(ctx)))))));
 //////}
 //////
 ////////////void test_stack_to_list() {
@@ -2177,15 +2156,11 @@ int main() {
 	RUN_TEST(test_execute_atom);
 	RUN_TEST(test_execute_list);
 	RUN_TEST(test_execute_primitive);
-	//RUN_TEST(test_execute_xt_2);
-//	RUN_TEST(test_interpreter_branch);
-//	RUN_TEST(test_interpreter_continued_branch);
-//	RUN_TEST(test_interpreter_recursion);
-//	RUN_TEST(test_interpreter_jump);
-//
-
 	RUN_TEST(test_call);
-	//RUN_TEST(test_call_2);
+
+	// PARSING
+	RUN_TEST(test_parse_token);
+	
 
 //	RUN_TEST(test_mlength);
 //	RUN_TEST(test_last);
@@ -2258,7 +2233,6 @@ int main() {
 //	RUN_TEST(test_body);
 //	RUN_TEST(test_reveal);
 //
-//	//RUN_TEST(test_parse_name);
 //	RUN_TEST(test_find);
 //	//RUN_TEST(test_find_name);
 //	//RUN_TEST(test_to_number);
