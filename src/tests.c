@@ -289,17 +289,23 @@ void test_execute_list() {
 	TEST_ASSERT_NOT_EQUAL_INT(NEXT(NEXT(CAR(xlist))), NEXT(NEXT(CAR(ctx->stack))));
 }
 
-WORD(test_add,
+CELL test_add(CTX* ctx) {
 	CELL a = CAR(ctx->stack);
 	CELL b = CAR(NEXT(ctx->stack));
 	ctx->stack = reclaim(ctx, reclaim(ctx, ctx->stack));
 	ctx->stack = cons(ctx, b + a, AS(ATOM, 0));
-)
 
-WORD(test_dup,
+	return 0;
+}
+
+
+CELL test_dup(CTX* ctx) {
 	CELL a = CAR(ctx->stack);
 	ctx->stack = cons(ctx, a, AS(ATOM, ctx->stack));
-)
+
+	return 0;
+}
+
 
 void test_execute_primitive() {
 	CELL size = 512;

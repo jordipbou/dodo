@@ -3,6 +3,13 @@
 #include<stdio.h>
 #include<ctype.h>
 
+#ifdef _WIN32
+	#include<conio.h>
+#else
+	#include<unistd.h>
+	#include<termios.h>
+#endif
+
 typedef int8_t			BYTE;
 typedef intptr_t		CELL;
 typedef struct {
@@ -29,13 +36,13 @@ typedef CELL (*FUNC)(CTX*);
 #define PRIMITIVE(word)					((TYPE(word) & 1) == 0)
 #define IMMEDIATE(word)					((TYPE(word) & 2) == 2)
 
-#define WORD(name, block)				CELL name(CTX* ctx) { block; ctx->ip = NEXT(ctx->ip); return 0; }
-
 #define ERR_STACK_OVERFLOW			-1
 #define ERR_STACK_UNDERFLOW			-2
 #define ERR_UNDEFINED_WORD			-3
 #define ERR_NOT_ENOUGH_MEMORY		-4
 #define ERR_ZERO_LENGTH_NAME		-5
+#define ERR_ATOM_EXPECTED				-6
+#define ERR_RSTACK_UNDERFLOW		-7
 
 #define FREE(ctx)						(length(ctx->free) - 1)
 #define ALIGN(addr, bound)	((((CELL)addr) + (bound - 1)) & ~(bound - 1))
@@ -153,7 +160,8 @@ CELL execute(CTX* ctx, CELL xlist) {
 				break;
 			case PRIM:
 				result = ((FUNC)CAR(ctx->ip))(ctx);
-				if (result != 0) { return result; }
+				if (result < 0) { return result; }
+				if (result != 1) { ctx->ip = NEXT(ctx->ip); }
 				break;
 			case CALL:
 				if (NEXT(ctx->ip) != 0) {
@@ -303,62 +311,7 @@ CELL align(CTX* ctx) {
 
 // END OF CONTIGUOUS MEMORY
 
-WORD(_lbrace,
-	ctx->compiling = 1;
-	ctx->compiled = cons(ctx, 0, AS(LIST, ctx->compiled));
-)
-
-WORD(_rbrace,
-	CELL list = reverse(CAR(ctx->compiled), 0);
-	CAR(ctx->compiled) = 0;
-	ctx->compiled = reclaim(ctx, ctx->compiled);
-	if (ctx->compiled == 0) {
-		ctx->stack = cons(ctx, list, AS(LIST, ctx->stack));
-		ctx->compiling = 0;
-	} else {
-		CAR(ctx->compiled) = cons(ctx, list, AS(LIST, CAR(ctx->compiled)));
-	}
-)
-
-//WORD(_colon,
-CELL _colon(CTX* ctx) {
-	if (parse_token(ctx) == 0) { return ERR_ZERO_LENGTH_NAME; }
-	BYTE* str = ctx->here;
-	if (allot(ctx, sizeof(CELL) + (ctx->in - ctx->token) + 1) != 0) { return ERR_NOT_ENOUGH_MEMORY; }
-	*((CELL*)str) = ctx->in - ctx->token;
-	str += sizeof(CELL);
-	strncpy(str, ctx->tib + ctx->token, ctx->in - ctx->token);
-	str[ctx->in - ctx->token] = 0;
-	CELL h = header(ctx, str);
-	ctx->defs = cons(ctx, h, AS(ATOM, ctx->defs));
-	_lbrace(ctx);
-
-	//ctx->ip = NEXT(ctx->ip);
-	return 0;
-}
-//)
-
-//WORD(_semicolon,
-CELL _semicolon(CTX* ctx) {
-	_rbrace(ctx);
-	CELL h = CAR(ctx->defs);
-	ctx->defs = reclaim(ctx, ctx->defs);
-	body(h, CAR(ctx->stack));
-	CAR(ctx->stack) = 0;
-	ctx->stack = reclaim(ctx, ctx->stack);
-	reveal(ctx, h);
-
-	return 0;
-}
-//)
-
-WORD(_add,
-	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
-	CAR(NEXT(ctx->stack)) = CAR(NEXT(ctx->stack)) + CAR(ctx->stack);
-	ctx->stack = reclaim(ctx, ctx->stack);
-)
-
-WORD(_dup, 
+CELL _dup(CTX* ctx) {
 	switch(TYPE(ctx->stack)) {
 		case ATOM:
 			ctx->stack = cons(ctx, CAR(ctx->stack), AS(ATOM, ctx->stack));
@@ -373,7 +326,9 @@ WORD(_dup,
 			ctx->stack = cons(ctx, CAR(ctx->stack), AS(CALL, ctx->stack));
 			break;
 	}
-)
+
+	return 0;
+}
 
 void dump_list(CTX* ctx, CELL pair, CELL order) {
 	if (pair) {
@@ -388,11 +343,13 @@ void dump_list(CTX* ctx, CELL pair, CELL order) {
 	}
 }
 
-WORD(_dump_stack,
+CELL _dump_stack(CTX* ctx) {
 	printf("<%ld> ", length(ctx->stack));
 	dump_list(ctx, ctx->stack, 1);
 	printf("\n");
-)
+
+	return 0;
+}
 
 CELL _dump_compiled(CTX* ctx) {
 	printf("COMPILED: <%ld> ", length(ctx->compiled));
@@ -423,33 +380,220 @@ CELL _execute(CTX* ctx) {
 		ctx->rstack = cons(ctx, NEXT(ctx->ip), AS(ATOM, ctx->rstack));
 	}
 	ctx->ip = xlist;
+
+	return 1;
+}
+
+// Basic WORDS needed for executing SECTOR FORTH
+
+CELL D_lbrace(CTX* ctx) {
+	ctx->compiling = 1;
+	ctx->compiled = cons(ctx, 0, AS(LIST, ctx->compiled));
+
 	return 0;
 }
 
-//// Source code for getch is taken from:
-//// Crossline readline (https://github.com/jcwangxp/Crossline).
-//// It's a fantastic readline cross-platform replacement, but only getch was
-//// needed and there's no need to include everything else.
-////#ifdef _WIN32	// Windows
-////int dodo_getch (void) {	fflush (stdout); return _getch(); }
-////#else
-////int dodo_getch ()
-////{
-////	char ch = 0;
-////	struct termios old_term, cur_term;
-////	fflush (stdout);
-////	if (tcgetattr(STDIN_FILENO, &old_term) < 0)	{ perror("tcsetattr"); }
-////	cur_term = old_term;
-////	cur_term.c_lflag &= ~(ICANON | ECHO | ISIG); // echoing off, canonical off, no signal chars
-////	cur_term.c_cc[VMIN] = 1;
-////	cur_term.c_cc[VTIME] = 0;
-////	if (tcsetattr(STDIN_FILENO, TCSANOW, &cur_term) < 0)	{ perror("tcsetattr"); }
-////	if (read(STDIN_FILENO, &ch, 1) < 0)	{ /* perror("read()"); */ } // signal will interrupt
-////	if (tcsetattr(STDIN_FILENO, TCSADRAIN, &old_term) < 0)	{ perror("tcsetattr"); }
-////	return ch;
-////}
-////#endif
-////
-////void _key(X* x) { push(x, dodo_getch()); }
-////void _emit(X* x) { C K = T(x); pop(x); K == 127 ? printf ("\b \b") : printf ("%c", (char)K); }
-//
+CELL D_rbrace(CTX* ctx) {
+	CELL list = reverse(CAR(ctx->compiled), 0);
+	CAR(ctx->compiled) = 0;
+	ctx->compiled = reclaim(ctx, ctx->compiled);
+	if (ctx->compiled == 0) {
+		ctx->stack = cons(ctx, list, AS(LIST, ctx->stack));
+		ctx->compiling = 0;
+	} else {
+		CAR(ctx->compiled) = cons(ctx, list, AS(LIST, CAR(ctx->compiled)));
+	}
+
+	return 0;
+}
+
+CELL D_colon(CTX* ctx) {
+	if (parse_token(ctx) == 0) { return ERR_ZERO_LENGTH_NAME; }
+	BYTE* str = ctx->here;
+	if (allot(ctx, sizeof(CELL) + (ctx->in - ctx->token) + 1) != 0) { return ERR_NOT_ENOUGH_MEMORY; }
+	*((CELL*)str) = ctx->in - ctx->token;
+	str += sizeof(CELL);
+	strncpy(str, ctx->tib + ctx->token, ctx->in - ctx->token);
+	str[ctx->in - ctx->token] = 0;
+	CELL h = header(ctx, str);
+	ctx->defs = cons(ctx, h, AS(ATOM, ctx->defs));
+	D_lbrace(ctx);
+
+	return 0;
+}
+
+CELL D_semicolon(CTX* ctx) {
+	D_rbrace(ctx);
+	CELL h = CAR(ctx->defs);
+	ctx->defs = reclaim(ctx, ctx->defs);
+	body(h, CAR(ctx->stack));
+	CAR(ctx->stack) = 0;
+	ctx->stack = reclaim(ctx, ctx->stack);
+	reveal(ctx, h);
+
+	return 0;
+}
+
+CELL D_parse(CTX* ctx) {
+	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
+	if (TYPE(ctx->stack) != ATOM) { return ERR_ATOM_EXPECTED; }
+	CELL delimiter = CAR(ctx->stack);
+	printf("PARSING until %c %ld\n", delimiter, delimiter);
+	ctx->stack = reclaim(ctx, ctx->stack);
+	while (*(ctx->tib + ctx->in) != 0 && *(ctx->tib + ctx->in) != delimiter) {
+		ctx->in++;
+	}
+	ctx->in++;
+}
+
+CELL D_immediate(CTX* ctx) {
+	CDR(ctx->latest) = CDR(ctx->latest) | 2;
+	return 0;	
+}
+
+// SECTOR FORTH Primitives
+
+CELL D_fetch(CTX* ctx) {
+	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
+	if (TYPE(ctx->stack) != ATOM) { return ERR_ATOM_EXPECTED; }
+	CAR(ctx->stack) = *((CELL*)(CAR(ctx->stack)));
+
+	return 0;
+}
+
+CELL D_store(CTX* ctx) {
+	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
+	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
+	CELL addr = CAR(ctx->stack);
+	CELL x = CAR(NEXT(ctx->stack));
+	ctx->stack = reclaim(ctx, reclaim(ctx, ctx->stack));
+	*((CELL*)addr) = x;
+
+	return 0;
+}
+
+CELL D_sp_fetch(CTX* ctx) {
+	if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
+	ctx->stack = cons(ctx, ctx->stack, AS(ATOM, ctx->stack));
+
+	return 0;
+}
+
+CELL D_rp_fetch(CTX* ctx) {
+	if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
+	ctx->stack = cons(ctx, ctx->rstack, AS(ATOM, ctx->stack));
+
+	return 0;
+}
+
+CELL D_zeroeq(CTX* ctx) {
+	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
+	if (TYPE(ctx->stack) != ATOM) { return ERR_ATOM_EXPECTED; }
+	CAR(ctx->stack) = CAR(ctx->stack) == 0 ? -1 : 0;
+
+	return 0;
+}
+
+CELL D_add(CTX* ctx) {
+	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
+	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
+	CAR(NEXT(ctx->stack)) = CAR(NEXT(ctx->stack)) + CAR(ctx->stack);
+	ctx->stack = reclaim(ctx, ctx->stack);
+
+	return 0;
+}
+
+CELL D_nand(CTX* ctx) {
+	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
+	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
+	CAR(NEXT(ctx->stack)) = !(CAR(NEXT(ctx->stack)) && CAR(ctx->stack));
+	ctx->stack = reclaim(ctx, ctx->stack);
+
+	return 0;
+}
+
+CELL D_exit(CTX* ctx) {
+	if (ctx->rstack == 0) { return ERR_RSTACK_UNDERFLOW; }
+	CELL addr = CAR(ctx->rstack);
+	ctx->rstack = reclaim(ctx, ctx->rstack);
+
+	ctx->ip = addr;
+	return 1;
+}
+
+// Source code for getch is taken from:
+// Crossline readline (https://github.com/jcwangxp/Crossline).
+// It's a fantastic readline cross-platform replacement, but only getch was
+// needed and there's no need to include everything else.
+#ifdef _WIN32	// Windows
+int dodo_getch (void) {	fflush (stdout); return _getch(); }
+#else
+int dodo_getch ()
+{
+	char ch = 0;
+	struct termios old_term, cur_term;
+	fflush (stdout);
+	if (tcgetattr(STDIN_FILENO, &old_term) < 0)	{ perror("tcsetattr"); }
+	cur_term = old_term;
+	cur_term.c_lflag &= ~(ICANON | ECHO | ISIG); // echoing off, canonical off, no signal chars
+	cur_term.c_cc[VMIN] = 1;
+	cur_term.c_cc[VTIME] = 0;
+	if (tcsetattr(STDIN_FILENO, TCSANOW, &cur_term) < 0)	{ perror("tcsetattr"); }
+	if (read(STDIN_FILENO, &ch, 1) < 0)	{ /* perror("read()"); */ } // signal will interrupt
+	if (tcsetattr(STDIN_FILENO, TCSADRAIN, &old_term) < 0)	{ perror("tcsetattr"); }
+	return ch;
+}
+#endif
+
+CELL D_key(CTX* ctx) {
+	if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
+	ctx->stack = cons(ctx, dodo_getch(), AS(ATOM, ctx->stack));
+
+	return 0;
+}
+
+CELL D_emit(CTX* ctx) { 
+	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
+	CELL k = CAR(ctx->stack);
+	ctx->stack = reclaim(ctx, ctx->stack);
+	printf("%c", (char)k);
+
+	return 0;
+}
+
+// SECTORFORTH Variables
+
+CELL D_state(CTX* ctx) {
+	if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
+	ctx->stack = cons(ctx, (CELL)&ctx->compiling, AS(ATOM, ctx->stack));
+
+	return 0;
+}
+
+CELL D_tib(CTX* ctx) {
+	if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
+	ctx->stack = cons(ctx, (CELL)&ctx->tib, AS(ATOM, ctx->stack));
+
+	return 0;
+}
+
+CELL D_in(CTX* ctx) {
+	if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
+	ctx->stack = cons(ctx, (CELL)&ctx->in, AS(ATOM, ctx->stack));
+
+	return 0;
+}
+
+CELL D_here(CTX* ctx) {
+	if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
+	ctx->stack = cons(ctx, (CELL)&ctx->here, AS(ATOM, ctx->stack));
+
+	return 0;
+}
+
+CELL D_latest(CTX* ctx) {
+	if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
+	ctx->stack = cons(ctx, (CELL)&ctx->latest, AS(ATOM, ctx->stack));
+
+	return 0;
+}
