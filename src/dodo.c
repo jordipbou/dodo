@@ -31,19 +31,28 @@ void main() {
 
 	//printf("%ld\n", CAR(ctx->stack));
 
-//	ctx->latest =
-//		cons(ctx, cons(ctx, (CELL)"+", AS(ATOM, cons(ctx, (CELL)&_add, AS(PRIM, 0)))), AS(LIST, 
-//		cons(ctx, cons(ctx, (CELL)"{", AS(ATOM, cons(ctx, (CELL)&_lbrace, AS(PRIM, 0)))), AS(CALL,
-//		cons(ctx, cons(ctx, (CELL)"}", AS(ATOM, cons(ctx, (CELL)&_rbrace, AS(PRIM, 0)))), AS(CALL, 0))))));
-//
-//	printf("add: %p\n", NEXT(CAR(ctx->latest)));
-//	BYTE buf[255];
-//	CELL result;
-//	do {
-//		fgets(buf, 255, stdin);
-//		result = evaluate(ctx, buf);
-//		if (result != 0) { printf("ERROR: %ld\n", result); exit(1); }
-//		dump_stack(ctx);
-//		dump_compiled_stack(ctx);
-//	} while(1);
+	//ctx->latest =
+		//cons(ctx, cons(ctx, (CELL)"+", AS(ATOM, cons(ctx, (CELL)&_add, AS(PRIM, 0)))), AS(LIST, 
+		//cons(ctx, cons(ctx, (CELL)"dup", AS(ATOM, cons(ctx, (CELL)&_dup, AS(PRIM, 0)))), AS(LIST,
+		//cons(ctx, cons(ctx, (CELL)":", AS(ATOM, cons(ctx, (CELL)&_colon, AS(PRIM, 0)))), AS(CALL,
+		//cons(ctx, cons(ctx, (CELL)";", AS(ATOM, cons(ctx, (CELL)&_semicolon, AS(PRIM, 0)))), AS(CALL, 
+		//0))))))));
+
+	reveal(ctx, primitive(body(header(ctx, "+"), cons(ctx, (CELL)&_add, AS(PRIM, 0)))));
+	reveal(ctx, primitive(body(header(ctx, "dup"), cons(ctx, (CELL)&_dup, AS(PRIM, 0)))));
+	reveal(ctx, immediate(primitive(body(header(ctx, ":"), cons(ctx, (CELL)&_colon, AS(PRIM, 0))))));
+	reveal(ctx, immediate(primitive(body(header(ctx, ";"), cons(ctx, (CELL)&_semicolon, AS(PRIM, 0))))));
+	reveal(ctx, immediate(primitive(body(header(ctx, "{"), cons(ctx, (CELL)&_lbrace, AS(PRIM, 0))))));
+	reveal(ctx, immediate(primitive(body(header(ctx, "}"), cons(ctx, (CELL)&_rbrace, AS(PRIM, 0))))));
+	reveal(ctx, primitive(body(header(ctx, ".b"), cons(ctx, (CELL)&_dump_body, AS(PRIM, 0)))));
+	reveal(ctx, primitive(body(header(ctx, "execute"), cons(ctx, (CELL)&_execute, AS(PRIM, 0)))));
+	reveal(ctx, primitive(body(header(ctx, ".s"), cons(ctx, (CELL)&_dump_stack, AS(PRIM, 0)))));
+
+	BYTE buf[255];
+	CELL result;
+	do {
+		fgets(buf, 255, stdin);
+		result = evaluate(ctx, buf);
+		if (result != 0) { printf("ERROR: %ld\n", result); return; }
+	} while(1);
 }
