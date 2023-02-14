@@ -454,6 +454,9 @@ void test_find_token() {
 	TEST_ASSERT_EQUAL_INT(NEXT(NEXT(ctx->latest)), word);
 }
 
+void test_evaluate() {
+}
+
 // CONTIGUOUS MEMORY
 
 //void test_allot() {
