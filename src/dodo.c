@@ -33,7 +33,7 @@
 void main() {
 	CELL size = 20000;
 	BYTE block[size];
-	CTX* ctx = init(block, size);
+	CTX* ctx = bootstrap(init(block, size));
 
 	//add_primitive(ctx, ".s", &_dump_stack);
 	//add_primitive(ctx, "+", &D_add);

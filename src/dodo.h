@@ -35,7 +35,7 @@ typedef CELL (*FUNC)(CTX*);
 
 #define NFA(word)								(CAR(CAR(word)))
 #define DFA(word)								(CAR(NEXT(CAR(word))))
-#define XT(word)								(CDR(NEXT(CAR(word))))
+#define XT(word)								(NEXT(NEXT(CAR(word))))
 #define PRIMITIVE(word)					((TYPE(word) & 1) == 0)
 #define IMMEDIATE(word)					((TYPE(word) & 2) == 2)
 
@@ -167,8 +167,11 @@ CELL parse_token(CTX* ctx) {
 
 CELL find_token(CTX* ctx) {
 	CELL word = ctx->latest;
+	printf("word %ld\n", word);
+	if (word) printf("NFA(word) %s\n", NFA(word));
 	while (word && strncmp((BYTE*)NFA(word), ctx->tib + ctx->token, ctx->in - ctx->token)) {
 		word = NEXT(word);
+		if (word) printf("NFA(word) %s\n", NFA(word));
 	}
 	return word;
 }
@@ -183,6 +186,7 @@ CELL evaluate(CTX* ctx, BYTE* str) {
 	ctx->in = 0;
 	do {
 		if (parse_token(ctx) == 0) { return 0; }
+		printf("TOKEN: %.*s\n", ctx->in - ctx->token, ctx->tib + ctx->token);
 		if ((word = find_token(ctx)) != 0) {
 			if (!ctx->state || IMMEDIATE(word)) {
 				if ((result = execute(ctx, XT(word))) != 0) {
@@ -264,8 +268,14 @@ CELL compile_str(CTX* ctx) {
 		str[i] = ctx->tib[str_start + i];
 	}
 	str[ctx->in - str_start] = 0;
-	ctx->stack = cons(ctx, (CELL)str, AS(ATOM, ctx->stack));
-	ctx->stack = cons(ctx, ctx->in - str_start, AS(ATOM, ctx->stack));
+	if (ctx->state) {
+		CAR(ctx->cpile) = cons(ctx, (CELL)str, AS(ATOM, CAR(ctx->cpile)));
+		//CAR(ctx->cpile) = cons(ctx, ctx->in - str_start, AS(ATOM, CAR(ctx->cpile)));
+	} else {
+		ctx->stack = cons(ctx, (CELL)str, AS(ATOM, ctx->stack));
+		//ctx->stack = cons(ctx, ctx->in - str_start, AS(ATOM, ctx->stack));
+	}
+	ctx->in++;
 	return 0;
 }
 
@@ -289,6 +299,37 @@ CELL append(CTX* ctx) {
 	return 0;
 }
 
+CELL lbrace(CTX* ctx) {
+ ctx->state = 1;
+ ctx->cpile = cons(ctx, 0, AS(LIST, ctx->cpile));
+
+ return 0;
+}
+
+CELL reverse(CELL pair, CELL list) {
+	if (pair != 0) {
+		CELL t = NEXT(pair);
+		CDR(pair) = AS(TYPE(pair), list);
+		return reverse(t, pair);
+	} else {
+		return list;
+	}
+}
+
+CELL rbrace(CTX* ctx) {
+  CELL list = reverse(CAR(ctx->cpile), 0);
+  CAR(ctx->cpile) = 0;
+  ctx->cpile = reclaim(ctx, ctx->cpile);
+  if (ctx->cpile == 0) {
+		ctx->stack = cons(ctx, list, AS(LIST, ctx->stack));
+		ctx->state = 0;
+  } else {
+		CAR(ctx->cpile) = cons(ctx, list, AS(LIST, CAR(ctx->cpile)));
+  }
+
+  return 0;
+}
+
 CELL length(CELL pair) { 
 	CELL c = 0; 
 	while (pair) { 
@@ -298,16 +339,104 @@ CELL length(CELL pair) {
 	return c; 
 }
 
-//CELL reverse(CELL pair, CELL list) {
-//	if (pair != 0) {
-//		CELL t = NEXT(pair);
-//		CDR(pair) = AS(TYPE(pair), list);
-//		return reverse(t, pair);
-//	} else {
-//		return list;
-//	}
-//}
-//
+CELL find_prim(CTX* ctx, CELL xt) {
+	CELL word = ctx->latest;
+	while (word && XT(word) != xt) { word = NEXT(word); }
+	return word;
+}
+
+void dump_list(CTX* ctx, CELL pair, CELL order) {
+	CELL word;
+	if (pair) {
+		if (order) dump_list(ctx, NEXT(pair), order);
+		switch (TYPE(pair)) {
+			case ATOM: printf("%ld ", CAR(pair)); break;
+			case LIST: printf("{ "); dump_list(ctx, CAR(pair), 0); printf("} "); break;
+			case PRIM: 
+				word = find_prim(ctx, CAR(pair));
+				printf("%s ", (BYTE*)(word ? (NFA(word)) : "")); break;
+			case CALL: printf("X::{ "); dump_list(ctx, CAR(pair), 0); printf("} "); break;
+		}
+		if (!order) dump_list(ctx, NEXT(pair), order);
+	}
+}
+
+CELL dump_stack(CTX* ctx) {
+	printf("<%ld> ", length(ctx->stack));
+	dump_list(ctx, ctx->stack, 1);
+	printf("\n");
+
+	return 0;
+}
+
+CELL words(CTX* ctx) {
+	printf("WORDS: ");
+	CELL p = ctx->latest;
+	while (p) { printf("%s ", (BYTE*)NFA(p)); p = NEXT(p); }
+	printf("\n");
+}
+
+CTX* bootstrap(CTX* ctx) {
+	ctx->latest = 
+		cons(ctx, 
+			cons(ctx, (CELL)"s\"", AS(ATOM, 
+			cons(ctx, (CELL)ctx->here, AS(ATOM, 
+			cons(ctx, (CELL)&compile_str, AS(PRIM, 0)))))), 
+		AS(CALL, ctx->latest));	
+
+	ctx->latest = 
+		cons(ctx,
+			cons(ctx, (CELL)"allot", AS(ATOM,
+			cons(ctx, (CELL)ctx->here, AS(ATOM,
+			cons(ctx, (CELL)&allot, AS(PRIM, 0)))))),
+		AS(LIST, ctx->latest));
+
+	ctx->latest =
+		cons(ctx,
+			cons(ctx, (CELL)"append", AS(ATOM,
+			cons(ctx, (CELL)ctx->here, AS(ATOM,
+			cons(ctx, (CELL)&append, AS(PRIM, 0)))))),
+		AS(LIST, ctx->latest));
+
+	ctx->latest =
+		cons(ctx,
+			cons(ctx, (CELL)".s", AS(ATOM,
+			cons(ctx, (CELL)ctx->here, AS(ATOM,
+			cons(ctx, (CELL)&dump_stack, AS(PRIM, 0)))))),
+		AS(LIST, ctx->latest));
+
+	ctx->latest =
+		cons(ctx,
+			cons(ctx, (CELL)"{", AS(ATOM,
+			cons(ctx, (CELL)ctx->here, AS(ATOM,
+			cons(ctx, (CELL)&lbrace, AS(PRIM, 0)))))),
+		AS(CALL, ctx->latest));
+
+	ctx->latest =
+		cons(ctx,
+			cons(ctx, (CELL)"}", AS(ATOM,
+			cons(ctx, (CELL)ctx->here, AS(ATOM,
+			cons(ctx, (CELL)&rbrace, AS(PRIM, 0)))))),
+		AS(CALL, ctx->latest));
+
+	ctx->latest =
+		cons(ctx,
+			cons(ctx, (CELL)"words", AS(ATOM,
+			cons(ctx, (CELL)ctx->here, AS(ATOM,
+			cons(ctx, (CELL)&words, AS(PRIM, 0)))))),
+		AS(LIST, ctx->latest));
+
+	// VARIABLES
+
+	ctx->latest =
+		cons(ctx,
+			cons(ctx, (CELL)"latest", AS(ATOM,
+			cons(ctx, (CELL)ctx->here, AS(ATOM,
+			cons(ctx, (CELL)&ctx->latest, AS(ATOM, 0)))))),
+		AS(LIST, ctx->latest));
+	return ctx;
+}
+
 //// PRIMITIVES
 //
 //CELL P_lbrace(CTX* ctx) {
