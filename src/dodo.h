@@ -167,11 +167,18 @@ CELL parse_token(CTX* ctx) {
 
 CELL find_token(CTX* ctx) {
 	CELL word = ctx->latest;
+	printf("token %.*s\n", ctx->in - ctx->token, ctx->tib + ctx->token);
 	printf("word %ld\n", word);
-	if (word) printf("NFA(word) %s\n", NFA(word));
-	while (word && strncmp((BYTE*)NFA(word), ctx->tib + ctx->token, ctx->in - ctx->token)) {
+	while (
+	word
+	&& !(strlen(NFA(word)) == (ctx->in - ctx->token) 
+	     && strncmp((BYTE*)NFA(word), ctx->tib + ctx->token, ctx->in - ctx->token) == 0i
+	)) {
 		word = NEXT(word);
 		if (word) printf("NFA(word) %s\n", NFA(word));
+	}
+	if (word) {
+		printf("WORD found: %s strlen(NFA(word)) %ld (ctx->in - ctx->token) %ld\n", NFA(word), strlen(NFA(word)), ctx->in - ctx->token);
 	}
 	return word;
 }

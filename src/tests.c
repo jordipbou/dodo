@@ -388,9 +388,10 @@ void test_find_token() {
 	CTX* ctx = init(block, size);
 
 	ctx->latest =	
-		cons(ctx, cons(ctx, (CELL)"test", AS(ATOM, 0)), AS(LIST,
+		cons(ctx, cons(ctx, (CELL)"test2", AS(ATOM, 0)), AS(LIST,
 		cons(ctx, cons(ctx, (CELL)"dup", AS(ATOM, 0)), AS(CALL,
-		cons(ctx, cons(ctx, (CELL)"join", AS(ATOM, 0)), AS(LIST, 0))))));
+		cons(ctx, cons(ctx, (CELL)"join", AS(ATOM, 0)), AS(LIST,
+		cons(ctx, cons(ctx, (CELL)"test", AS(ATOM, 0)), AS(LIST, 0))))))));
 
 	ctx->tib = "dup";
 	ctx->token = 0;
@@ -411,6 +412,16 @@ void test_find_token() {
 
 	TEST_ASSERT_EQUAL_INT(0, IMMEDIATE(word));
 	TEST_ASSERT_EQUAL_INT(NEXT(NEXT(ctx->latest)), word);
+
+	ctx->tib = "test";
+	ctx->token = 0;
+	ctx->in = 0;
+
+	parse_token(ctx);
+	word = find_token(ctx);
+
+	TEST_ASSERT_EQUAL_STRING("test", (BYTE*)NFA(word));
+	TEST_ASSERT_EQUAL_INT(NEXT(NEXT(NEXT(ctx->latest))), word);
 }
 
 // OUTER INTERPRETER
@@ -544,11 +555,9 @@ void test_compile_str() {
 
 	TEST_ASSERT_EQUAL_INT(0, result);
 
-	CELL length = CAR(ctx->stack);
-	BYTE* addr = (BYTE*)CAR(NEXT(ctx->stack));
+	BYTE* addr = (BYTE*)CAR(ctx->stack);
 
 	TEST_ASSERT_EQUAL_STRING("test string", addr);
-	TEST_ASSERT_EQUAL_INT(11, length);
 	TEST_ASSERT_EQUAL_INT(11, *((CELL*)(addr - sizeof(CELL))));
 }
 

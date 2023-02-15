@@ -42,18 +42,18 @@ void main() {
 	//add_primitive(ctx, ":", &D_colon);
 	//add_primitive(ctx, ";", &D_semicolon);
 
-	//FILE *fptr;
+	FILE *fptr;
 	BYTE buf[255];
 	CELL result;
-	//fptr = fopen("test.dodo", "r");
+	fptr = fopen("test.dodo", "r");
 	////fptr = fopen("ttester.fs", "r");
 	////fptr = fopen("dodo.fs", "r");
-	//while (fgets(buf, 255, fptr)) {
-	//	result = evaluate(ctx, buf);
-	//	if (result != 0) { 
-	//		printf("ERROR: %ld\n", result); 
-	//	}
-	//}
+	while (fgets(buf, 255, fptr)) {
+		result = evaluate(ctx, buf);
+		if (result != 0) { 
+			printf("ERROR: %ld\n", result); 
+		}
+	}
 	do {
 		fgets(buf, 255, stdin);
 		result = evaluate(ctx, buf);
