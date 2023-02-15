@@ -269,7 +269,25 @@ CELL compile_str(CTX* ctx) {
 	return 0;
 }
 
-/// LIST OPERATIONS
+// LIST OPERATIONS
+
+CELL append(CTX* ctx) {
+	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
+	if (TYPE(NEXT(ctx->stack)) == LIST) {
+		CELL t = NEXT(ctx->stack);
+		CDR(ctx->stack) = AS(TYPE(ctx->stack), CAR(NEXT(ctx->stack)));
+		CAR(t) = ctx->stack;
+		ctx->stack = t;
+	} else if (TYPE(NEXT(ctx->stack)) == ATOM) {
+		CELL* dest = (CELL*)CAR(NEXT(ctx->stack));	
+		CELL t = NEXT(ctx->stack);
+		CDR(ctx->stack) = AS(TYPE(ctx->stack), *dest);
+		*dest = ctx->stack;
+		ctx->stack = reclaim(ctx, t);
+	}
+
+	return 0;
+}
 
 CELL length(CELL pair) { 
 	CELL c = 0; 

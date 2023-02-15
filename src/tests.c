@@ -553,22 +553,65 @@ void test_compile_str() {
 }
 
 ////  LIST FUNCTIONS
-//
-//void test_length() {
-//	CELL p1 = (CELL)malloc(2*sizeof(CELL));
-//	CELL p2 = (CELL)malloc(2*sizeof(CELL));
-//	CELL p3 = (CELL)malloc(2*sizeof(CELL));
-//
-//	CDR(p1) = AS(ATOM, p2);
-//	CDR(p2) = p3;
-//	CDR(p3) = 0;
-//
-//	TEST_ASSERT_EQUAL_INT(0, length(0));
-//	TEST_ASSERT_EQUAL_INT(1, length(p3));
-//	TEST_ASSERT_EQUAL_INT(2, length(p2));
-//	TEST_ASSERT_EQUAL_INT(3, length(p1));
-//}
-//
+
+void test_length() {
+	CELL p1 = (CELL)malloc(2*sizeof(CELL));
+	CELL p2 = (CELL)malloc(2*sizeof(CELL));
+	CELL p3 = (CELL)malloc(2*sizeof(CELL));
+
+	CDR(p1) = AS(ATOM, p2);
+	CDR(p2) = p3;
+	CDR(p3) = 0;
+
+	TEST_ASSERT_EQUAL_INT(0, length(0));
+	TEST_ASSERT_EQUAL_INT(1, length(p3));
+	TEST_ASSERT_EQUAL_INT(2, length(p2));
+	TEST_ASSERT_EQUAL_INT(3, length(p1));
+}
+
+void test_append() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	CELL dest = 0;
+	CELL result = 0;
+
+	result = append(ctx);
+
+	TEST_ASSERT_EQUAL_INT(ERR_STACK_UNDERFLOW, result);
+
+	ctx->stack = cons(ctx, (CELL)&dest, AS(ATOM, ctx->stack));
+	ctx->stack = cons(ctx, 7, AS(ATOM, ctx->stack));
+
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 2, FREE(ctx));
+
+	result = append(ctx);
+
+	TEST_ASSERT_EQUAL_INT(0, result);
+	TEST_ASSERT_EQUAL_INT(1, length(dest));
+	TEST_ASSERT_EQUAL_INT(7, CAR(dest));
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 1, FREE(ctx));
+
+	ctx->stack = reclaim(ctx, ctx->stack);
+	dest = reclaim(ctx, dest);
+
+	TEST_ASSERT_EQUAL_INT(0, length(ctx->stack));
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx), FREE(ctx));
+
+	ctx->stack = cons(ctx, cons(ctx, 7, AS(ATOM, 0)), AS(LIST, ctx->stack));
+	ctx->stack = cons(ctx, 11, AS(ATOM, ctx->stack));
+
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 3, FREE(ctx));
+
+	result = append(ctx);
+
+	TEST_ASSERT_EQUAL_INT(0, result);
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 3, FREE(ctx));
+	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
+	TEST_ASSERT_EQUAL_INT(LIST, TYPE(ctx->stack));
+	TEST_ASSERT_EQUAL_INT(2, length(CAR(ctx->stack)));
+}
 //void test_depth() {
 //	CELL p1 = (CELL)malloc(sizeof(CELL) * 2);
 //	CELL p2 = (CELL)malloc(sizeof(CELL) * 2);
@@ -2227,8 +2270,9 @@ int main() {
 	RUN_TEST(test_compile_str);
 	//RUN_TEST(test_align);
 
-	////  LIST FUNCTIONS
-	//RUN_TEST(test_length);
+	//  LIST FUNCTIONS
+	RUN_TEST(test_length);
+	RUN_TEST(test_append);
 	//RUN_TEST(test_depth);
 
 	//// WORD DEFINITIONS
