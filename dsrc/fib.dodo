@@ -1,10 +1,9 @@
-9 
+36 
 { 
 	swap dup 1 > 
-	{ 1 - dup 1 - rot dup execute rot rot dup execute rot + } 
-	{ } 
 	branch 
-} dup
-execute
+		{ 1 - dup 1 - rot x rot rot x rot + } 
+		{ } 
+} x
 swap drop
 .s

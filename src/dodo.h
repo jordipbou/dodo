@@ -174,7 +174,7 @@ CELL find_token(CTX* ctx) {
 	while (
 	word
 	&& !(strlen((BYTE*)NFA(word)) == (ctx->in - ctx->token) 
-	     && strncmp((BYTE*)NFA(word), ctx->tib + ctx->token, ctx->in - ctx->token) == 0i
+	     && strncmp((BYTE*)NFA(word), ctx->tib + ctx->token, ctx->in - ctx->token) == 0
 	)) {
 		word = NEXT(word);
 	}
@@ -562,14 +562,29 @@ CELL branch(CTX* ctx) {
 	if (ctx->stack == 0 || NEXT(ctx->stack) == 0 || NEXT(NEXT(ctx->stack)) == 0) {
 		return ERR_STACK_UNDERFLOW;
 	}
-	CELL b = CAR(NEXT(NEXT(ctx->stack)));
-	if (!b) {
-		swap(ctx);
+	CELL b = CAR(ctx->stack);
+	ctx->stack = reclaim(ctx, ctx->stack);
+	if (NEXT(NEXT(NEXT(ctx->ip))) != 0) {
+		if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
+		ctx->rstack = cons(ctx, NEXT(NEXT(NEXT(ctx->ip))), AS(ATOM, ctx->rstack));
 	}
-	drop(ctx);
-	swap(ctx);
-	drop(ctx);
-	exec(ctx);
+	if (b) {
+		ctx->ip = CAR(NEXT(ctx->ip));
+	} else {
+		ctx->ip = CAR(NEXT(NEXT(ctx->ip)));
+	}
+
+	//CELL b = CAR(NEXT(NEXT(ctx->stack)));
+
+	//if (!b) {
+	//	swap(ctx);
+	//}
+	//drop(ctx);
+	//swap(ctx);
+	//drop(ctx);
+	//exec(ctx);
+
+	return 1;
 }
 
 CELL gt(CTX* ctx) {

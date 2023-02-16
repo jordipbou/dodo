@@ -32,7 +32,7 @@
 //}
 
 void main(int argc, char *argv[]) {
-	CELL size = 65536;
+	CELL size = 4096;
 	BYTE block[size];
 	CTX* ctx = bootstrap(init(block, size));
 
