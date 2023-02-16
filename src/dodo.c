@@ -1,3 +1,4 @@
+#include<stdlib.h>
 #include<stdio.h>
 #include"dodo.h"
 
@@ -30,8 +31,8 @@
 //	return 0;
 //}
 
-void main() {
-	CELL size = 20000;
+void main(int argc, char *argv[]) {
+	CELL size = 65536;
 	BYTE block[size];
 	CTX* ctx = bootstrap(init(block, size));
 
@@ -45,20 +46,46 @@ void main() {
 	FILE *fptr;
 	BYTE buf[255];
 	CELL result;
-	fptr = fopen("test.dodo", "r");
-	////fptr = fopen("ttester.fs", "r");
-	////fptr = fopen("dodo.fs", "r");
-	while (fgets(buf, 255, fptr)) {
-		result = evaluate(ctx, buf);
-		if (result != 0) { 
-			printf("ERROR: %ld\n", result); 
+	if (argc == 2) {
+		//fptr = fopen("test.dodo", "r");
+		//fptr = fopen("ttester.fs", "r");
+		////fptr = fopen("dodo.fs", "r");
+		fptr = fopen(argv[1], "r");
+		while (fgets(buf, 255, fptr)) {
+			result = evaluate(ctx, buf);
+			if (result != 0) { 
+				switch (result) {
+					case -1: printf("Stack overflow\n"); break;
+					case -2: printf("Stack underflow\n"); break;
+					case -3: printf("Undefined word: %.*s\n", (int)(ctx->in - ctx->token), ctx->tib + ctx->token); break;
+					case -4: printf("Not enough memory\n"); break;
+					case -5: printf("Zero length name\n"); break;
+					case -6: printf("Atom expected\n"); break;
+					case -7: printf("Return stack underflow\n"); break;
+					case -8: break;
+					default: printf("ERROR: %ld\n", result); break;
+				}
+				printf("TIB: %s\n", ctx->tib + ctx->token);
+			}
 		}
 	}
-	do {
-		fgets(buf, 255, stdin);
-		result = evaluate(ctx, buf);
-		if (result != 0) { 
-			printf("ERROR: %ld\n", result); 
-		}
-	} while(1);
+	////do {
+	////	fgets(buf, 255, stdin);
+	////	result = evaluate(ctx, buf);
+	////	if (result != 0) { 
+	////		switch (result) {
+	////			case -1: printf("Stack overflow\n"); break;
+	////			case -2: printf("Stack underflow\n"); break;
+	////			case -3: printf("Undefined word: %.*s\n", (int)(ctx->in - ctx->token), ctx->tib + ctx->token); break;
+	////			case -4: printf("Not enough memory\n"); break;
+	////			case -5: printf("Zero length name\n"); break;
+	////			case -6: printf("Atom expected\n"); break;
+	////			case -7: printf("Return stack underflow\n"); break;
+	////			case -8: break;
+	////			default: printf("ERROR: %ld\n", result); break;
+	////		}
+	////		printf("TIB: %s\n", ctx->tib + ctx->token);
+	////		return;
+	////	}
+	////} while(1);
 }

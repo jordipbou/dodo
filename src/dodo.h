@@ -46,6 +46,7 @@ typedef CELL (*FUNC)(CTX*);
 #define ERR_ZERO_LENGTH_NAME		-5
 #define ERR_ATOM_EXPECTED				-6
 #define ERR_RSTACK_UNDERFLOW		-7
+#define ERR_EXIT								-8
 
 #define FREE(ctx)						(length(ctx->free) - 1)
 #define ALIGN(addr, bound)	((((CELL)addr) + (bound - 1)) & ~(bound - 1))
@@ -111,6 +112,9 @@ CELL reclaim(CTX* ctx, CELL pair) {
 
 // INNER INTERPRETER
 
+CELL dump_stack(CTX*);
+CELL find_prim(CTX*, CELL);
+
 CELL execute(CTX* ctx, CELL xlist) {
 	CELL result;
 	ctx->ip = xlist;
@@ -167,18 +171,12 @@ CELL parse_token(CTX* ctx) {
 
 CELL find_token(CTX* ctx) {
 	CELL word = ctx->latest;
-	printf("token %.*s\n", ctx->in - ctx->token, ctx->tib + ctx->token);
-	printf("word %ld\n", word);
 	while (
 	word
-	&& !(strlen(NFA(word)) == (ctx->in - ctx->token) 
+	&& !(strlen((BYTE*)NFA(word)) == (ctx->in - ctx->token) 
 	     && strncmp((BYTE*)NFA(word), ctx->tib + ctx->token, ctx->in - ctx->token) == 0i
 	)) {
 		word = NEXT(word);
-		if (word) printf("NFA(word) %s\n", NFA(word));
-	}
-	if (word) {
-		printf("WORD found: %s strlen(NFA(word)) %ld (ctx->in - ctx->token) %ld\n", NFA(word), strlen(NFA(word)), ctx->in - ctx->token);
 	}
 	return word;
 }
@@ -193,7 +191,6 @@ CELL evaluate(CTX* ctx, BYTE* str) {
 	ctx->in = 0;
 	do {
 		if (parse_token(ctx) == 0) { return 0; }
-		printf("TOKEN: %.*s\n", ctx->in - ctx->token, ctx->tib + ctx->token);
 		if ((word = find_token(ctx)) != 0) {
 			if (!ctx->state || IMMEDIATE(word)) {
 				if ((result = execute(ctx, XT(word))) != 0) {
@@ -348,7 +345,8 @@ CELL length(CELL pair) {
 
 CELL find_prim(CTX* ctx, CELL xt) {
 	CELL word = ctx->latest;
-	while (word && XT(word) != xt) { word = NEXT(word); }
+	while (word && CAR(XT(word)) != xt) { 
+		word = NEXT(word); }
 	return word;
 }
 
@@ -361,8 +359,13 @@ void dump_list(CTX* ctx, CELL pair, CELL order) {
 			case LIST: printf("{ "); dump_list(ctx, CAR(pair), 0); printf("} "); break;
 			case PRIM: 
 				word = find_prim(ctx, CAR(pair));
-				printf("%s ", (BYTE*)(word ? (NFA(word)) : "")); break;
-			case CALL: printf("X::{ "); dump_list(ctx, CAR(pair), 0); printf("} "); break;
+				if (word) {
+					printf("%s ", (BYTE*)(NFA(word)));
+				} else {
+					printf("PRIM_NOT_FOUND ");
+				}
+				break;
+			case CALL: printf("X{ "); dump_list(ctx, CAR(pair), 0); printf("} "); break;
 		}
 		if (!order) dump_list(ctx, NEXT(pair), order);
 	}
@@ -376,6 +379,12 @@ CELL dump_stack(CTX* ctx) {
 	return 0;
 }
 
+CELL dump_cpile(CTX* ctx) {
+	printf("COMPILED: <%ld> ", length(ctx->cpile));
+	dump_list(ctx, ctx->cpile, 1);
+	printf("\n");
+}
+
 CELL words(CTX* ctx) {
 	printf("WORDS: ");
 	CELL p = ctx->latest;
@@ -383,57 +392,421 @@ CELL words(CTX* ctx) {
 	printf("\n");
 }
 
+// PRIMITIVES
+
+CELL duplicate(CTX* ctx) {
+	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
+	switch(TYPE(ctx->stack)) {
+		case ATOM:
+			if ((ctx->stack = cons(ctx, CAR(ctx->stack), AS(ATOM, ctx->stack))) == 0) {
+				return ERR_STACK_OVERFLOW;
+			}
+			break;
+		case LIST:
+			if ((ctx->stack = cons(ctx, clone(ctx, CAR(ctx->stack)), AS(LIST, ctx->stack))) == 0) {
+				return ERR_STACK_OVERFLOW;
+			}
+			break;
+		case PRIM:
+			if ((ctx->stack = cons(ctx, CAR(ctx->stack), AS(PRIM, ctx->stack))) == 0) {
+				return ERR_STACK_OVERFLOW;
+			}
+			break;
+		case CALL:
+			if ((ctx->stack = cons(ctx, CAR(ctx->stack), AS(CALL, ctx->stack))) == 0) {
+				return ERR_STACK_OVERFLOW;
+			}
+			break;
+	}
+
+	return 0;
+}
+
+CELL drop(CTX* ctx) {
+	ctx->stack = reclaim(ctx, ctx->stack);
+	return 0;
+}
+
+CELL add(CTX* ctx) {
+	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
+	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
+	CAR(NEXT(ctx->stack)) = CAR(NEXT(ctx->stack)) + CAR(ctx->stack);
+	ctx->stack = reclaim(ctx, ctx->stack);
+
+	return 0;
+}
+
+CELL nand(CTX* ctx) {
+	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
+	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
+	CAR(NEXT(ctx->stack)) = !(CAR(NEXT(ctx->stack)) & CAR(ctx->stack));
+	ctx->stack = reclaim(ctx, ctx->stack);
+
+	return 0;
+}
+
+CELL fetch(CTX* ctx) {
+	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
+	if (TYPE(ctx->stack) != ATOM) { return ERR_ATOM_EXPECTED; }
+	CAR(ctx->stack) = *((CELL*)(CAR(ctx->stack)));
+
+	return 0;
+}
+
+CELL store(CTX* ctx) {
+	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
+	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
+	CELL addr = CAR(ctx->stack);
+	CELL x = CAR(NEXT(ctx->stack));
+	ctx->stack = reclaim(ctx, reclaim(ctx, ctx->stack));
+	*((CELL*)addr) = x;
+
+	return 0;
+}
+
+CELL rbracket(CTX* ctx) {
+	if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
+	if (ctx->cpile == 0) { ctx->cpile = cons(ctx, 0, AS(LIST, ctx->cpile)); }
+	ctx->state = 1;
+
+	return 0;
+}
+
+CELL lbracket(CTX* ctx) {
+	ctx->state = 0;
+
+	return 0;
+}
+
+CELL literal(CTX* ctx) {
+	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
+	if (TYPE(ctx->stack) != ATOM) { return ERR_ATOM_EXPECTED; }
+	CELL x = CAR(ctx->stack);
+	ctx->stack = reclaim(ctx, ctx->stack);
+	CAR(ctx->cpile) = cons(ctx, x, AS(ATOM, CAR(ctx->cpile)));
+	return 0;
+}
+
+CELL parse(CTX* ctx) {
+	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
+	if (ctx->free == ctx->there || NEXT(ctx->free) == ctx->there) { return ERR_STACK_OVERFLOW; }
+	CELL c = CAR(ctx->stack);
+	ctx->stack = reclaim(ctx, ctx->stack);
+	ctx->stack = cons(ctx, (CELL)(ctx->tib + ctx->in), AS(ATOM, ctx->stack));
+	CELL start = ctx->in;
+	while (*(ctx->tib + ctx->in) != 0 && *(ctx->tib + ctx->in) != c) {
+		ctx->in++;
+	}
+	if (*(ctx->tib + ctx->in) == c) { 
+		ctx->in++;
+	}
+	ctx->stack = cons(ctx, ctx->in - start, AS(ATOM, ctx->stack));
+
+	return 0;
+}
+
+CELL see(CTX* ctx) {
+	// TODO
+	parse_token(ctx);
+	CELL word = find_token(ctx);
+	if (word) {
+		printf(": %s ", NFA(word));
+		if (PRIMITIVE(word)) {
+			printf("; PRIMITIVE");
+		} else {
+			dump_list(ctx, XT(word), 1);
+			printf("; ");
+		}
+		printf("\n");
+	}
+	return 0;
+}
+
+CELL exec(CTX* ctx) {
+	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
+	CELL xt = CAR(ctx->stack);
+	CAR(ctx->stack) = 0;
+	ctx->stack = reclaim(ctx, ctx->stack);
+	if (NEXT(ctx->ip) != 0) {
+		if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
+		ctx->rstack = cons(ctx, NEXT(ctx->ip), AS(ATOM, ctx->rstack));
+	}
+	ctx->ip = xt;
+
+	return 1;
+}
+
+CELL swap(CTX* ctx) {
+	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
+	CELL t = NEXT(ctx->stack);
+	CDR(ctx->stack) = AS(TYPE(ctx->stack), NEXT(NEXT(ctx->stack)));
+	CDR(t) = AS(TYPE(t), ctx->stack);
+	ctx->stack = t;
+
+	return 0;
+}
+
+CELL branch(CTX* ctx) {
+	if (ctx->stack == 0 || NEXT(ctx->stack) == 0 || NEXT(NEXT(ctx->stack)) == 0) {
+		return ERR_STACK_UNDERFLOW;
+	}
+	CELL b = CAR(NEXT(NEXT(ctx->stack)));
+	if (!b) {
+		swap(ctx);
+	}
+	drop(ctx);
+	swap(ctx);
+	drop(ctx);
+	exec(ctx);
+}
+
+CELL gt(CTX* ctx) {
+	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
+	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
+	CAR(NEXT(ctx->stack)) = CAR(NEXT(ctx->stack)) > CAR(ctx->stack);
+	ctx->stack = reclaim(ctx, ctx->stack);
+
+	return 0;
+}
+
+CELL rot(CTX* ctx) {
+	if (ctx->stack == 0 || NEXT(ctx->stack) == 0 || NEXT(NEXT(ctx->stack)) == 0) {
+		return ERR_STACK_UNDERFLOW;
+	}
+	CELL t = ctx->stack;
+	ctx->stack = NEXT(NEXT(ctx->stack));
+	CDR(NEXT(t)) = AS(TYPE(NEXT(t)), NEXT(ctx->stack));
+	CDR(ctx->stack) = AS(TYPE(ctx->stack), t);
+
+	return 0;
+}
+
+CELL minus_rot(CTX* ctx) {
+	if (ctx->stack == 0 || NEXT(ctx->stack) == 0 || NEXT(NEXT(ctx->stack)) == 0) {
+		return ERR_STACK_UNDERFLOW;
+	}
+	CELL t = NEXT(ctx->stack);
+	CDR(ctx->stack) = AS(TYPE(ctx->stack), NEXT(NEXT(NEXT(ctx->stack))));
+	CDR(NEXT(t)) = AS(TYPE(NEXT(t)), ctx->stack);
+	ctx->stack = t;
+
+	return 0;
+}
+
+CELL sub(CTX* ctx) {
+	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
+	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
+	CAR(NEXT(ctx->stack)) = CAR(NEXT(ctx->stack)) - CAR(ctx->stack);
+	ctx->stack = reclaim(ctx, ctx->stack);
+
+	return 0;
+}
+
 CTX* bootstrap(CTX* ctx) {
+	ctx->latest = 
+		cons(ctx, 
+			cons(ctx, (CELL)"-", AS(ATOM, 
+			cons(ctx, (CELL)ctx->here, AS(ATOM, 
+			cons(ctx, (CELL)&sub, AS(PRIM, 0)))))), 
+		AS(ATOM, ctx->latest));	
+
+	ctx->latest = 
+		cons(ctx, 
+			cons(ctx, (CELL)"-rot", AS(ATOM, 
+			cons(ctx, (CELL)ctx->here, AS(ATOM, 
+			cons(ctx, (CELL)&minus_rot, AS(PRIM, 0)))))), 
+		AS(ATOM, ctx->latest));	
+
+	ctx->latest = 
+		cons(ctx, 
+			cons(ctx, (CELL)"rot", AS(ATOM, 
+			cons(ctx, (CELL)ctx->here, AS(ATOM, 
+			cons(ctx, (CELL)&rot, AS(PRIM, 0)))))), 
+		AS(ATOM, ctx->latest));	
+
+	ctx->latest = 
+		cons(ctx, 
+			cons(ctx, (CELL)">", AS(ATOM, 
+			cons(ctx, (CELL)ctx->here, AS(ATOM, 
+			cons(ctx, (CELL)&gt, AS(PRIM, 0)))))), 
+		AS(ATOM, ctx->latest));	
+
+	ctx->latest = 
+		cons(ctx, 
+			cons(ctx, (CELL)"swap", AS(ATOM, 
+			cons(ctx, (CELL)ctx->here, AS(ATOM, 
+			cons(ctx, (CELL)&swap, AS(PRIM, 0)))))), 
+		AS(ATOM, ctx->latest));	
+
+	ctx->latest = 
+		cons(ctx, 
+			cons(ctx, (CELL)"branch", AS(ATOM, 
+			cons(ctx, (CELL)ctx->here, AS(ATOM, 
+			cons(ctx, (CELL)&branch, AS(PRIM, 0)))))), 
+		AS(ATOM, ctx->latest));	
+
+	ctx->latest = 
+		cons(ctx, 
+			cons(ctx, (CELL)"execute", AS(ATOM, 
+			cons(ctx, (CELL)ctx->here, AS(ATOM, 
+			cons(ctx, (CELL)&exec, AS(PRIM, 0)))))), 
+		AS(ATOM, ctx->latest));	
+
+	ctx->latest = 
+		cons(ctx, 
+			cons(ctx, (CELL)"see", AS(ATOM, 
+			cons(ctx, (CELL)ctx->here, AS(ATOM, 
+			cons(ctx, (CELL)&see, AS(PRIM, 0)))))), 
+		AS(ATOM, ctx->latest));	
+
+	ctx->latest = 
+		cons(ctx, 
+			cons(ctx, (CELL)"parse", AS(ATOM, 
+			cons(ctx, (CELL)ctx->here, AS(ATOM, 
+			cons(ctx, (CELL)&parse, AS(PRIM, 0)))))), 
+		AS(ATOM, ctx->latest));	
+
+	ctx->latest = 
+		cons(ctx, 
+			cons(ctx, (CELL)"literal", AS(ATOM, 
+			cons(ctx, (CELL)ctx->here, AS(ATOM, 
+			cons(ctx, (CELL)&literal, AS(PRIM, 0)))))), 
+		AS(ATOM, ctx->latest));	
+
+	ctx->latest = 
+		cons(ctx, 
+			cons(ctx, (CELL)"[", AS(ATOM, 
+			cons(ctx, (CELL)ctx->here, AS(ATOM, 
+			cons(ctx, (CELL)&lbracket, AS(PRIM, 0)))))), 
+		AS(PRIM, ctx->latest));	
+
+	ctx->latest = 
+		cons(ctx, 
+			cons(ctx, (CELL)"]", AS(ATOM, 
+			cons(ctx, (CELL)ctx->here, AS(ATOM, 
+			cons(ctx, (CELL)&rbracket, AS(PRIM, 0)))))), 
+		AS(PRIM, ctx->latest));	
+
+	ctx->latest = 
+		cons(ctx, 
+			cons(ctx, (CELL)"@", AS(ATOM, 
+			cons(ctx, (CELL)ctx->here, AS(ATOM, 
+			cons(ctx, (CELL)&fetch, AS(PRIM, 0)))))), 
+		AS(ATOM, ctx->latest));	
+
+	ctx->latest = 
+		cons(ctx, 
+			cons(ctx, (CELL)"!", AS(ATOM, 
+			cons(ctx, (CELL)ctx->here, AS(ATOM, 
+			cons(ctx, (CELL)&store, AS(PRIM, 0)))))), 
+		AS(ATOM, ctx->latest));	
+
 	ctx->latest = 
 		cons(ctx, 
 			cons(ctx, (CELL)"s\"", AS(ATOM, 
 			cons(ctx, (CELL)ctx->here, AS(ATOM, 
 			cons(ctx, (CELL)&compile_str, AS(PRIM, 0)))))), 
-		AS(CALL, ctx->latest));	
+		AS(PRIM, ctx->latest));	
 
 	ctx->latest = 
 		cons(ctx,
 			cons(ctx, (CELL)"allot", AS(ATOM,
 			cons(ctx, (CELL)ctx->here, AS(ATOM,
 			cons(ctx, (CELL)&allot, AS(PRIM, 0)))))),
-		AS(LIST, ctx->latest));
+		AS(ATOM, ctx->latest));
 
 	ctx->latest =
 		cons(ctx,
 			cons(ctx, (CELL)"append", AS(ATOM,
 			cons(ctx, (CELL)ctx->here, AS(ATOM,
 			cons(ctx, (CELL)&append, AS(PRIM, 0)))))),
-		AS(LIST, ctx->latest));
+		AS(ATOM, ctx->latest));
 
 	ctx->latest =
 		cons(ctx,
 			cons(ctx, (CELL)".s", AS(ATOM,
 			cons(ctx, (CELL)ctx->here, AS(ATOM,
 			cons(ctx, (CELL)&dump_stack, AS(PRIM, 0)))))),
-		AS(LIST, ctx->latest));
+		AS(ATOM, ctx->latest));
+
+	ctx->latest =
+		cons(ctx,
+			cons(ctx, (CELL)".c", AS(ATOM,
+			cons(ctx, (CELL)ctx->here, AS(ATOM,
+			cons(ctx, (CELL)&dump_cpile, AS(PRIM, 0)))))),
+		AS(ATOM, ctx->latest));
 
 	ctx->latest =
 		cons(ctx,
 			cons(ctx, (CELL)"{", AS(ATOM,
 			cons(ctx, (CELL)ctx->here, AS(ATOM,
 			cons(ctx, (CELL)&lbrace, AS(PRIM, 0)))))),
-		AS(CALL, ctx->latest));
+		AS(PRIM, ctx->latest));
 
 	ctx->latest =
 		cons(ctx,
 			cons(ctx, (CELL)"}", AS(ATOM,
 			cons(ctx, (CELL)ctx->here, AS(ATOM,
 			cons(ctx, (CELL)&rbrace, AS(PRIM, 0)))))),
-		AS(CALL, ctx->latest));
+		AS(PRIM, ctx->latest));
 
 	ctx->latest =
 		cons(ctx,
 			cons(ctx, (CELL)"words", AS(ATOM,
 			cons(ctx, (CELL)ctx->here, AS(ATOM,
 			cons(ctx, (CELL)&words, AS(PRIM, 0)))))),
-		AS(LIST, ctx->latest));
+		AS(ATOM, ctx->latest));
+
+	ctx->latest =
+		cons(ctx,
+			cons(ctx, (CELL)"dup", AS(ATOM,
+			cons(ctx, (CELL)ctx->here, AS(ATOM,
+			cons(ctx, (CELL)&duplicate, AS(PRIM, 0)))))),
+		AS(ATOM, ctx->latest));
+
+	ctx->latest =
+		cons(ctx,
+			cons(ctx, (CELL)"drop", AS(ATOM,
+			cons(ctx, (CELL)ctx->here, AS(ATOM,
+			cons(ctx, (CELL)&drop, AS(PRIM, 0)))))),
+		AS(ATOM, ctx->latest));
+
+	ctx->latest =
+		cons(ctx,
+			cons(ctx, (CELL)"+", AS(ATOM,
+			cons(ctx, (CELL)ctx->here, AS(ATOM,
+			cons(ctx, (CELL)&add, AS(PRIM, 0)))))),
+		AS(ATOM, ctx->latest));
+
+	ctx->latest =
+		cons(ctx,
+			cons(ctx, (CELL)"nand", AS(ATOM,
+			cons(ctx, (CELL)ctx->here, AS(ATOM,
+			cons(ctx, (CELL)&nand, AS(PRIM, 0)))))),
+		AS(ATOM, ctx->latest));
 
 	// VARIABLES
+
+	ctx->latest =
+		cons(ctx,
+			cons(ctx, (CELL)"here", AS(ATOM,
+			cons(ctx, (CELL)ctx->here, AS(ATOM,
+			cons(ctx, (CELL)&ctx->here, AS(ATOM, 0)))))),
+		AS(LIST, ctx->latest));
+
+	ctx->latest =
+		cons(ctx,
+			cons(ctx, (CELL)"there", AS(ATOM,
+			cons(ctx, (CELL)ctx->here, AS(ATOM,
+			cons(ctx, (CELL)&ctx->there, AS(ATOM, 0)))))),
+		AS(LIST, ctx->latest));
+
+	ctx->latest =
+		cons(ctx,
+			cons(ctx, (CELL)"state", AS(ATOM,
+			cons(ctx, (CELL)ctx->here, AS(ATOM,
+			cons(ctx, (CELL)&ctx->state, AS(ATOM, 0)))))),
+		AS(LIST, ctx->latest));
 
 	ctx->latest =
 		cons(ctx,
@@ -441,6 +814,14 @@ CTX* bootstrap(CTX* ctx) {
 			cons(ctx, (CELL)ctx->here, AS(ATOM,
 			cons(ctx, (CELL)&ctx->latest, AS(ATOM, 0)))))),
 		AS(LIST, ctx->latest));
+
+	ctx->latest =
+		cons(ctx,
+			cons(ctx, (CELL)"BASE", AS(ATOM,
+			cons(ctx, (CELL)ctx->here, AS(ATOM,
+			cons(ctx, (CELL)&ctx->base, AS(ATOM, 0)))))),
+		AS(LIST, ctx->latest));
+
 	return ctx;
 }
 
@@ -604,12 +985,6 @@ CTX* bootstrap(CTX* ctx) {
 ////	}
 ////
 ////	return 0;
-////}
-////
-////CELL _dump_cpile(CTX* ctx) {
-////	printf("COMPILED: <%ld> ", length(ctx->cpile));
-////	dump_list(ctx, ctx->cpile, 1);
-////	printf("\n");
 ////}
 ////
 ////CELL _dump_hstack(CTX* ctx) {

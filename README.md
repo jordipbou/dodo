@@ -13,7 +13,7 @@ There are 3 basic data structures:
 	* NEXT	-- PAIR * (last 2 bits are used to store typing information)
 	* VALUE -- CELL
 
-# Typing
+# Types
 
 Although DODO grows from an untyped Forth based VM, typing is required to 
 allow working with lists that may contain other lists or scalars.
@@ -22,16 +22,12 @@ As every PAIR pointer will be aligned to a 32 bit address (minimum for a 16
 bit CELL architecture, where a PAIR will be 32 bit wide) that leaves 2 bits
 free to store typing information.
 
-Those 2 bits will have different meanings depending on where are used, but
-they are used to, at least, indicate the following information:
+The 4 types defined are:
 
-- Free pair	(this will always be and will be the only one using 00)
 - Number (scalar)
-- eXecution Token
 - List
 - Primitive word (defined in C)
 - Colon definition
-- Immediate word
 
 
 
