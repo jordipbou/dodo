@@ -447,10 +447,9 @@ void test_evaluate_words() {
 	ctx->latest = 
 		cons(ctx,
 			cons(ctx, (CELL)"test", AS(ATOM,
-			cons(ctx, (CELL)ctx->here, AS(ATOM,
 			cons(ctx, 7, AS(ATOM,
 			cons(ctx, 11, AS(ATOM,
-			cons(ctx, 13, AS(ATOM, 0)))))))))),
+			cons(ctx, 13, AS(ATOM, 0)))))))),
 		AS(LIST, 0));
 
 	evaluate(ctx, " test   ");

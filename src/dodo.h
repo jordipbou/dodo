@@ -34,8 +34,7 @@ typedef CELL (*FUNC)(CTX*);
 #define CALL										3
 
 #define NFA(word)								(CAR(CAR(word)))
-#define DFA(word)								(CAR(NEXT(CAR(word))))
-#define XT(word)								(NEXT(NEXT(CAR(word))))
+#define XT(word)								(NEXT(CAR(word)))
 #define PRIMITIVE(word)					((TYPE(word) & 1) == 0)
 #define IMMEDIATE(word)					((TYPE(word) & 2) == 2)
 
@@ -633,190 +632,163 @@ CTX* bootstrap(CTX* ctx) {
 	ctx->latest = 
 		cons(ctx, 
 			cons(ctx, (CELL)"-", AS(ATOM, 
-			cons(ctx, (CELL)ctx->here, AS(ATOM, 
-			cons(ctx, (CELL)&sub, AS(PRIM, 0)))))), 
+			cons(ctx, (CELL)&sub, AS(PRIM, 0)))), 
 		AS(ATOM, ctx->latest));	
 
 	ctx->latest = 
 		cons(ctx, 
 			cons(ctx, (CELL)"-rot", AS(ATOM, 
-			cons(ctx, (CELL)ctx->here, AS(ATOM, 
-			cons(ctx, (CELL)&minus_rot, AS(PRIM, 0)))))), 
+			cons(ctx, (CELL)&minus_rot, AS(PRIM, 0)))), 
 		AS(ATOM, ctx->latest));	
 
 	ctx->latest = 
 		cons(ctx, 
 			cons(ctx, (CELL)"rot", AS(ATOM, 
-			cons(ctx, (CELL)ctx->here, AS(ATOM, 
-			cons(ctx, (CELL)&rot, AS(PRIM, 0)))))), 
+			cons(ctx, (CELL)&rot, AS(PRIM, 0)))), 
 		AS(ATOM, ctx->latest));	
 
 	ctx->latest = 
 		cons(ctx, 
 			cons(ctx, (CELL)">", AS(ATOM, 
-			cons(ctx, (CELL)ctx->here, AS(ATOM, 
-			cons(ctx, (CELL)&gt, AS(PRIM, 0)))))), 
+			cons(ctx, (CELL)&gt, AS(PRIM, 0)))), 
 		AS(ATOM, ctx->latest));	
 
 	ctx->latest = 
 		cons(ctx, 
 			cons(ctx, (CELL)"swap", AS(ATOM, 
-			cons(ctx, (CELL)ctx->here, AS(ATOM, 
-			cons(ctx, (CELL)&swap, AS(PRIM, 0)))))), 
+			cons(ctx, (CELL)&swap, AS(PRIM, 0)))), 
 		AS(ATOM, ctx->latest));	
 
 	ctx->latest = 
 		cons(ctx, 
 			cons(ctx, (CELL)"branch", AS(ATOM, 
-			cons(ctx, (CELL)ctx->here, AS(ATOM, 
-			cons(ctx, (CELL)&branch, AS(PRIM, 0)))))), 
+			cons(ctx, (CELL)&branch, AS(PRIM, 0)))), 
 		AS(ATOM, ctx->latest));	
 
 	ctx->latest = 
 		cons(ctx, 
 			cons(ctx, (CELL)"x", AS(ATOM, 
-			cons(ctx, (CELL)ctx->here, AS(ATOM, 
-			cons(ctx, (CELL)&exec_x, AS(PRIM, 0)))))), 
+			cons(ctx, (CELL)&exec_x, AS(PRIM, 0)))), 
 		AS(ATOM, ctx->latest));	
 
 	ctx->latest = 
 		cons(ctx, 
 			cons(ctx, (CELL)"execute", AS(ATOM, 
-			cons(ctx, (CELL)ctx->here, AS(ATOM, 
-			cons(ctx, (CELL)&exec, AS(PRIM, 0)))))), 
+			cons(ctx, (CELL)&exec, AS(PRIM, 0)))), 
 		AS(ATOM, ctx->latest));	
 
 	ctx->latest = 
 		cons(ctx, 
 			cons(ctx, (CELL)"see", AS(ATOM, 
-			cons(ctx, (CELL)ctx->here, AS(ATOM, 
-			cons(ctx, (CELL)&see, AS(PRIM, 0)))))), 
+			cons(ctx, (CELL)&see, AS(PRIM, 0)))), 
 		AS(ATOM, ctx->latest));	
 
 	ctx->latest = 
 		cons(ctx, 
 			cons(ctx, (CELL)"parse", AS(ATOM, 
-			cons(ctx, (CELL)ctx->here, AS(ATOM, 
-			cons(ctx, (CELL)&parse, AS(PRIM, 0)))))), 
+			cons(ctx, (CELL)&parse, AS(PRIM, 0)))), 
 		AS(ATOM, ctx->latest));	
 
 	ctx->latest = 
 		cons(ctx, 
 			cons(ctx, (CELL)"literal", AS(ATOM, 
-			cons(ctx, (CELL)ctx->here, AS(ATOM, 
-			cons(ctx, (CELL)&literal, AS(PRIM, 0)))))), 
+			cons(ctx, (CELL)&literal, AS(PRIM, 0)))), 
 		AS(ATOM, ctx->latest));	
 
 	ctx->latest = 
 		cons(ctx, 
 			cons(ctx, (CELL)"[", AS(ATOM, 
-			cons(ctx, (CELL)ctx->here, AS(ATOM, 
-			cons(ctx, (CELL)&lbracket, AS(PRIM, 0)))))), 
+			cons(ctx, (CELL)&lbracket, AS(PRIM, 0)))), 
 		AS(PRIM, ctx->latest));	
 
 	ctx->latest = 
 		cons(ctx, 
 			cons(ctx, (CELL)"]", AS(ATOM, 
-			cons(ctx, (CELL)ctx->here, AS(ATOM, 
-			cons(ctx, (CELL)&rbracket, AS(PRIM, 0)))))), 
+			cons(ctx, (CELL)&rbracket, AS(PRIM, 0)))), 
 		AS(PRIM, ctx->latest));	
 
 	ctx->latest = 
 		cons(ctx, 
 			cons(ctx, (CELL)"@", AS(ATOM, 
-			cons(ctx, (CELL)ctx->here, AS(ATOM, 
-			cons(ctx, (CELL)&fetch, AS(PRIM, 0)))))), 
+			cons(ctx, (CELL)&fetch, AS(PRIM, 0)))), 
 		AS(ATOM, ctx->latest));	
 
 	ctx->latest = 
 		cons(ctx, 
 			cons(ctx, (CELL)"!", AS(ATOM, 
-			cons(ctx, (CELL)ctx->here, AS(ATOM, 
-			cons(ctx, (CELL)&store, AS(PRIM, 0)))))), 
+			cons(ctx, (CELL)&store, AS(PRIM, 0)))), 
 		AS(ATOM, ctx->latest));	
 
 	ctx->latest = 
 		cons(ctx, 
 			cons(ctx, (CELL)"s\"", AS(ATOM, 
-			cons(ctx, (CELL)ctx->here, AS(ATOM, 
-			cons(ctx, (CELL)&compile_str, AS(PRIM, 0)))))), 
+			cons(ctx, (CELL)&compile_str, AS(PRIM, 0)))), 
 		AS(PRIM, ctx->latest));	
 
 	ctx->latest = 
 		cons(ctx,
 			cons(ctx, (CELL)"allot", AS(ATOM,
-			cons(ctx, (CELL)ctx->here, AS(ATOM,
-			cons(ctx, (CELL)&allot, AS(PRIM, 0)))))),
+			cons(ctx, (CELL)&allot, AS(PRIM, 0)))),
 		AS(ATOM, ctx->latest));
 
 	ctx->latest =
 		cons(ctx,
 			cons(ctx, (CELL)"append", AS(ATOM,
-			cons(ctx, (CELL)ctx->here, AS(ATOM,
-			cons(ctx, (CELL)&append, AS(PRIM, 0)))))),
+			cons(ctx, (CELL)&append, AS(PRIM, 0)))),
 		AS(ATOM, ctx->latest));
 
 	ctx->latest =
 		cons(ctx,
 			cons(ctx, (CELL)".s", AS(ATOM,
-			cons(ctx, (CELL)ctx->here, AS(ATOM,
-			cons(ctx, (CELL)&dump_stack, AS(PRIM, 0)))))),
+			cons(ctx, (CELL)&dump_stack, AS(PRIM, 0)))),
 		AS(ATOM, ctx->latest));
 
 	ctx->latest =
 		cons(ctx,
 			cons(ctx, (CELL)".c", AS(ATOM,
-			cons(ctx, (CELL)ctx->here, AS(ATOM,
-			cons(ctx, (CELL)&dump_cpile, AS(PRIM, 0)))))),
+			cons(ctx, (CELL)&dump_cpile, AS(PRIM, 0)))),
 		AS(ATOM, ctx->latest));
 
 	ctx->latest =
 		cons(ctx,
 			cons(ctx, (CELL)"{", AS(ATOM,
-			cons(ctx, (CELL)ctx->here, AS(ATOM,
-			cons(ctx, (CELL)&lbrace, AS(PRIM, 0)))))),
+			cons(ctx, (CELL)&lbrace, AS(PRIM, 0)))),
 		AS(PRIM, ctx->latest));
 
 	ctx->latest =
 		cons(ctx,
 			cons(ctx, (CELL)"}", AS(ATOM,
-			cons(ctx, (CELL)ctx->here, AS(ATOM,
-			cons(ctx, (CELL)&rbrace, AS(PRIM, 0)))))),
+			cons(ctx, (CELL)&rbrace, AS(PRIM, 0)))),
 		AS(PRIM, ctx->latest));
 
 	ctx->latest =
 		cons(ctx,
 			cons(ctx, (CELL)"words", AS(ATOM,
-			cons(ctx, (CELL)ctx->here, AS(ATOM,
-			cons(ctx, (CELL)&words, AS(PRIM, 0)))))),
+			cons(ctx, (CELL)&words, AS(PRIM, 0)))),
 		AS(ATOM, ctx->latest));
 
 	ctx->latest =
 		cons(ctx,
 			cons(ctx, (CELL)"dup", AS(ATOM,
-			cons(ctx, (CELL)ctx->here, AS(ATOM,
-			cons(ctx, (CELL)&duplicate, AS(PRIM, 0)))))),
+			cons(ctx, (CELL)&duplicate, AS(PRIM, 0)))),
 		AS(ATOM, ctx->latest));
 
 	ctx->latest =
 		cons(ctx,
 			cons(ctx, (CELL)"drop", AS(ATOM,
-			cons(ctx, (CELL)ctx->here, AS(ATOM,
-			cons(ctx, (CELL)&drop, AS(PRIM, 0)))))),
+			cons(ctx, (CELL)&drop, AS(PRIM, 0)))),
 		AS(ATOM, ctx->latest));
 
 	ctx->latest =
 		cons(ctx,
 			cons(ctx, (CELL)"+", AS(ATOM,
-			cons(ctx, (CELL)ctx->here, AS(ATOM,
-			cons(ctx, (CELL)&add, AS(PRIM, 0)))))),
+			cons(ctx, (CELL)&add, AS(PRIM, 0)))),
 		AS(ATOM, ctx->latest));
 
 	ctx->latest =
 		cons(ctx,
 			cons(ctx, (CELL)"nand", AS(ATOM,
-			cons(ctx, (CELL)ctx->here, AS(ATOM,
-			cons(ctx, (CELL)&nand, AS(PRIM, 0)))))),
+			cons(ctx, (CELL)&nand, AS(PRIM, 0)))),
 		AS(ATOM, ctx->latest));
 
 	// VARIABLES
@@ -824,36 +796,31 @@ CTX* bootstrap(CTX* ctx) {
 	ctx->latest =
 		cons(ctx,
 			cons(ctx, (CELL)"here", AS(ATOM,
-			cons(ctx, (CELL)ctx->here, AS(ATOM,
-			cons(ctx, (CELL)&ctx->here, AS(ATOM, 0)))))),
+			cons(ctx, (CELL)&ctx->here, AS(ATOM, 0)))),
 		AS(LIST, ctx->latest));
 
 	ctx->latest =
 		cons(ctx,
 			cons(ctx, (CELL)"there", AS(ATOM,
-			cons(ctx, (CELL)ctx->here, AS(ATOM,
-			cons(ctx, (CELL)&ctx->there, AS(ATOM, 0)))))),
+			cons(ctx, (CELL)&ctx->there, AS(ATOM, 0)))),
 		AS(LIST, ctx->latest));
 
 	ctx->latest =
 		cons(ctx,
 			cons(ctx, (CELL)"state", AS(ATOM,
-			cons(ctx, (CELL)ctx->here, AS(ATOM,
-			cons(ctx, (CELL)&ctx->state, AS(ATOM, 0)))))),
+			cons(ctx, (CELL)&ctx->state, AS(ATOM, 0)))),
 		AS(LIST, ctx->latest));
 
 	ctx->latest =
 		cons(ctx,
 			cons(ctx, (CELL)"latest", AS(ATOM,
-			cons(ctx, (CELL)ctx->here, AS(ATOM,
-			cons(ctx, (CELL)&ctx->latest, AS(ATOM, 0)))))),
+			cons(ctx, (CELL)&ctx->latest, AS(ATOM, 0)))),
 		AS(LIST, ctx->latest));
 
 	ctx->latest =
 		cons(ctx,
 			cons(ctx, (CELL)"BASE", AS(ATOM,
-			cons(ctx, (CELL)ctx->here, AS(ATOM,
-			cons(ctx, (CELL)&ctx->base, AS(ATOM, 0)))))),
+			cons(ctx, (CELL)&ctx->base, AS(ATOM, 0)))),
 		AS(LIST, ctx->latest));
 
 	return ctx;
