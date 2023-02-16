@@ -510,7 +510,7 @@ CELL see(CTX* ctx) {
 	parse_token(ctx);
 	CELL word = find_token(ctx);
 	if (word) {
-		printf(": %s ", NFA(word));
+		printf(": %s ", (BYTE*)NFA(word));
 		if (PRIMITIVE(word)) {
 			printf("; PRIMITIVE");
 		} else {
@@ -527,6 +527,18 @@ CELL exec(CTX* ctx) {
 	CELL xt = CAR(ctx->stack);
 	CAR(ctx->stack) = 0;
 	ctx->stack = reclaim(ctx, ctx->stack);
+	if (NEXT(ctx->ip) != 0) {
+		if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
+		ctx->rstack = cons(ctx, NEXT(ctx->ip), AS(ATOM, ctx->rstack));
+	}
+	ctx->ip = xt;
+
+	return 1;
+}
+
+CELL exec_x(CTX* ctx) {
+	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
+	CELL xt = CAR(ctx->stack);
 	if (NEXT(ctx->ip) != 0) {
 		if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
 		ctx->rstack = cons(ctx, NEXT(ctx->ip), AS(ATOM, ctx->rstack));
@@ -643,6 +655,13 @@ CTX* bootstrap(CTX* ctx) {
 			cons(ctx, (CELL)"branch", AS(ATOM, 
 			cons(ctx, (CELL)ctx->here, AS(ATOM, 
 			cons(ctx, (CELL)&branch, AS(PRIM, 0)))))), 
+		AS(ATOM, ctx->latest));	
+
+	ctx->latest = 
+		cons(ctx, 
+			cons(ctx, (CELL)"x", AS(ATOM, 
+			cons(ctx, (CELL)ctx->here, AS(ATOM, 
+			cons(ctx, (CELL)&exec_x, AS(PRIM, 0)))))), 
 		AS(ATOM, ctx->latest));	
 
 	ctx->latest = 
