@@ -44,8 +44,9 @@ typedef CELL (*FUNC)(CTX*);
 #define ERR_NOT_ENOUGH_MEMORY		-4
 #define ERR_ZERO_LENGTH_NAME		-5
 #define ERR_ATOM_EXPECTED				-6
-#define ERR_RSTACK_UNDERFLOW		-7
-#define ERR_EXIT								-8
+#define ERR_LIST_EXPECTED				-7
+#define ERR_RSTACK_UNDERFLOW		-8
+#define ERR_EXIT								-9
 
 #define FREE(ctx)						(length(ctx->free) - 1)
 #define ALIGN(addr, bound)	((((CELL)addr) + (bound - 1)) & ~(bound - 1))
@@ -426,6 +427,17 @@ CELL drop(CTX* ctx) {
 	return 0;
 }
 
+CELL over(CTX* ctx) {
+	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
+	if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
+	if (TYPE(NEXT(ctx->stack)) == ATOM) {
+		ctx->stack = cons(ctx, CAR(NEXT(ctx->stack)), AS(ATOM, ctx->stack));
+	} else if (TYPE(NEXT(ctx->stack)) == LIST) {
+		ctx->stack = cons(ctx, clone(ctx, CAR(NEXT(ctx->stack))), AS(LIST, ctx->stack));
+	}
+	return 0;
+}
+
 CELL add(CTX* ctx) {
 	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
 	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
@@ -628,7 +640,173 @@ CELL sub(CTX* ctx) {
 	return 0;
 }
 
+CELL parse_name(CTX* ctx) {
+	if (ctx->free == ctx->there || NEXT(ctx->free) == ctx->there) { return ERR_STACK_OVERFLOW; }
+	parse_token(ctx);
+	ctx->stack = cons(ctx, (CELL)(ctx->tib + ctx->token), AS(ATOM, ctx->stack));
+	ctx->stack = cons(ctx, ctx->in - ctx->token, AS(ATOM, ctx->stack));
+	return 0;
+}
+
+CELL type(CTX* ctx) {
+	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
+	CELL l = CAR(ctx->stack);
+	BYTE* s = (BYTE*)CAR(NEXT(ctx->stack));
+	ctx->stack = reclaim(ctx, reclaim(ctx, ctx->stack));
+	printf("%.*s", (int)l, s);
+	return 0;
+}
+
+CELL sliteral(CTX* ctx) {
+	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
+	CELL l = CAR(ctx->stack);
+	BYTE* s = (BYTE*)CAR(NEXT(ctx->stack));
+	ctx->stack = reclaim(ctx, reclaim(ctx, ctx->stack));
+	BYTE* str = ctx->here;
+	ctx->stack = cons(ctx, sizeof(CELL) + l + 1, AS(ATOM, ctx->stack));
+	if (allot(ctx) != 0) { return ERR_NOT_ENOUGH_MEMORY; }
+	*((CELL*)str) = l;
+	str += sizeof(CELL);
+	for (CELL i = 0; i < l; i++) { str[i] = s[i]; }
+	str[l] = 0;
+	if (ctx->state) {
+		CAR(ctx->cpile) = cons(ctx, (CELL)str, AS(ATOM, CAR(ctx->cpile)));
+	} else {
+		ctx->stack = cons(ctx, (CELL)str, AS(ATOM, ctx->stack));
+	}
+	//ctx->stack = cons(ctx, l, AS(ATOM, ctx->stack));
+	return 0;
+}
+
+CELL here(CTX* ctx) {
+	if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
+	ctx->stack = cons(ctx, (CELL)ctx->here, AS(ATOM, ctx->stack));
+	return 0;
+}
+
+CELL carcdr(CTX* ctx) {
+	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
+	if (TYPE(ctx->stack) != LIST) { return ERR_LIST_EXPECTED; }
+	if (CAR(ctx->stack) == 0) { return 0; }
+	CELL h = CAR(ctx->stack);
+	CAR(ctx->stack) = NEXT(CAR(ctx->stack));
+	CDR(h) = AS(TYPE(h), ctx->stack);
+	ctx->stack = h;
+	return 0;
+}
+
+CELL comma(CTX* ctx) {
+	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
+	if (TYPE(ctx->stack) != ATOM) { return ERR_ATOM_EXPECTED; }
+	CELL v = CAR(ctx->stack);
+	ctx->stack = reclaim(ctx, ctx->stack);
+	CELL* here = (CELL*)ctx->here;
+	ctx->stack = cons(ctx, sizeof(CELL), AS(ATOM, ctx->stack));
+	if (allot(ctx) != 0) { return ERR_NOT_ENOUGH_MEMORY; }
+	*here = v;
+	return 0;
+}
+
+CELL align(CTX* ctx) {
+	if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
+	ctx->stack = cons(ctx, ALIGN(ctx->here, sizeof(CELL)) - (CELL)ctx->here, AS(ATOM, ctx->stack));
+	return allot(ctx);
+}
+
+CELL cells(CTX* ctx) {
+	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
+	if (TYPE(ctx->stack) != ATOM) { return ERR_ATOM_EXPECTED; }
+	CAR(ctx->stack) = CAR(ctx->stack) * sizeof(CELL);
+	return 0;
+}
+
+CELL postpone(CTX* ctx) {
+	CELL word;
+	parse_token(ctx);
+	if ((word = find_token(ctx)) == 0) { return ERR_UNDEFINED_WORD; }
+	if (ctx->state) {
+		if (PRIMITIVE(word)) {
+			CAR(ctx->cpile) = cons(ctx, CAR(XT(word)), AS(PRIM, CAR(ctx->cpile)));
+		} else {
+			CAR(ctx->cpile) = cons(ctx, XT(word), AS(LIST, CAR(ctx->cpile)));
+		}
+	} else {
+		if (PRIMITIVE(word)) {
+			ctx->stack = cons(ctx, CAR(XT(word)), AS(PRIM, ctx->stack));
+		} else {
+			ctx->stack = cons(ctx, XT(word), AS(LIST, ctx->stack));
+		}
+	}
+	return 0;
+}
+
+CELL immediate(CTX* ctx) {
+	if (ctx->latest == 0) return 0;
+	CDR(ctx->latest) = CDR(ctx->latest) | 2;
+	return 0;
+}
+
 CTX* bootstrap(CTX* ctx) {
+	ctx->latest = 
+		cons(ctx, 
+			cons(ctx, (CELL)"IMMEDIATE", AS(ATOM, 
+			cons(ctx, (CELL)&immediate, AS(PRIM, 0)))), 
+		AS(PRIM, ctx->latest));	
+
+	ctx->latest = 
+		cons(ctx, 
+			cons(ctx, (CELL)"POSTPONE", AS(ATOM, 
+			cons(ctx, (CELL)&postpone, AS(PRIM, 0)))), 
+		AS(PRIM, ctx->latest));	
+
+	ctx->latest = 
+		cons(ctx, 
+			cons(ctx, (CELL)"CELLS", AS(ATOM, 
+			cons(ctx, (CELL)&cells, AS(PRIM, 0)))), 
+		AS(ATOM, ctx->latest));	
+
+	ctx->latest = 
+		cons(ctx, 
+			cons(ctx, (CELL)",", AS(ATOM, 
+			cons(ctx, (CELL)&comma, AS(PRIM, 0)))), 
+		AS(ATOM, ctx->latest));	
+
+	ctx->latest = 
+		cons(ctx, 
+			cons(ctx, (CELL)"ALIGN", AS(ATOM, 
+			cons(ctx, (CELL)&align, AS(PRIM, 0)))), 
+		AS(ATOM, ctx->latest));	
+
+	ctx->latest = 
+		cons(ctx, 
+			cons(ctx, (CELL)"CARCDR", AS(ATOM, 
+			cons(ctx, (CELL)&carcdr, AS(PRIM, 0)))), 
+		AS(ATOM, ctx->latest));	
+
+	ctx->latest = 
+		cons(ctx, 
+			cons(ctx, (CELL)"OVER", AS(ATOM, 
+			cons(ctx, (CELL)&over, AS(PRIM, 0)))), 
+		AS(ATOM, ctx->latest));	
+
+	ctx->latest = 
+		cons(ctx, 
+			cons(ctx, (CELL)"SLITERAL", AS(ATOM, 
+			cons(ctx, (CELL)&sliteral, AS(PRIM, 0)))), 
+		AS(PRIM, ctx->latest));	
+
+	ctx->latest = 
+		cons(ctx, 
+			cons(ctx, (CELL)"TYPE", AS(ATOM, 
+			cons(ctx, (CELL)&type, AS(PRIM, 0)))), 
+		AS(ATOM, ctx->latest));	
+
+	ctx->latest = 
+		cons(ctx, 
+			cons(ctx, (CELL)"PARSE-NAME", AS(ATOM, 
+			cons(ctx, (CELL)&parse_name, AS(PRIM, 0)))), 
+		AS(ATOM, ctx->latest));	
+
 	ctx->latest = 
 		cons(ctx, 
 			cons(ctx, (CELL)"-", AS(ATOM, 
@@ -637,13 +815,13 @@ CTX* bootstrap(CTX* ctx) {
 
 	ctx->latest = 
 		cons(ctx, 
-			cons(ctx, (CELL)"-rot", AS(ATOM, 
+			cons(ctx, (CELL)"-ROT", AS(ATOM, 
 			cons(ctx, (CELL)&minus_rot, AS(PRIM, 0)))), 
 		AS(ATOM, ctx->latest));	
 
 	ctx->latest = 
 		cons(ctx, 
-			cons(ctx, (CELL)"rot", AS(ATOM, 
+			cons(ctx, (CELL)"ROT", AS(ATOM, 
 			cons(ctx, (CELL)&rot, AS(PRIM, 0)))), 
 		AS(ATOM, ctx->latest));	
 
@@ -655,45 +833,45 @@ CTX* bootstrap(CTX* ctx) {
 
 	ctx->latest = 
 		cons(ctx, 
-			cons(ctx, (CELL)"swap", AS(ATOM, 
+			cons(ctx, (CELL)"SWAP", AS(ATOM, 
 			cons(ctx, (CELL)&swap, AS(PRIM, 0)))), 
 		AS(ATOM, ctx->latest));	
 
 	ctx->latest = 
 		cons(ctx, 
-			cons(ctx, (CELL)"branch", AS(ATOM, 
+			cons(ctx, (CELL)"BRANCH", AS(ATOM, 
 			cons(ctx, (CELL)&branch, AS(PRIM, 0)))), 
 		AS(ATOM, ctx->latest));	
 
 	ctx->latest = 
 		cons(ctx, 
-			cons(ctx, (CELL)"x", AS(ATOM, 
+			cons(ctx, (CELL)"X", AS(ATOM, 
 			cons(ctx, (CELL)&exec_x, AS(PRIM, 0)))), 
 		AS(ATOM, ctx->latest));	
 
 	ctx->latest = 
 		cons(ctx, 
-			cons(ctx, (CELL)"execute", AS(ATOM, 
+			cons(ctx, (CELL)"EXECUTE", AS(ATOM, 
 			cons(ctx, (CELL)&exec, AS(PRIM, 0)))), 
 		AS(ATOM, ctx->latest));	
 
 	ctx->latest = 
 		cons(ctx, 
-			cons(ctx, (CELL)"see", AS(ATOM, 
+			cons(ctx, (CELL)"SEE", AS(ATOM, 
 			cons(ctx, (CELL)&see, AS(PRIM, 0)))), 
 		AS(ATOM, ctx->latest));	
 
 	ctx->latest = 
 		cons(ctx, 
-			cons(ctx, (CELL)"parse", AS(ATOM, 
+			cons(ctx, (CELL)"PARSE", AS(ATOM, 
 			cons(ctx, (CELL)&parse, AS(PRIM, 0)))), 
 		AS(ATOM, ctx->latest));	
 
 	ctx->latest = 
 		cons(ctx, 
-			cons(ctx, (CELL)"literal", AS(ATOM, 
+			cons(ctx, (CELL)"LITERAL", AS(ATOM, 
 			cons(ctx, (CELL)&literal, AS(PRIM, 0)))), 
-		AS(ATOM, ctx->latest));	
+		AS(PRIM, ctx->latest));	
 
 	ctx->latest = 
 		cons(ctx, 
@@ -721,31 +899,31 @@ CTX* bootstrap(CTX* ctx) {
 
 	ctx->latest = 
 		cons(ctx, 
-			cons(ctx, (CELL)"s\"", AS(ATOM, 
+			cons(ctx, (CELL)"S\"", AS(ATOM, 
 			cons(ctx, (CELL)&compile_str, AS(PRIM, 0)))), 
 		AS(PRIM, ctx->latest));	
 
 	ctx->latest = 
 		cons(ctx,
-			cons(ctx, (CELL)"allot", AS(ATOM,
+			cons(ctx, (CELL)"ALLOT", AS(ATOM,
 			cons(ctx, (CELL)&allot, AS(PRIM, 0)))),
 		AS(ATOM, ctx->latest));
 
 	ctx->latest =
 		cons(ctx,
-			cons(ctx, (CELL)"append", AS(ATOM,
+			cons(ctx, (CELL)"APPEND", AS(ATOM,
 			cons(ctx, (CELL)&append, AS(PRIM, 0)))),
 		AS(ATOM, ctx->latest));
 
 	ctx->latest =
 		cons(ctx,
-			cons(ctx, (CELL)".s", AS(ATOM,
+			cons(ctx, (CELL)".S", AS(ATOM,
 			cons(ctx, (CELL)&dump_stack, AS(PRIM, 0)))),
 		AS(ATOM, ctx->latest));
 
 	ctx->latest =
 		cons(ctx,
-			cons(ctx, (CELL)".c", AS(ATOM,
+			cons(ctx, (CELL)".C", AS(ATOM,
 			cons(ctx, (CELL)&dump_cpile, AS(PRIM, 0)))),
 		AS(ATOM, ctx->latest));
 
@@ -763,19 +941,19 @@ CTX* bootstrap(CTX* ctx) {
 
 	ctx->latest =
 		cons(ctx,
-			cons(ctx, (CELL)"words", AS(ATOM,
+			cons(ctx, (CELL)"WORDS", AS(ATOM,
 			cons(ctx, (CELL)&words, AS(PRIM, 0)))),
 		AS(ATOM, ctx->latest));
 
 	ctx->latest =
 		cons(ctx,
-			cons(ctx, (CELL)"dup", AS(ATOM,
+			cons(ctx, (CELL)"DUP", AS(ATOM,
 			cons(ctx, (CELL)&duplicate, AS(PRIM, 0)))),
 		AS(ATOM, ctx->latest));
 
 	ctx->latest =
 		cons(ctx,
-			cons(ctx, (CELL)"drop", AS(ATOM,
+			cons(ctx, (CELL)"DROP", AS(ATOM,
 			cons(ctx, (CELL)&drop, AS(PRIM, 0)))),
 		AS(ATOM, ctx->latest));
 
@@ -787,34 +965,40 @@ CTX* bootstrap(CTX* ctx) {
 
 	ctx->latest =
 		cons(ctx,
-			cons(ctx, (CELL)"nand", AS(ATOM,
+			cons(ctx, (CELL)"NAND", AS(ATOM,
 			cons(ctx, (CELL)&nand, AS(PRIM, 0)))),
+		AS(ATOM, ctx->latest));
+
+	ctx->latest =
+		cons(ctx,
+			cons(ctx, (CELL)"HERE", AS(ATOM,
+			cons(ctx, (CELL)&here, AS(PRIM, 0)))),
 		AS(ATOM, ctx->latest));
 
 	// VARIABLES
 
 	ctx->latest =
 		cons(ctx,
-			cons(ctx, (CELL)"here", AS(ATOM,
-			cons(ctx, (CELL)&ctx->here, AS(ATOM, 0)))),
-		AS(LIST, ctx->latest));
-
-	ctx->latest =
-		cons(ctx,
-			cons(ctx, (CELL)"there", AS(ATOM,
+			cons(ctx, (CELL)"THERE", AS(ATOM,
 			cons(ctx, (CELL)&ctx->there, AS(ATOM, 0)))),
 		AS(LIST, ctx->latest));
 
 	ctx->latest =
 		cons(ctx,
-			cons(ctx, (CELL)"state", AS(ATOM,
+			cons(ctx, (CELL)"STATE", AS(ATOM,
 			cons(ctx, (CELL)&ctx->state, AS(ATOM, 0)))),
 		AS(LIST, ctx->latest));
 
 	ctx->latest =
 		cons(ctx,
-			cons(ctx, (CELL)"latest", AS(ATOM,
+			cons(ctx, (CELL)"LATEST", AS(ATOM,
 			cons(ctx, (CELL)&ctx->latest, AS(ATOM, 0)))),
+		AS(LIST, ctx->latest));
+
+	ctx->latest =
+		cons(ctx,
+			cons(ctx, (CELL)"HSTACK", AS(ATOM,
+			cons(ctx, (CELL)&ctx->hstack, AS(ATOM, 0)))),
 		AS(LIST, ctx->latest));
 
 	ctx->latest =
@@ -916,10 +1100,6 @@ CTX* bootstrap(CTX* ctx) {
 // 		}
 // 	}
 // 	return 0;
-//}
-//
-//CELL align(CTX* ctx) {
-//	return allot(ctx, ALIGN(ctx->here, sizeof(CELL)) - (CELL)ctx->here);
 //}
 //
 //CELL header(CTX* ctx, BYTE* name) {
@@ -1136,124 +1316,4 @@ CTX* bootstrap(CTX* ctx) {
 ////	return 0;
 ////}
 ////
-////// SECTORFORTH Variables
-////
-////CELL D_state(CTX* ctx) {
-////	if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
-////	ctx->stack = cons(ctx, (CELL)&ctx->state, AS(ATOM, ctx->stack));
-////
-////	return 0;
-////}
-////
-////CELL D_tib(CTX* ctx) {
-////	if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
-////	ctx->stack = cons(ctx, (CELL)&ctx->tib, AS(ATOM, ctx->stack));
-////
-////	return 0;
-////}
-////
-////CELL D_in(CTX* ctx) {
-////	if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
-////	ctx->stack = cons(ctx, (CELL)&ctx->in, AS(ATOM, ctx->stack));
-////
-////	return 0;
-////}
-////
-////CELL D_here(CTX* ctx) {
-////	if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
-////	ctx->stack = cons(ctx, (CELL)&ctx->here, AS(ATOM, ctx->stack));
-////
-////	return 0;
-////}
-////
-////CELL D_latest(CTX* ctx) {
-////	if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
-////	ctx->stack = cons(ctx, (CELL)&ctx->latest, AS(ATOM, ctx->stack));
-////
-////	return 0;
-////}
-////
-////// FORTH TESTER primitives
-////
-////CELL D_base(CTX* ctx) {
-////	if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
-////	ctx->stack = cons(ctx, (CELL)&ctx->base, AS(ATOM, ctx->stack));
-////
-////	return 0;
-////}
-////
-////CELL D_cell(CTX* ctx) {
-////	if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
-////	ctx->stack = cons(ctx, sizeof(CELL), AS(ATOM, ctx->stack));
-////
-////	return 0;
-////}
-////
-////CELL D_over(CTX* ctx) {
-////	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
-////	if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
-////	if (TYPE(NEXT(ctx->stack)) == LIST) {
-////		ctx->stack = cons(ctx, clone(ctx, CAR(NEXT(ctx->stack))), AS(LIST, ctx->stack));
-////	} else {
-////		ctx->stack = cons(ctx, CAR(NEXT(ctx->stack)), AS(TYPE(NEXT(ctx->stack)), ctx->stack));
-////	}
-////}
-////
-////CELL D_parse_name(CTX* ctx) {
-////	if (ctx->free == ctx->there || NEXT(ctx->free) == ctx->there) { return ERR_STACK_OVERFLOW; }
-////	parse_token(ctx);
-////	ctx->stack = cons(ctx, (CELL)(ctx->tib + ctx->token), AS(ATOM, ctx->stack));
-////	ctx->stack = cons(ctx, ctx->in - ctx->token, AS(ATOM, ctx->stack));
-////	return 0;
-////}
-////
-////CELL D_s_literal(CTX* ctx) {
-////	/* TODO: Compile only words ?! */
-////	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
-////	CELL len = CAR(ctx->stack);
-////	ctx->stack = reclaim(ctx, ctx->stack);
-////	BYTE* addr = (BYTE*)CAR(ctx->stack);
-////	ctx->stack = reclaim(ctx, ctx->stack);
-////	BYTE* str = ctx->here;
-////	if (allot(ctx, sizeof(CELL) + len + 1) != 0) { return ERR_NOT_ENOUGH_MEMORY; }
-////	*((CELL*)str) = len;
-////	str += sizeof(CELL);
-////	strncpy(str, addr, len);
-////	str[len] = 0;
-////
-////	ctx->cpile = cons(ctx, (CELL)str, AS(ATOM, ctx->cpile));
-////	ctx->cpile = cons(ctx, len, AS(ATOM, ctx->cpile));
-////
-////	return 0;
-////}
-////
-////CELL D_header(CTX* ctx) {
-////	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
-////	CELL len = CAR(ctx->stack);
-////	ctx->stack = reclaim(ctx, ctx->stack);
-////	BYTE* addr = (BYTE*)CAR(ctx->stack);
-////	ctx->stack = reclaim(ctx, ctx->stack);
-////
-////	header(ctx, addr);
-////
-////	return 0;
-////}
-////
-////CELL D_reveal(CTX* ctx) {
-////	CELL word = ctx->hstack;
-////	ctx->hstack = NEXT(ctx->hstack);
-////	reveal(ctx, word);
-////
-////	return 0;
-////}
-////
-////CELL D_comma(CTX* ctx) {
-////	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
-////	BYTE* here = ctx->here;
-////	if (allot(ctx, sizeof(CELL)) == 0) { return ERR_NOT_ENOUGH_MEMORY; }
-////	CELL x = CAR(ctx->stack);
-////	ctx->stack = reclaim(ctx, ctx->stack);
-////	*((CELL*)here) = x;
-////	
-////	return 0;
-////}
+
