@@ -76,7 +76,7 @@ CTX* init(BYTE* block, CELL size) {
 	return ctx;
 }
 
-// MANAGED MEMORY
+// LINKED LISTS
 
 CELL cons(CTX* ctx, CELL car, CELL cdr) {
 	if (ctx->free == ctx->there) return 0;
@@ -110,10 +110,26 @@ CELL reclaim(CTX* ctx, CELL pair) {
 	return tail;
 }
 
-// INNER INTERPRETER
+CELL reverse(CELL pair, CELL list) {
+	if (pair != 0) {
+		CELL t = NEXT(pair);
+		CDR(pair) = AS(TYPE(pair), list);
+		return reverse(t, pair);
+	} else {
+		return list;
+	}
+}
 
-CELL dump_stack(CTX*);
-CELL find_prim(CTX*, CELL);
+CELL length(CELL pair) { 
+	CELL c = 0; 
+	while (pair) { 
+		c++; 
+		pair = NEXT(pair); 
+	} 
+	return c; 
+}
+
+// INNER INTERPRETER
 
 CELL execute(CTX* ctx, CELL xlist) {
 	CELL result;
@@ -283,6 +299,50 @@ CELL compile_str(CTX* ctx) {
 	return 0;
 }
 
+// PRIMITIVES
+
+// TODO: Add test
+
+CELL branch(CTX* ctx) {
+	if (ctx->stack == 0 || NEXT(ctx->stack) == 0 || NEXT(NEXT(ctx->stack)) == 0) {
+		return ERR_STACK_UNDERFLOW;
+	}
+	CELL b = CAR(ctx->stack);
+	ctx->stack = reclaim(ctx, ctx->stack);
+	if (NEXT(NEXT(NEXT(ctx->ip))) != 0) {
+		if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
+		ctx->rstack = cons(ctx, NEXT(NEXT(NEXT(ctx->ip))), AS(ATOM, ctx->rstack));
+	}
+	if (b) {
+		ctx->ip = CAR(NEXT(ctx->ip));
+	} else {
+		ctx->ip = CAR(NEXT(NEXT(ctx->ip)));
+	}
+
+	return 1;
+}
+
+// TODO: Add jump and tests
+// TODO: Add zjump and tests
+
+CELL add(CTX* ctx) {
+	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
+	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
+	CAR(NEXT(ctx->stack)) = CAR(NEXT(ctx->stack)) + CAR(ctx->stack);
+	ctx->stack = reclaim(ctx, ctx->stack);
+
+	return 0;
+}
+
+CELL nand(CTX* ctx) {
+	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
+	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
+	CAR(NEXT(ctx->stack)) = !(CAR(NEXT(ctx->stack)) & CAR(ctx->stack));
+	ctx->stack = reclaim(ctx, ctx->stack);
+
+	return 0;
+}
+
 // LIST OPERATIONS
 
 CELL append(CTX* ctx) {
@@ -310,16 +370,6 @@ CELL lbrace(CTX* ctx) {
  return 0;
 }
 
-CELL reverse(CELL pair, CELL list) {
-	if (pair != 0) {
-		CELL t = NEXT(pair);
-		CDR(pair) = AS(TYPE(pair), list);
-		return reverse(t, pair);
-	} else {
-		return list;
-	}
-}
-
 CELL rbrace(CTX* ctx) {
   CELL list = reverse(CAR(ctx->cpile), 0);
   CAR(ctx->cpile) = 0;
@@ -332,15 +382,6 @@ CELL rbrace(CTX* ctx) {
   }
 
   return 0;
-}
-
-CELL length(CELL pair) { 
-	CELL c = 0; 
-	while (pair) { 
-		c++; 
-		pair = NEXT(pair); 
-	} 
-	return c; 
 }
 
 CELL find_prim(CTX* ctx, CELL xt) {
@@ -435,24 +476,6 @@ CELL over(CTX* ctx) {
 	} else if (TYPE(NEXT(ctx->stack)) == LIST) {
 		ctx->stack = cons(ctx, clone(ctx, CAR(NEXT(ctx->stack))), AS(LIST, ctx->stack));
 	}
-	return 0;
-}
-
-CELL add(CTX* ctx) {
-	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
-	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
-	CAR(NEXT(ctx->stack)) = CAR(NEXT(ctx->stack)) + CAR(ctx->stack);
-	ctx->stack = reclaim(ctx, ctx->stack);
-
-	return 0;
-}
-
-CELL nand(CTX* ctx) {
-	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
-	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
-	CAR(NEXT(ctx->stack)) = !(CAR(NEXT(ctx->stack)) & CAR(ctx->stack));
-	ctx->stack = reclaim(ctx, ctx->stack);
-
 	return 0;
 }
 
@@ -567,35 +590,6 @@ CELL swap(CTX* ctx) {
 	ctx->stack = t;
 
 	return 0;
-}
-
-CELL branch(CTX* ctx) {
-	if (ctx->stack == 0 || NEXT(ctx->stack) == 0 || NEXT(NEXT(ctx->stack)) == 0) {
-		return ERR_STACK_UNDERFLOW;
-	}
-	CELL b = CAR(ctx->stack);
-	ctx->stack = reclaim(ctx, ctx->stack);
-	if (NEXT(NEXT(NEXT(ctx->ip))) != 0) {
-		if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
-		ctx->rstack = cons(ctx, NEXT(NEXT(NEXT(ctx->ip))), AS(ATOM, ctx->rstack));
-	}
-	if (b) {
-		ctx->ip = CAR(NEXT(ctx->ip));
-	} else {
-		ctx->ip = CAR(NEXT(NEXT(ctx->ip)));
-	}
-
-	//CELL b = CAR(NEXT(NEXT(ctx->stack)));
-
-	//if (!b) {
-	//	swap(ctx);
-	//}
-	//drop(ctx);
-	//swap(ctx);
-	//drop(ctx);
-	//exec(ctx);
-
-	return 1;
 }
 
 CELL gt(CTX* ctx) {

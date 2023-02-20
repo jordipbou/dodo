@@ -208,6 +208,37 @@ void test_reclaim_list() {
 	TEST_ASSERT_EQUAL_INT(0, tail);
 }
 
+void test_reverse() {
+	CELL p1 = (CELL)malloc(2*sizeof(CELL));
+	CELL p2 = (CELL)malloc(2*sizeof(CELL));
+	CELL p3 = (CELL)malloc(2*sizeof(CELL));
+	
+	CDR(p1) = p2;
+	CDR(p2) = p3;
+	CDR(p3) = 0;
+
+	CELL r = reverse(p1, 0);
+
+	TEST_ASSERT_EQUAL_INT(p3, r);
+	TEST_ASSERT_EQUAL_INT(p2, NEXT(r));
+	TEST_ASSERT_EQUAL_INT(p1, NEXT(NEXT(r)));
+}
+
+void test_length() {
+	CELL p1 = (CELL)malloc(2*sizeof(CELL));
+	CELL p2 = (CELL)malloc(2*sizeof(CELL));
+	CELL p3 = (CELL)malloc(2*sizeof(CELL));
+
+	CDR(p1) = AS(ATOM, p2);
+	CDR(p2) = p3;
+	CDR(p3) = 0;
+
+	TEST_ASSERT_EQUAL_INT(0, length(0));
+	TEST_ASSERT_EQUAL_INT(1, length(p3));
+	TEST_ASSERT_EQUAL_INT(2, length(p2));
+	TEST_ASSERT_EQUAL_INT(3, length(p1));
+}
+
 // INNER INTERPRETER
 
 void test_execute_atom() {
@@ -561,21 +592,6 @@ void test_compile_str() {
 }
 
 ////  LIST FUNCTIONS
-
-void test_length() {
-	CELL p1 = (CELL)malloc(2*sizeof(CELL));
-	CELL p2 = (CELL)malloc(2*sizeof(CELL));
-	CELL p3 = (CELL)malloc(2*sizeof(CELL));
-
-	CDR(p1) = AS(ATOM, p2);
-	CDR(p2) = p3;
-	CDR(p3) = 0;
-
-	TEST_ASSERT_EQUAL_INT(0, length(0));
-	TEST_ASSERT_EQUAL_INT(1, length(p3));
-	TEST_ASSERT_EQUAL_INT(2, length(p2));
-	TEST_ASSERT_EQUAL_INT(3, length(p1));
-}
 
 void test_append() {
 	CELL size = 512;
@@ -2255,9 +2271,11 @@ int main() {
 
 	// LIST CREATION AND DESTRUCTION (AUTOMATIC MEMORY MANAGEMENT)
 	RUN_TEST(test_cons);
+	RUN_TEST(test_clone);
 	RUN_TEST(test_reclaim);
 	RUN_TEST(test_reclaim_list);
-	RUN_TEST(test_clone);
+	RUN_TEST(test_reverse);
+	RUN_TEST(test_length);
 
 	// INNER INTERPRETER
 	RUN_TEST(test_execute_atom);
@@ -2279,7 +2297,6 @@ int main() {
 	//RUN_TEST(test_align);
 
 	//  LIST FUNCTIONS
-	RUN_TEST(test_length);
 	RUN_TEST(test_append);
 	//RUN_TEST(test_depth);
 
