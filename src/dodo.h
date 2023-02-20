@@ -172,6 +172,98 @@ CELL execute(CTX* ctx, CELL xlist) {
 	} while (1);
 }
 
+// IP PRIMITIVES
+
+CELL branch(CTX* ctx) {
+	if (ctx->stack == 0) {
+		return ERR_STACK_UNDERFLOW;
+	}
+	CELL b = CAR(ctx->stack);
+	ctx->stack = reclaim(ctx, ctx->stack);
+	if (NEXT(NEXT(NEXT(ctx->ip))) != 0) {
+		if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
+		ctx->rstack = cons(ctx, NEXT(NEXT(NEXT(ctx->ip))), AS(ATOM, ctx->rstack));
+	}
+	if (b) {
+		ctx->ip = CAR(NEXT(ctx->ip));
+	} else {
+		ctx->ip = CAR(NEXT(NEXT(ctx->ip)));
+	}
+
+	return 1;
+}
+
+// TODO: Add jump and tests
+// TODO: Add zjump and tests
+
+// STACK PRIMITIVES
+
+CELL duplicate(CTX* ctx) {
+	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
+	switch(TYPE(ctx->stack)) {
+		case ATOM:
+			if ((ctx->stack = cons(ctx, CAR(ctx->stack), AS(ATOM, ctx->stack))) == 0) {
+				return ERR_STACK_OVERFLOW;
+			}
+			break;
+		case LIST:
+			if ((ctx->stack = cons(ctx, clone(ctx, CAR(ctx->stack)), AS(LIST, ctx->stack))) == 0) {
+				return ERR_STACK_OVERFLOW;
+			}
+			break;
+		case PRIM:
+			if ((ctx->stack = cons(ctx, CAR(ctx->stack), AS(PRIM, ctx->stack))) == 0) {
+				return ERR_STACK_OVERFLOW;
+			}
+			break;
+		case CALL:
+			if ((ctx->stack = cons(ctx, CAR(ctx->stack), AS(CALL, ctx->stack))) == 0) {
+				return ERR_STACK_OVERFLOW;
+			}
+			break;
+	}
+
+	return 0;
+}
+
+CELL swap(CTX* ctx) {
+	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
+	CELL t = NEXT(ctx->stack);
+	CDR(ctx->stack) = AS(TYPE(ctx->stack), NEXT(NEXT(ctx->stack)));
+	CDR(t) = AS(TYPE(t), ctx->stack);
+	ctx->stack = t;
+
+	return 0;
+}
+
+CELL drop(CTX* ctx) {
+	ctx->stack = reclaim(ctx, ctx->stack);
+	return 0;
+}
+
+CELL over(CTX* ctx) {
+	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
+	if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
+	if (TYPE(NEXT(ctx->stack)) == ATOM) {
+		ctx->stack = cons(ctx, CAR(NEXT(ctx->stack)), AS(ATOM, ctx->stack));
+	} else if (TYPE(NEXT(ctx->stack)) == LIST) {
+		ctx->stack = cons(ctx, clone(ctx, CAR(NEXT(ctx->stack))), AS(LIST, ctx->stack));
+	}
+	return 0;
+}
+
+CELL rot(CTX* ctx) {
+	if (ctx->stack == 0 || NEXT(ctx->stack) == 0 || NEXT(NEXT(ctx->stack)) == 0) {
+		return ERR_STACK_UNDERFLOW;
+	}
+	CELL t = ctx->stack;
+	ctx->stack = NEXT(NEXT(ctx->stack));
+	CDR(NEXT(t)) = AS(TYPE(NEXT(t)), NEXT(ctx->stack));
+	CDR(ctx->stack) = AS(TYPE(ctx->stack), t);
+
+	return 0;
+}
+
 // PARSING
 
 CELL parse_token(CTX* ctx) {
@@ -303,28 +395,6 @@ CELL compile_str(CTX* ctx) {
 
 // TODO: Add test
 
-CELL branch(CTX* ctx) {
-	if (ctx->stack == 0 || NEXT(ctx->stack) == 0 || NEXT(NEXT(ctx->stack)) == 0) {
-		return ERR_STACK_UNDERFLOW;
-	}
-	CELL b = CAR(ctx->stack);
-	ctx->stack = reclaim(ctx, ctx->stack);
-	if (NEXT(NEXT(NEXT(ctx->ip))) != 0) {
-		if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
-		ctx->rstack = cons(ctx, NEXT(NEXT(NEXT(ctx->ip))), AS(ATOM, ctx->rstack));
-	}
-	if (b) {
-		ctx->ip = CAR(NEXT(ctx->ip));
-	} else {
-		ctx->ip = CAR(NEXT(NEXT(ctx->ip)));
-	}
-
-	return 1;
-}
-
-// TODO: Add jump and tests
-// TODO: Add zjump and tests
-
 CELL add(CTX* ctx) {
 	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
 	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
@@ -435,50 +505,6 @@ CELL words(CTX* ctx) {
 
 // PRIMITIVES
 
-CELL duplicate(CTX* ctx) {
-	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
-	switch(TYPE(ctx->stack)) {
-		case ATOM:
-			if ((ctx->stack = cons(ctx, CAR(ctx->stack), AS(ATOM, ctx->stack))) == 0) {
-				return ERR_STACK_OVERFLOW;
-			}
-			break;
-		case LIST:
-			if ((ctx->stack = cons(ctx, clone(ctx, CAR(ctx->stack)), AS(LIST, ctx->stack))) == 0) {
-				return ERR_STACK_OVERFLOW;
-			}
-			break;
-		case PRIM:
-			if ((ctx->stack = cons(ctx, CAR(ctx->stack), AS(PRIM, ctx->stack))) == 0) {
-				return ERR_STACK_OVERFLOW;
-			}
-			break;
-		case CALL:
-			if ((ctx->stack = cons(ctx, CAR(ctx->stack), AS(CALL, ctx->stack))) == 0) {
-				return ERR_STACK_OVERFLOW;
-			}
-			break;
-	}
-
-	return 0;
-}
-
-CELL drop(CTX* ctx) {
-	ctx->stack = reclaim(ctx, ctx->stack);
-	return 0;
-}
-
-CELL over(CTX* ctx) {
-	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
-	if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
-	if (TYPE(NEXT(ctx->stack)) == ATOM) {
-		ctx->stack = cons(ctx, CAR(NEXT(ctx->stack)), AS(ATOM, ctx->stack));
-	} else if (TYPE(NEXT(ctx->stack)) == LIST) {
-		ctx->stack = cons(ctx, clone(ctx, CAR(NEXT(ctx->stack))), AS(LIST, ctx->stack));
-	}
-	return 0;
-}
-
 CELL fetch(CTX* ctx) {
 	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
 	if (TYPE(ctx->stack) != ATOM) { return ERR_ATOM_EXPECTED; }
@@ -582,45 +608,11 @@ CELL exec_x(CTX* ctx) {
 	return 1;
 }
 
-CELL swap(CTX* ctx) {
-	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
-	CELL t = NEXT(ctx->stack);
-	CDR(ctx->stack) = AS(TYPE(ctx->stack), NEXT(NEXT(ctx->stack)));
-	CDR(t) = AS(TYPE(t), ctx->stack);
-	ctx->stack = t;
-
-	return 0;
-}
-
 CELL gt(CTX* ctx) {
 	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
 	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
 	CAR(NEXT(ctx->stack)) = CAR(NEXT(ctx->stack)) > CAR(ctx->stack);
 	ctx->stack = reclaim(ctx, ctx->stack);
-
-	return 0;
-}
-
-CELL rot(CTX* ctx) {
-	if (ctx->stack == 0 || NEXT(ctx->stack) == 0 || NEXT(NEXT(ctx->stack)) == 0) {
-		return ERR_STACK_UNDERFLOW;
-	}
-	CELL t = ctx->stack;
-	ctx->stack = NEXT(NEXT(ctx->stack));
-	CDR(NEXT(t)) = AS(TYPE(NEXT(t)), NEXT(ctx->stack));
-	CDR(ctx->stack) = AS(TYPE(ctx->stack), t);
-
-	return 0;
-}
-
-CELL minus_rot(CTX* ctx) {
-	if (ctx->stack == 0 || NEXT(ctx->stack) == 0 || NEXT(NEXT(ctx->stack)) == 0) {
-		return ERR_STACK_UNDERFLOW;
-	}
-	CELL t = NEXT(ctx->stack);
-	CDR(ctx->stack) = AS(TYPE(ctx->stack), NEXT(NEXT(NEXT(ctx->stack))));
-	CDR(NEXT(t)) = AS(TYPE(NEXT(t)), ctx->stack);
-	ctx->stack = t;
 
 	return 0;
 }
@@ -807,11 +799,11 @@ CTX* bootstrap(CTX* ctx) {
 			cons(ctx, (CELL)&sub, AS(PRIM, 0)))), 
 		AS(ATOM, ctx->latest));	
 
-	ctx->latest = 
-		cons(ctx, 
-			cons(ctx, (CELL)"-ROT", AS(ATOM, 
-			cons(ctx, (CELL)&minus_rot, AS(PRIM, 0)))), 
-		AS(ATOM, ctx->latest));	
+	//ctx->latest = 
+	//	cons(ctx, 
+	//		cons(ctx, (CELL)"-ROT", AS(ATOM, 
+	//		cons(ctx, (CELL)&minus_rot, AS(PRIM, 0)))), 
+	//	AS(ATOM, ctx->latest));	
 
 	ctx->latest = 
 		cons(ctx, 
