@@ -1,13 +1,13 @@
-LATEST { S" \" 10 PARSE DROP DROP } APPEND LATEST { S" DECIMAL" 10 BASE ! } APPEND
-LATEST { S" HEX" 16 BASE ! } APPEND
-LATEST { 
-	S" CREATE" 
-	PARSE-NAME POSTPONE { POSTPONE SLITERAL 
-	POSTPONE [ ALIGN HERE POSTPONE ] POSTPONE LITERAL 
-	POSTPONE } LATEST SWAP APPEND } APPEND
-LATEST { S" VARIABLE" CREATE 0 , } APPEND
-LATEST { S" :" PARSE-NAME POSTPONE { POSTPONE SLITERAL } APPEND IMMEDIATE
-LATEST { S" ;" POSTPONE } LATEST SWAP APPEND } APPEND IMMEDIATE
+latest { s" \" 10 parse drop drop } append
+latest { s" decimal" 10 base ! } append
+latest { s" :" parse-name postpone { postpone sliteral } append immediate
+latest { s" ;" postpone } latest swap append } append immediate
+\ It seems to work up until here. Next words should be created with : ;
+latest { s" create"
+	parse-name postpone { postpone sliteral
+	postpone [ align here postpone ] postpone literal
+	postpone } latest swap append } append
+latest { s" variable" create 0 , } append
 
 \ This file contains the code for ttester, a utility for testing Forth words,
 \ as developed by several authors (see below), together with some explanations

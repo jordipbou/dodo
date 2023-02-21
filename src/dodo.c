@@ -40,6 +40,7 @@ void main(int argc, char *argv[]) {
 					default: printf("ERROR: %ld\n", result); break;
 				}
 				printf("TIB: %s\n", ctx->tib + ctx->token);
+				return;
 			}
 		}
 	} else {
