@@ -376,6 +376,46 @@ void test_branch() {
 
 }
 
+void test_jump() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	CELL dest = cons(ctx, 7, AS(ATOM, 0));
+	CELL src = cons(ctx, (CELL)&jump, AS(PRIM, cons(ctx, dest, AS(ATOM, 0))));
+
+	execute(ctx, src);
+
+	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
+	TEST_ASSERT_EQUAL_INT(7, CAR(ctx->stack));
+}
+
+void test_zjump() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	CELL dest = cons(ctx, 7, AS(ATOM, 0));
+	CELL src = 
+		cons(ctx, (CELL)&zjump, AS(PRIM, 
+		cons(ctx, dest, AS(ATOM, 
+		cons(ctx, 13, AS(ATOM, 0))))));
+
+	ctx->stack = cons(ctx, 1, AS(ATOM, 0));
+
+	execute(ctx, src);
+
+	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
+	TEST_ASSERT_EQUAL_INT(13, CAR(ctx->stack));
+
+	ctx->stack = cons(ctx, 0, AS(ATOM, 0));
+
+	execute(ctx, src);
+
+	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
+	TEST_ASSERT_EQUAL_INT(7, CAR(ctx->stack));
+}
+
 // STACK PRIMITIVES
 
 void test_duplicate_atom() {
@@ -2307,6 +2347,8 @@ int main() {
 
 	// IP PRIMITIVES
 	RUN_TEST(test_branch);
+	RUN_TEST(test_jump);
+	RUN_TEST(test_zjump);
 
 	// STACK PRIMITIVES
 	RUN_TEST(test_duplicate_atom);

@@ -175,9 +175,8 @@ CELL execute(CTX* ctx, CELL xlist) {
 // IP PRIMITIVES
 
 CELL branch(CTX* ctx) {
-	if (ctx->stack == 0) {
-		return ERR_STACK_UNDERFLOW;
-	}
+	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
+	if (TYPE(ctx->stack) != ATOM) { return ERR_ATOM_EXPECTED; }
 	CELL b = CAR(ctx->stack);
 	ctx->stack = reclaim(ctx, ctx->stack);
 	if (NEXT(NEXT(NEXT(ctx->ip))) != 0) {
@@ -193,8 +192,25 @@ CELL branch(CTX* ctx) {
 	return 1;
 }
 
-// TODO: Add jump and tests
-// TODO: Add zjump and tests
+CELL jump(CTX* ctx) {
+	ctx->ip = CAR(NEXT(ctx->ip));
+
+	return 1;
+}
+
+CELL zjump(CTX* ctx) {
+	if (ctx->stack == 0) { return ERR_STACK_OVERFLOW; }
+	if (TYPE(ctx->stack) != ATOM) { return ERR_ATOM_EXPECTED; }
+	CELL b = CAR(ctx->stack);
+	ctx->stack = reclaim(ctx, ctx->stack);
+	if (b) {
+		ctx->ip = NEXT(NEXT(ctx->ip));
+	} else {
+		ctx->ip = CAR(NEXT(ctx->ip));
+	}
+
+	return 1;
+}
 
 // STACK PRIMITIVES
 
