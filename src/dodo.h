@@ -356,6 +356,36 @@ CELL eq(CTX* ctx) {
 	return 0;
 }
 
+// BIT PRIMITIVES
+
+CELL and(CTX* ctx) {
+	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
+	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
+	CAR(NEXT(ctx->stack)) = CAR(NEXT(ctx->stack)) & CAR(ctx->stack);
+	ctx->stack = reclaim(ctx, ctx->stack);
+
+	return 0;
+}
+
+CELL or(CTX* ctx) {
+	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
+	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
+	CAR(NEXT(ctx->stack)) = CAR(NEXT(ctx->stack)) | CAR(ctx->stack);
+	ctx->stack = reclaim(ctx, ctx->stack);
+
+	return 0;
+}
+
+CELL invert(CTX* ctx) {
+	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
+	if (TYPE(ctx->stack) != ATOM) { return ERR_ATOM_EXPECTED; }
+	CAR(ctx->stack) = ~CAR(ctx->stack);
+
+	return 0;
+}
+
+
+
 // PARSING
 
 CELL parse_token(CTX* ctx) {
@@ -484,17 +514,6 @@ CELL compile_str(CTX* ctx) {
 }
 
 // PRIMITIVES
-
-// TODO: Add test
-
-CELL nand(CTX* ctx) {
-	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
-	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
-	CAR(NEXT(ctx->stack)) = !(CAR(NEXT(ctx->stack)) & CAR(ctx->stack));
-	ctx->stack = reclaim(ctx, ctx->stack);
-
-	return 0;
-}
 
 // LIST OPERATIONS
 
@@ -812,6 +831,13 @@ CELL immediate(CTX* ctx) {
 		AS(PRIM, ctx->latest));
 
 CTX* bootstrap(CTX* ctx) {
+	// STACK PRIMITIVES
+	WORD("dup", &duplicate);
+	WORD("swap", &swap);
+	WORD("over", &over);
+	WORD("rot", &rot);
+	WORD("drop", &drop);
+
 	// IP PRIMITIVES
 	WORD("branch", &branch);
 	WORD("jump", &jump);
@@ -828,6 +854,11 @@ CTX* bootstrap(CTX* ctx) {
 	WORD(">", &gt);
 	WORD("<", &lt);
 	WORD("=", &eq);
+
+	// BIT PRIMITIVES
+	WORD("and", &and);
+	WORD("or", &or);
+	WORD("invert", &invert);
 
 	ctx->latest = 
 		cons(ctx, 
@@ -867,12 +898,6 @@ CTX* bootstrap(CTX* ctx) {
 
 	ctx->latest = 
 		cons(ctx, 
-			cons(ctx, (CELL)"over", AS(ATOM, 
-			cons(ctx, (CELL)&over, AS(PRIM, 0)))), 
-		AS(ATOM, ctx->latest));	
-
-	ctx->latest = 
-		cons(ctx, 
 			cons(ctx, (CELL)"sliteral", AS(ATOM, 
 			cons(ctx, (CELL)&sliteral, AS(PRIM, 0)))), 
 		AS(PRIM, ctx->latest));	
@@ -887,18 +912,6 @@ CTX* bootstrap(CTX* ctx) {
 		cons(ctx, 
 			cons(ctx, (CELL)"parse-name", AS(ATOM, 
 			cons(ctx, (CELL)&parse_name, AS(PRIM, 0)))), 
-		AS(ATOM, ctx->latest));	
-
-	ctx->latest = 
-		cons(ctx, 
-			cons(ctx, (CELL)"rot", AS(ATOM, 
-			cons(ctx, (CELL)&rot, AS(PRIM, 0)))), 
-		AS(ATOM, ctx->latest));	
-
-	ctx->latest = 
-		cons(ctx, 
-			cons(ctx, (CELL)"swap", AS(ATOM, 
-			cons(ctx, (CELL)&swap, AS(PRIM, 0)))), 
 		AS(ATOM, ctx->latest));	
 
 	ctx->latest = 
@@ -1001,24 +1014,6 @@ CTX* bootstrap(CTX* ctx) {
 		cons(ctx,
 			cons(ctx, (CELL)"words", AS(ATOM,
 			cons(ctx, (CELL)&words, AS(PRIM, 0)))),
-		AS(ATOM, ctx->latest));
-
-	ctx->latest =
-		cons(ctx,
-			cons(ctx, (CELL)"dup", AS(ATOM,
-			cons(ctx, (CELL)&duplicate, AS(PRIM, 0)))),
-		AS(ATOM, ctx->latest));
-
-	ctx->latest =
-		cons(ctx,
-			cons(ctx, (CELL)"drop", AS(ATOM,
-			cons(ctx, (CELL)&drop, AS(PRIM, 0)))),
-		AS(ATOM, ctx->latest));
-
-	ctx->latest =
-		cons(ctx,
-			cons(ctx, (CELL)"nand", AS(ATOM,
-			cons(ctx, (CELL)&nand, AS(PRIM, 0)))),
 		AS(ATOM, ctx->latest));
 
 	ctx->latest =
