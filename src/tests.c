@@ -689,6 +689,71 @@ void test_mod() {
 	TEST_ASSERT_EQUAL_INT(4, CAR(ctx->stack));
 }
 
+// COMPARISON OPERATORS
+
+void test_gt() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	ctx->stack = cons(ctx, 7, AS(ATOM, cons(ctx, 13, AS(ATOM, 0))));
+	gt(ctx);
+	TEST_ASSERT_EQUAL_INT(1, CAR(ctx->stack));
+	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
+
+	ctx->stack = cons(ctx, 13, AS(ATOM, cons(ctx, 7, AS(ATOM, 0))));
+	gt(ctx);
+	TEST_ASSERT_EQUAL_INT(0, CAR(ctx->stack));
+	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
+
+	ctx->stack = cons(ctx, 7, AS(ATOM, cons(ctx, 7, AS(ATOM, 0))));
+	gt(ctx);
+	TEST_ASSERT_EQUAL_INT(0, CAR(ctx->stack));
+	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
+}
+
+void test_lt() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	ctx->stack = cons(ctx, 7, AS(ATOM, cons(ctx, 13, AS(ATOM, 0))));
+	lt(ctx);
+	TEST_ASSERT_EQUAL_INT(0, CAR(ctx->stack));
+	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
+
+	ctx->stack = cons(ctx, 13, AS(ATOM, cons(ctx, 7, AS(ATOM, 0))));
+	lt(ctx);
+	TEST_ASSERT_EQUAL_INT(1, CAR(ctx->stack));
+	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
+
+	ctx->stack = cons(ctx, 7, AS(ATOM, cons(ctx, 7, AS(ATOM, 0))));
+	lt(ctx);
+	TEST_ASSERT_EQUAL_INT(0, CAR(ctx->stack));
+	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
+}
+
+void test_eq() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	ctx->stack = cons(ctx, 7, AS(ATOM, cons(ctx, 13, AS(ATOM, 0))));
+	eq(ctx);
+	TEST_ASSERT_EQUAL_INT(0, CAR(ctx->stack));
+	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
+
+	ctx->stack = cons(ctx, 13, AS(ATOM, cons(ctx, 7, AS(ATOM, 0))));
+	eq(ctx);
+	TEST_ASSERT_EQUAL_INT(0, CAR(ctx->stack));
+	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
+
+	ctx->stack = cons(ctx, 7, AS(ATOM, cons(ctx, 7, AS(ATOM, 0))));
+	eq(ctx);
+	TEST_ASSERT_EQUAL_INT(1, CAR(ctx->stack));
+	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
+}
+
 // PARSING
 
 void test_parse_token() {
@@ -1630,87 +1695,6 @@ void test_append() {
 //	TEST_ASSERT_EQUAL_INT(13, CAR(NEXT(ctx->stack)));
 //}
 //
-//void test_gt() {
-//	CELL size = 512;
-//	BYTE block[size];
-//	X*CTX* ctx = init(block, size);
-//
-//	push(x, ATOM, 13);
-//	push(x, ATOM, 7);
-//	_gt(ctx);
-//	TEST_ASSERT_EQUAL_INT(1, CAR(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//	pop(ctx);
-//
-//	push(x, ATOM, 7);
-//	push(x, ATOM, 13);
-//	_gt(ctx);
-//	TEST_ASSERT_EQUAL_INT(0, CAR(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//	pop(ctx);
-//
-//	push(x, ATOM, 7);
-//	push(x, ATOM, 7);
-//	_gt(ctx);
-//	TEST_ASSERT_EQUAL_INT(0, CAR(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//	pop(ctx);
-//}
-//
-//void test_lt() {
-//	CELL size = 512;
-//	BYTE block[size];
-//	X*CTX* ctx = init(block, size);
-//
-//	push(x, ATOM, 13);
-//	push(x, ATOM, 7);
-//	_lt(ctx);
-//	TEST_ASSERT_EQUAL_INT(0, CAR(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//	pop(ctx);
-//
-//	push(x, ATOM, 7);
-//	push(x, ATOM, 13);
-//	_lt(ctx);
-//	TEST_ASSERT_EQUAL_INT(1, CAR(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//	pop(ctx);
-//
-//	push(x, ATOM, 7);
-//	push(x, ATOM, 7);
-//	_lt(ctx);
-//	TEST_ASSERT_EQUAL_INT(0, CAR(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//	pop(ctx);
-//}
-//
-//void test_eq() {
-//	CELL size = 512;
-//	BYTE block[size];
-//	X*CTX* ctx = init(block, size);
-//
-//	push(x, ATOM, 13),
-//	push(x, ATOM, 7);
-//	_eq(ctx);
-//	TEST_ASSERT_EQUAL_INT(0, CAR(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//	pop(ctx);
-//
-//	push(x, ATOM, 7);
-//	push(x, ATOM, 13);
-//	_eq(ctx);
-//	TEST_ASSERT_EQUAL_INT(0, CAR(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//	pop(ctx);
-//
-//	push(x, ATOM, 7);
-//	push(x, ATOM, 7);
-//	_eq(ctx);
-//	TEST_ASSERT_EQUAL_INT(1, CAR(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//	pop(ctx);
-//}
-//
 //void test_neq() {
 //	CELL size = 512;
 //	BYTE block[size];
@@ -2214,6 +2198,11 @@ int main() {
 	RUN_TEST(test_mul);
 	RUN_TEST(test_division);
 	RUN_TEST(test_mod);
+
+	// COMPARISON PRIMITIVES
+	RUN_TEST(test_gt);
+	RUN_TEST(test_lt);
+	RUN_TEST(test_eq);
 
 	// PARSING
 	RUN_TEST(test_parse_token);
