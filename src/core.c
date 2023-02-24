@@ -34,7 +34,7 @@ void dump_list(X* x, C pair, C dir) { //, C order) {
 
 C dump_stack(X* x) {
 	printf("\n");
-	dump_list(x, x->s, 0);
+	dump_list(x, S(x), 0);
 
 	return 0;
 }
