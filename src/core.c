@@ -14,20 +14,21 @@ C find_prim(X* x, C xt) {
 void dump_list(X* x, C pair, C dir) { //, C order) {
 	C word;
 	if (pair) {
-		dump_list(x, N(pair), dir);
+		if (!dir) dump_list(x, N(pair), dir);
 		switch (T(pair)) {
-			case ATOM: printf("%ld ", A(pair)); break;
+			case ATOM: printf("#%ld ", A(pair)); break;
 			case LIST: printf("{ "); dump_list(x, A(pair), 1); printf("} "); break;
 			case PRIM: 
 				word = find_prim(x, A(pair));
 				if (word) {
-					printf("%s ", (B*)(NFA(word)));
+					printf("P:%s ", (B*)(NFA(word)));
 				} else {
 					printf("PRIM_NOT_FOUND ");
 				}
 				break;
-			case WORD: printf("%s ", NFA(A(pair))); break;
+			case WORD: printf("W:%s ", NFA(A(pair))); break;
 		}
+		if (dir) dump_list(x, N(pair), 1);
 		if (!dir) printf("\n");
 	}
 }
@@ -78,7 +79,7 @@ void main(int argc, char *argv[]) {
 					//case -8: break;
 					default: printf("ERROR: %ld\n", result); break;
 				}
-				printf("TIB: %s\n", x->tib + x->token);
+				//printf("TIB: %s\n", x->tib + x->token);
 				return;
 			}
 		}
@@ -91,7 +92,7 @@ void main(int argc, char *argv[]) {
 				switch (result) {
 					case -1: printf("Stack overflow\n"); break;
 					case -2: printf("Stack underflow\n"); break;
-					case -3: printf("Undefined word: %.*s\n", (int)(x->in - x->token), x->tib + x->token); break;
+					//case -3: printf("Undefined word: %.*s\n", (int)(x->in - x->token), x->tib + x->token); break;
 					case -4: printf("Not enough memory\n"); break;
 					case -5: printf("Zero length name\n"); break;
 					case -6: printf("Atom expected\n"); break;
@@ -99,7 +100,7 @@ void main(int argc, char *argv[]) {
 					case -8: break;
 					default: printf("ERROR: %ld\n", result); break;
 				}
-				printf("TIB: %s\n", x->tib + x->token);
+				//printf("TIB: %s\n", x->tib + x->token);
 				return;
 			}
 			dump_stack(x);

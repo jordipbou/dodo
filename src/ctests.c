@@ -47,17 +47,13 @@ void test_X_block_initialization() {
 
 	TEST_ASSERT_EQUAL_INT(((B*)x) + sizeof(X), BOTTOM(x));
 	TEST_ASSERT_EQUAL_INT(BOTTOM(x), x->here);
-	TEST_ASSERT_EQUAL_INT(ALIGN(x->here, 2*sizeof(C)), x->t);
+	TEST_ASSERT_EQUAL_INT(ALIGN(x->here, 2*sizeof(C)), x->there);
 	TEST_ASSERT_EQUAL_INT(ALIGN(((B*)x) + size - 2*sizeof(C) - 1, 2*sizeof(C)), TOP(x));
-	TEST_ASSERT_EQUAL_INT(TOP(x) - 2*sizeof(C), x->f);
+	TEST_ASSERT_EQUAL_INT(TOP(x) - 2*sizeof(C), x->free);
 
 	TEST_ASSERT_EQUAL_INT(0, x->d);
 	TEST_ASSERT_EQUAL_INT(0, S(x));
-	TEST_ASSERT_EQUAL_INT(0, x->r);
 	TEST_ASSERT_EQUAL_INT(0, x->state);
-	TEST_ASSERT_EQUAL_PTR(0, x->tib);
-	TEST_ASSERT_EQUAL_INT(0, x->token);
-	TEST_ASSERT_EQUAL_INT(0, x->in);
 }
 
 // LIST CREATION AND DESTRUCTION (AUTOMATIC MEMORY MANAGEMENT)
@@ -81,7 +77,7 @@ void test_LIST_cons() {
 	TEST_ASSERT_EQUAL_INT(7, A(pair));
 	TEST_ASSERT_EQUAL_INT(0, D(pair));
 	
-	while (x->f != x->t) { cons(x, 1, 0); }
+	while (FREE(x)) { cons(x, 1, 0); }
 
 	C p3 = cons(x, 13, 0);
 	TEST_ASSERT_EQUAL_INT(0, p3);
@@ -340,6 +336,24 @@ void test_INNER_execute_call() {
 	TEST_ASSERT_EQUAL_INT(2, length(S(x)));
 	TEST_ASSERT_EQUAL_INT(13, A(S(x)));
 	TEST_ASSERT_EQUAL_INT(20, A(N(S(x))));
+}
+
+// PILE PRIMITIVES
+
+void test_PILE_spush() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	TEST_ASSERT_EQUAL_INT(1, length(x->p));
+	TEST_ASSERT_EQUAL_INT(A(x->p), S(x));
+	TEST_ASSERT_EQUAL_INT(A(x->p), O(x));
+
+	spush(x);
+
+	TEST_ASSERT_EQUAL_INT(2, length(x->p));
+	TEST_ASSERT_EQUAL_INT(A(x->p), S(x));
+	TEST_ASSERT_EQUAL_INT(A(x->p), O(x));
 }
 
 //// IP PRIMITIVEs
@@ -2143,7 +2157,7 @@ int main() {
 	RUN_TEST(test_X_block_size);
 	RUN_TEST(test_X_block_initialization);
 
-	//// LIST CREATION AND DESTRUCTION (AUTOMATIC MEMORY MANAGEMENT)
+	// LIST CREATION AND DESTRUCTION (AUTOMATIC MEMORY MANAGEMENT)
 	RUN_TEST(test_LIST_cons);
 	RUN_TEST(test_LIST_clone);
 	RUN_TEST(test_LIST_reclaim);
@@ -2151,11 +2165,14 @@ int main() {
 	RUN_TEST(test_LIST_reverse);
 	RUN_TEST(test_LIST_length);
 
-	//// INNER INTERPRETER
+	// INNER INTERPRETER
 	RUN_TEST(test_INNER_execute_atom);
 	RUN_TEST(test_INNER_execute_list);
 	RUN_TEST(test_INNER_execute_primitive);
 	RUN_TEST(test_INNER_execute_call);
+
+	// PILE PRIMITIVES
+	RUN_TEST(test_PILE_spush);
 
 	//// IP PRIMITIVES
 	//RUN_TEST(test_IP_branch);

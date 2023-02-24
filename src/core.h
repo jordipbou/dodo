@@ -7,9 +7,9 @@
 typedef int8_t			B;
 typedef intptr_t		C;
 typedef struct { 
-	B* tib, * here;
-	C size, t, ip, state, token, in, base;
-	C f, p, s, r, d, o;
+	B* here;
+	C there, free, p, s, d, o;
+	C size, state, base;
 } X;
 typedef C (*FUNC)(X*);
 
@@ -28,11 +28,12 @@ enum Types { ATOM, LIST, PRIM, WORD };
 #define IMMEDIATE(word)			(T(word) == PRIM || T(word) == WORD)
 
 #define S(x)								(A(x->s))
+#define O(x)								(A(x->o))
 
 #define TK(x)								(x->tib + x->token)
 #define TL(x)								(x->in - x->token)
 
-#define FREE(x)							(length(x->f) - 1)
+#define FREE(x)							(length(x->free) - 1)
 #define ALIGN(addr, bound)	((((C)addr) + (bound - 1)) & ~(bound - 1))
 
 #define BOTTOM(x)						(((B*)x) + sizeof(X))
@@ -46,7 +47,7 @@ enum Types { ATOM, LIST, PRIM, WORD };
 #define ERR(x, cond, err)		if (cond) { return err; }
 #define OF(x, cond)					ERR(x, cond, ERR_STACK_OVERFLOW)
 #define UF(x, cond)					ERR(x, cond, ERR_STACK_UNDERFLOW)
-#define OF1(x)							OF(x, x->f == x->t)
+#define OF1(x)							OF(x, x->free == x->there)
 #define UF1(x)							UF(x, S(x) == 0)
 #define UF2(x)							UF(x, S(x) == 0 || N(S(x)) == 0)
 #define UF3(x)							UF(x, S(x) == 0 || N(S(x)) == 0 || N(N(S(x))) == 0)
@@ -58,27 +59,26 @@ X* init(B* block, C size) {
 	X* x = (X*)block;	
 	x->size = size;
 	x->here = BOTTOM(x);
-	x->t = ALIGN(BOTTOM(x), 2*sizeof(C));
+	x->there = ALIGN(BOTTOM(x), 2*sizeof(C));
 	x->o = x->s = x->p = TOP(x);
 	D(x->p) = A(x->p) = 0;
-	x->f = TOP(x) - 2*sizeof(C);
+	x->free = TOP(x) - 2*sizeof(C);
 
-	for (C pair = x->t; pair <= x->f; pair += 2*sizeof(C)) {
-		A(pair) = pair == x->f ? 0 : pair + 2*sizeof(C);
-		D(pair) = pair == x->t ? 0 : pair - 2*sizeof(C);
+	for (C pair = x->there; pair <= x->free; pair += 2*sizeof(C)) {
+		A(pair) = pair == x->free ? 0 : pair + 2*sizeof(C);
+		D(pair) = pair == x->there ? 0 : pair - 2*sizeof(C);
 	}
 
-	x->r = x->d = x->state = x->token = x->in = 0;
+	x->d = x->state = 0;
 	x->base = 10;
-	x->tib = 0;
 
 	return x;
 }
 
 C cons(X* x, C car, C cdr) {
-	if (x->f == x->t) return 0;
-	C pair = x->f;
-	x->f = D(x->f);
+	if (x->free == x->there) return 0;
+	C pair = x->free;
+	x->free = D(x->free);
 	A(pair) = car;
 	D(pair) = cdr;
 	return pair;
@@ -97,9 +97,9 @@ C reclaim(X* x, C pair) {
 		} 
 	} 
 	C tail = N(pair);
-	D(pair) = x->f;
+	D(pair) = x->free;
 	A(pair) = 0;
-	x->f = pair;
+	x->free = pair;
 	return tail;
 }
 
@@ -122,51 +122,42 @@ C length(C pair) {
 	return c; 
 }
 
-#define CALL(x, i, n) \
-	if (n != 0) { \
-		if (x->f == x->t) { return ERR_STACK_OVERFLOW; } \
-		x->r = cons(x, n, AS(ATOM, x->r)); \
-	} \
-	x->ip = i;
+#define CALL(x, i, n)		((n) ? (execute(x, i), (n)) : (i))
 
 C execute(X* x, C xlist) {
-	C result;
-	x->ip = xlist;
-	do {
-		if (x->ip == 0) {
-			if (x->r) {	x->ip = A(x->r); x->r = reclaim(x, x->r);	} 
-			else { return 0; }	
-		}
-		switch (T(x->ip)) {
-			case ATOM: 
-				OF(x, (S(x) = cons(x, A(x->ip), AS(ATOM, S(x)))) == 0);
-				x->ip = N(x->ip); 
-				break;
-			case LIST:
-				OF(x, (S(x) = cons(x, clone(x, A(x->ip)), AS(LIST, S(x)))) == 0);
-				x->ip = N(x->ip);
-				break;
+	C r, p = xlist;
+	while (p) {
+		switch (T(p)) {
+			case ATOM: OF(x, (S(x) = cons(x, A(p), AS(ATOM, S(x)))) == 0); p = N(p); break;
+			case LIST: OF(x, (S(x) = cons(x, clone(x, A(p)), AS(LIST, S(x)))) == 0); p = N(p); break;
 			case PRIM:
-				ERR(x, (result = ((FUNC)A(x->ip))(x)) < 0, result);
-				if (result != 1) { x->ip = N(x->ip); }
+				switch (A(p)) {
+					case 0: 
+						r = A(S(x)); S(x) = reclaim(x, S(x));
+						p = CALL(x, r ? A(N(p)) : A(N(N(p))), N(N(N(p))));
+						break;
+					case 1: break; // JUMP
+					case 2: break; // ZJUMP
+					default: ERR(x, (r = ((FUNC)A(p))(x)) < 0, r); p = N(p); break;
+				};
 				break;
-			case WORD:
-				CALL(x, XT(A(x->ip)), N(x->ip));
-				break;
+			case WORD: p = CALL(x, XT(A(p)), N(p)); break;
 		}
-	} while (1);
+	} 
 }
 
-C parse_token(X* x) {
-	while (*(x->tib + x->in) != 0 && isspace(*(x->tib + x->in))) { x->in++;	}
-	x->token = x->in;
-	while (*(x->tib + x->in) != 0 && !isspace(*(x->tib + x->in))) { x->in++; }
-	return x->in - x->token;
+C parse_token(X* x, B* tib, C* token, C* in) {
+	while (*(tib + *in) != 0 && isspace(*(tib + *in))) { *in += 1;	}
+	*token = *in;
+	while (*(tib + *in) != 0 && !isspace(*(tib + *in))) { *in += 1; }
+	return *in - *token;
 }
 
-C find_token(X* x) {
+C find_token(X* x, B* tib, C token, C in) {
 	C w = x->d;
-	while (w && !(strlen(NFA(w)) == TL(x) && strncmp(NFA(w), TK(x), TL(x)) == 0)) {	w = N(w); }
+	while (w && !(strlen(NFA(w)) == (in - token) && strncmp(NFA(w), tib + token, in - token) == 0)) {
+		w = N(w); 
+	}
 	return w;
 }
 
@@ -175,11 +166,10 @@ C find_token(X* x) {
 C evaluate(X* x, B* str) {
 	C word, result;
 	char *endptr;
-	x->tib = str;
-	x->token = x->in = 0;
+	C token, in = 0;
 	do {
-		if (parse_token(x) == 0) { return 0; }
-		if ((word = find_token(x)) != 0) {
+		if (parse_token(x, str, &token, &in) == 0) { return 0; }
+		if ((word = find_token(x, str, token, in)) != 0) {
 			if (!x->state || IMMEDIATE(word)) {
 				ERR(x, (result = execute(x, XT(word))) != 0, result);
 			} else {
@@ -191,8 +181,8 @@ C evaluate(X* x, B* str) {
 				}
 			}
 		} else {
-			intmax_t number = strtoimax(x->tib + x->token, &endptr, x->base);
-			if (number == 0 && endptr == (char*)(x->tib + x->token)) {
+			intmax_t number = strtoimax(str + token, &endptr, x->base);
+			if (number == 0 && endptr == (char*)(str + token)) {
 				return ERR_UNDEFINED_WORD;
 			} else {
 				OF1(x); S(x) = cons(x, number, AS(ATOM, S(x)));
@@ -256,62 +246,31 @@ C rot(X* x) {
 	C t = S(x); S(x) = N(N(S(x))); D(N(t)) = AS(T(N(t)), N(S(x))); D(S(x)) = AS(T(S(x)), t); return 0;
 }
 
-C lbrace(X* x) {
-	if (!x->state) {
-		x->o = x->s;
-	}
-	x->p = cons(x, 0, AS(LIST, x->p));
+C spush(X* x) { x->p = cons(x, 0, AS(LIST, x->p)); x->s = x->p; return 0; }
+C stack_to_list(X* x) {
+	if (!N(x->p)) { return 0; } // Current stack can be pushed to itself as list ?
+	A(x->p) = reverse(A(x->p), 0);
+	C t = N(x->p);
+	D(x->p) = AS(LIST, A(N(x->p)));
+	A(t) = x->p;
+	x->p = t;
 	x->s = x->p;
-	x->state = 1;
 	return 0;
 }
+C lbracket(X* x) { x->s = x->o; x->state = 0; return 0; }
+C rbracket(X* x) { if (!x->state) { x->o = x->s; }; x->s = x->p; x->state = 1; return 0; }
+C lbrace(X* x) { rbracket(x); spush(x); return 0; }
+C rbrace(X* x) { lbracket(x); stack_to_list(x); return 0; }
+C literal(X* x) { UF1(x); C t = O(x); O(x) = N(O(x)); D(t) = AS(T(t), S(x)); S(x) = t; return 0; }
 
-C rbrace(X* x) {
-	// TODO: It will fail if called on x->s
-	C t = A(x->p);
-	A(x->p) = 0;
-	x->p = reclaim(x, x->p);
-	x->s = x->p;
-	S(x) = cons(x, reverse(t, 0), AS(LIST, S(x)));
-	if (x->s == x->o) x->state = 0;
-	return 0;
+C interpret(X* x) { 
+	UF1(x); 
+	C t = A(S(x)); A(S(x)) = 0; S(x) = reclaim(x, S(x)); 
+	C r = execute(x, t); 
+	reclaim(x, t); 
+	return r; 
 }
-
-C lbracket(X* x) {
-	x->s = x->o;
-	x->state = 0;
-	return 0;
-}
-
-C rbracket(X* x) {
-	x->o = x->s;
-	x->state = 1;
-	return 0;
-}
-
-C eval(X* x) {
-	UF1(x);
-	C t = A(S(x));
-	A(S(x)) = 0;
-	S(x) = reclaim(x, S(x));
-	// TODO: t should be reclaimed later !!!! Here we have a leak !!!
-	return 1;
-}
-
-C exec(X* x) {
-	UF1(x);
-	CALL(x, A(S(x)), N(x->ip));
-	return 1;
-}
-
-C branch(X* x) {
-	UF1(x);
-	AE1(x);
-	C b = A(S(x));
-	S(x) = reclaim(x, S(x));
-	CALL(x, (b ? A(N(x->ip)) : A(N(N(x->ip)))), N(N(N(x->ip))));
-	return 1;
-}
+C exec(X* x) { UF1(x); return execute(x, A(S(x))); }
 
 #define ADD_PRIMITIVE(x, name, func, immediate) \
 	x->d = cons(x, \
@@ -346,10 +305,15 @@ X* bootstrap(X* x) {
 	ADD_PRIMITIVE(x, "[", &lbracket, 2);
 	ADD_PRIMITIVE(x, "]", &rbracket, 2);
 
-	ADD_PRIMITIVE(x, "i", &eval, 0);
+	ADD_PRIMITIVE(x, "spush", &spush, 2);
+	ADD_PRIMITIVE(x, "s>l", &stack_to_list, 2);
+
+	ADD_PRIMITIVE(x, "literal", &literal, 2);
+
+	ADD_PRIMITIVE(x, "i", &interpret, 0);
 	ADD_PRIMITIVE(x, "x", &exec, 0);
 
-	ADD_PRIMITIVE(x, "branch", &branch, 0);
+	ADD_PRIMITIVE(x, "branch", 0, 0);
 
 	return x;
 }
