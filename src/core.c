@@ -39,6 +39,23 @@ C dump_stack(X* x) {
 
 	return 0;
 }
+
+C type(X* x) {
+	UF2(x);
+	C l = A(S(x));
+	C a = A(N(S(x)));
+	S(x) = rcl(x, rcl(x, S(x)));
+	printf("%.*s", l, (B*)a);
+	return 0;
+}
+
+C words(X* x) {
+	C w = x->dict;
+	printf("WORDS: ");
+	while (w) { printf("%s ", NFA(w)); w = N(w); }
+	printf("\n");
+}
+
 // ----------------------------
 
 char *strlwr(char *str)
@@ -59,6 +76,8 @@ void main(int argc, char *argv[]) {
 	X* x = bootstrap(init(block, size));
 
 	ADD_PRIMITIVE(x, ".s", &dump_stack, 0);
+	ADD_PRIMITIVE(x, "words", &words, 0);
+	ADD_PRIMITIVE(x, "type", &type, 0);
 
 	FILE *fptr;
 	B buf[255];
@@ -71,20 +90,20 @@ void main(int argc, char *argv[]) {
 				switch (result) {
 					case -1: printf("Stack overflow\n"); break;
 					case -2: printf("Stack underflow\n"); break;
-					//case -3: printf("Undefined word: %.*s\n", (int)(x->in - x->token), x->tib + x->token); break;
+					//case -3: printf("Undefined word: %.*s\n", (int)(x->in - x->tk), x->ib + x->tk); break;
 					//case -4: printf("Not enough memory\n"); break;
-					//case -5: printf("Zero length name\n"); break;
+					//case -5: printf("Zero lth name\n"); break;
 					case -3: printf("Atom expected\n"); break;
 					//case -7: printf("Return s underflow\n"); break;
 					//case -8: break;
 					default: printf("ERROR: %ld\n", result); break;
 				}
-				//printf("TIB: %s\n", x->tib + x->token);
+				//printf("TIB: %s\n", x->ib + x->tk);
 				return;
 			}
 		}
 	} else {
-		printf("STATE: %ld FREE PAIRS: %ld CONTIGUOUS: %ld TRANSIENT: %ld PILE: %ld\n", x->state, FREE(x), (C)(x->here - BOTTOM(x)), (C)(x->there - (C)x->here), length(x->p));
+		printf("STATE: %ld FREE PAIRS: %ld CONTIGUOUS: %ld TRANSIENT: %ld PILE: %ld\n", x->state, FREE(x), (C)(x->here - BOTTOM(x)), (C)(x->t - (C)x->here), lth(x->p));
 		do {
 			printf("IN: ");
 			fgets(buf, 255, stdin);
@@ -92,19 +111,27 @@ void main(int argc, char *argv[]) {
 			if (result != 0) { 
 				switch (result) {
 					case -1: printf("Stack overflow\n"); break;
-					case -2: printf("Stack underflow\n"); break;
-					//case -3: printf("Undefined word: %.*s\n", (int)(x->in - x->token), x->tib + x->token); break;
+					case -2: 
+						printf("Stack underflow\n"); 
+						printf("STATE: %ld FREE PAIRS: %ld CONTIGUOUS: %ld TRANSIENT: %ld PILE: %ld\n", x->state, FREE(x), (C)(x->here - BOTTOM(x)), (C)(x->t - (C)x->here), lth(x->p));
+						printf("TOKEN: %.*s\n", TL(x), TK(x));
+						printf("x->p %ld x->s %ld x->o %ld\n", x->p, x->s, x->o);
+						printf("lth(S(x)) %ld lth(O(x)) %ld\n", lth(S(x)), lth(O(x)));
+						printf("S(x) "); dump_list(x, S(x), 1);
+						printf("O(x) "); dump_list(x, O(x), 1);
+						break;
+					//case -3: printf("Undefined word: %.*s\n", (int)(x->in - x->tk), x->ib + x->tk); break;
 					case -4: printf("Not enough memory\n"); break;
-					case -5: printf("Zero length name\n"); break;
+					case -5: printf("Zero lth name\n"); break;
 					case -6: printf("Atom expected\n"); break;
 					case -7: printf("Return s underflow\n"); break;
 					case -8: break;
 					default: printf("ERROR: %ld\n", result); break;
 				}
-				//printf("TIB: %s\n", x->tib + x->token);
+				//printf("TIB: %s\n", x->ib + x->tk);
 				return;
 			}
-		printf("STATE: %ld FREE PAIRS: %ld CONTIGUOUS: %ld TRANSIENT: %ld PILE: %ld\n", x->state, FREE(x), (C)(x->here - BOTTOM(x)), (C)(x->there - (C)x->here), length(x->p));
+		printf("STATE: %ld FREE PAIRS: %ld CONTIGUOUS: %ld TRANSIENT: %ld PILE: %ld\n", x->state, FREE(x), (C)(x->here - BOTTOM(x)), (C)(x->t - (C)x->here), lth(x->p));
 			dump_stack(x);
 		} while(1);
 	}
