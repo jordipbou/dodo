@@ -7,42 +7,45 @@
 typedef int8_t			B;
 typedef intptr_t		C;
 typedef struct { 
-	B* here;
-	C there, free, p, s, d, o;
-	C size, state, base;
+	B* here, * tib;
+	C there, free, p, s, o;
+	C dict, size, state;
+	C token, in;
 } X;
 typedef C (*FUNC)(X*);
 
-#define A(pair)							(*((C*)pair))
-#define D(pair)							(*(((C*)pair) + 1))
-#define N(pair)							(D(pair) & -4)
-#define T(pair)							(D(pair) & 3)
-
 enum Types { ATOM, LIST, PRIM, WORD };
 
-#define AS(type, cell)			((cell & -4) | type)
+#define A(pair)								(*((C*)pair))
+#define D(pair)								(*(((C*)pair) + 1))
+#define N(pair)								(D(pair) & -4)
+#define T(pair)								(D(pair) & 3)
 
-#define NFA(word)						((B*)A(A(word)))
-#define XT(word)						(N(A(word)))
-#define PRIMITIVE(word)			(T(word) == ATOM || T(word) == PRIM)
-#define IMMEDIATE(word)			(T(word) == PRIM || T(word) == WORD)
+#define AS(type, cell)				((cell & -4) | type)
 
-#define S(x)								(A(x->s))
-#define O(x)								(A(x->o))
+#define NFA(word)							((B*)A(A(word)))
+#define XT(word)							(N(A(word)))
+#define PRIMITIVE(word)				(T(word) == ATOM || T(word) == PRIM)
+#define IMMEDIATE(word)				(T(word) == PRIM || T(word) == WORD)
 
-#define TK(x)								(x->tib + x->token)
-#define TL(x)								(x->in - x->token)
+#define S(x)									(A(x->s))
+#define O(x)									(A(x->o))
 
-#define FREE(x)							(length(x->free) - 1)
-#define ALIGN(addr, bound)	((((C)addr) + (bound - 1)) & ~(bound - 1))
+#define TK(x)									(x->tib + x->token)
+#define TL(x)									(x->in - x->token)
 
-#define BOTTOM(x)						(((B*)x) + sizeof(X))
-#define TOP(x)							(ALIGN(((B*)x) + x->size - (2*sizeof(C)) - 1, (2*sizeof(C))))
+#define FREE(x)								(length(x->free) - 1)
+#define ALIGN(addr, bound)		((((C)addr) + (bound - 1)) & ~(bound - 1))
+#define RESERVED(x)						((x->there) - ((C)x->here))
 
-#define ERR_STACK_OVERFLOW	-1
-#define ERR_STACK_UNDERFLOW	-2
-#define ERR_UNDEFINED_WORD	-3
-#define ERR_ATOM_EXPECTED		-4
+#define BOTTOM(x)							(((B*)x) + sizeof(X))
+#define TOP(x)								(ALIGN(((B*)x) + x->size - (2*sizeof(C)) - 1, (2*sizeof(C))))
+
+#define ERR_STACK_OVERFLOW		-1
+#define ERR_STACK_UNDERFLOW		-2
+#define ERR_UNDEFINED_WORD		-3
+#define ERR_ATOM_EXPECTED			-4
+#define ERR_NOT_ENOUGH_MEMORY	-5
 
 #define ERR(x, cond, err)		if (cond) { return err; }
 #define OF(x, cond)					ERR(x, cond, ERR_STACK_OVERFLOW)
@@ -69,8 +72,7 @@ X* init(B* block, C size) {
 		D(pair) = pair == x->there ? 0 : pair - 2*sizeof(C);
 	}
 
-	x->d = x->state = 0;
-	x->base = 10;
+	x->dict = x->state = 0;
 
 	return x;
 }
@@ -84,9 +86,9 @@ C cons(X* x, C car, C cdr) {
 	return pair;
 }
 
-C clone(X* x, C pair) {
-	if (!pair) return 0;
-	return cons(x, T(pair) == LIST ? clone(x, A(pair)) : A(pair), AS(T(pair), clone(x, N(pair))));
+C clone(X* x, C p) { 
+	if (!p) return 0;
+	return cons(x, T(p) == LIST ? clone(x, A(p)) : A(p), AS(T(p), clone(x, N(p))));
 }
 
 C reclaim(X* x, C pair) {
@@ -103,24 +105,8 @@ C reclaim(X* x, C pair) {
 	return tail;
 }
 
-C reverse(C pair, C list) {
-	if (pair != 0) {
-		C t = N(pair);
-		D(pair) = AS(T(pair), list);
-		return reverse(t, pair);
-	} else {
-		return list;
-	}
-}
-
-C length(C pair) { 
-	C c = 0; 
-	while (pair) { 
-		c++; 
-		pair = N(pair); 
-	} 
-	return c; 
-}
+C reverse(C p, C l) { C t; return p ? t = N(p), D(p) = AS(T(p), l), reverse(t, p) : l; }
+C length(C p) { C c = 0; while (p) { c++; p = N(p); } return c; }
 
 #define CALL(x, i, n)		((n) ? (execute(x, i), (n)) : (i))
 
@@ -146,16 +132,16 @@ C execute(X* x, C xlist) {
 	} 
 }
 
-C parse_token(X* x, B* tib, C* token, C* in) {
-	while (*(tib + *in) != 0 && isspace(*(tib + *in))) { *in += 1;	}
-	*token = *in;
-	while (*(tib + *in) != 0 && !isspace(*(tib + *in))) { *in += 1; }
-	return *in - *token;
+C parse_token(X* x) {
+	while (*(x->tib + x->in) != 0 && isspace(*(x->tib + x->in))) { x->in++;	}
+	x->token = x->in;
+	while (*(x->tib + x->in) != 0 && !isspace(*(x->tib + x->in))) { x->in++; }
+	return TL(x);
 }
 
-C find_token(X* x, B* tib, C token, C in) {
-	C w = x->d;
-	while (w && !(strlen(NFA(w)) == (in - token) && strncmp(NFA(w), tib + token, in - token) == 0)) {
+C find_token(X* x) {
+	C w = x->dict;
+	while (w && !(strlen(NFA(w)) == TL(x) && strncmp(NFA(w), TK(x), TL(x)) == 0)) {
 		w = N(w); 
 	}
 	return w;
@@ -166,10 +152,11 @@ C find_token(X* x, B* tib, C token, C in) {
 C evaluate(X* x, B* str) {
 	C word, result;
 	char *endptr;
-	C token, in = 0;
+	x->tib = str;
+	x->token = x->in = 0;
 	do {
-		if (parse_token(x, str, &token, &in) == 0) { return 0; }
-		if ((word = find_token(x, str, token, in)) != 0) {
+		if (parse_token(x) == 0) { return 0; }
+		if ((word = find_token(x)) != 0) {
 			if (!x->state || IMMEDIATE(word)) {
 				ERR(x, (result = execute(x, XT(word))) != 0, result);
 			} else {
@@ -181,8 +168,8 @@ C evaluate(X* x, B* str) {
 				}
 			}
 		} else {
-			intmax_t number = strtoimax(str + token, &endptr, x->base);
-			if (number == 0 && endptr == (char*)(str + token)) {
+			intmax_t number = strtoimax(TK(x), &endptr, 10);
+			if (number == 0 && endptr == (char*)(TK(x))) {
 				return ERR_UNDEFINED_WORD;
 			} else {
 				OF1(x); S(x) = cons(x, number, AS(ATOM, S(x)));
@@ -211,36 +198,27 @@ BINOP(eq, ==)
 
 BINOP(and, &)
 BINOP(or, |)
-
-C invert(X* x) {
-	UF1(x); AE1(x);
-	A(S(x)) = ~A(S(x));
-	return 0;
-}
+C invert(X* x) { UF1(x); AE1(x); A(S(x)) = ~A(S(x)); return 0; }
 
 C duplicate(X* x) {
 	UF1(x);
 	OF(x, (S(x) = cons(x, T(S(x)) == LIST ? clone(x, A(S(x))) : A(S(x)), AS(T(S(x)), S(x)))) == 0);
 	return 0;
 }
-
 C swap(X* x) {
 	UF2(x);
 	C t = N(S(x)); D(S(x)) = AS(T(S(x)), N(N(S(x)))); D(t) = AS(T(t), S(x)); S(x) = t; 
 	return 0;
 }
-
 C drop(X* x) {
 	S(x) = reclaim(x, S(x));
 	return 0;
 }
-
 C over(X* x) {
 	UF2(x); OF1(x);
 	S(x) = cons(x, T(N(S(x))) == LIST ? clone(x, A(N(S(x)))) : A(N(S(x))), AS(LIST, S(x)));
 	return 0;
 }
-
 C rot(X* x) { 
 	UF3(x); 
 	C t = S(x); S(x) = N(N(S(x))); D(N(t)) = AS(T(N(t)), N(S(x))); D(S(x)) = AS(T(S(x)), t); return 0;
@@ -265,18 +243,57 @@ C literal(X* x) { UF1(x); C t = O(x); O(x) = N(O(x)); D(t) = AS(T(t), S(x)); S(x
 
 C interpret(X* x) { 
 	UF1(x); 
-	C t = A(S(x)); A(S(x)) = 0; S(x) = reclaim(x, S(x)); 
-	C r = execute(x, t); 
+	// TODO: Expects a list?
+	C t = S(x); S(x) = N(S(x)); D(t) = AS(LIST, 0);
+	C r = execute(x, A(t)); 
 	reclaim(x, t); 
 	return r; 
 }
-C exec(X* x) { UF1(x); return execute(x, A(S(x))); }
+C exec(X* x) { UF1(x); /* TODO: Expects a list? */ return execute(x, A(S(x))); }
+
+C grow(X* x) { 
+	if (A(x->there) == (x->there + 2*sizeof(C))) { 
+		x->there += 2*sizeof(C);
+		D(x->there) = 0;
+		return 0;
+	} else {
+		return ERR_NOT_ENOUGH_MEMORY;
+	}
+}
+C shrink(X* x) {
+	// TODO
+}
+
+C compile_str(X* x) {
+	x->token = ++x->in;
+	while (*(x->tib + x->in) != 0 && *(x->tib + x->in) != '"') { x->in++; }
+	B* here = x->here;
+	while (RESERVED(x) < (TL(x) + 1)) { ERR(x, grow(x) != 0, ERR_NOT_ENOUGH_MEMORY); }
+	for (C i; i < TL(x); i++) { here[i] = *(x->tib + x->token + i); }
+	here[TL(x)] = 0;
+	S(x) = cons(x, (C)here, AS(ATOM, S(x)));
+	S(x) = cons(x, TL(x), AS(ATOM, S(x)));
+	x->here += TL(x) + 1;
+	x->in++;
+	return 0;
+}
+
+C type(X* x) {
+	UF2(x);
+	C l = A(S(x));
+	C a = A(N(S(x)));
+	S(x) = reclaim(x, reclaim(x, S(x)));
+	printf("%.*s", l, (B*)a);
+	return 0;
+}
+
+// TODO: Add dict for accessing its stack and append, to add to another stack
 
 #define ADD_PRIMITIVE(x, name, func, immediate) \
-	x->d = cons(x, \
+	x->dict = cons(x, \
 		cons(x, (C)name, AS(ATOM, \
 		cons(x, (C)func, AS(PRIM, 0)))), \
-	AS(immediate, x->d));
+	AS(immediate, x->dict));
 
 X* bootstrap(X* x) {
 	ADD_PRIMITIVE(x, "+", &add, 0);
@@ -314,6 +331,11 @@ X* bootstrap(X* x) {
 	ADD_PRIMITIVE(x, "x", &exec, 0);
 
 	ADD_PRIMITIVE(x, "branch", 0, 0);
+
+	ADD_PRIMITIVE(x, "grow", &grow, 0);
+
+	ADD_PRIMITIVE(x, "s\"", &compile_str, 2);
+	ADD_PRIMITIVE(x, "type", &type, 0);
 
 	return x;
 }

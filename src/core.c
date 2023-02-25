@@ -5,7 +5,7 @@
 
 // -------------------------
 C find_prim(X* x, C xt) {
-	C word = x->d;
+	C word = x->dict;
 	while (word && A(XT(word)) != xt) { 
 		word = N(word); }
 	return word;
@@ -84,6 +84,7 @@ void main(int argc, char *argv[]) {
 			}
 		}
 	} else {
+		printf("STATE: %ld FREE PAIRS: %ld CONTIGUOUS: %ld TRANSIENT: %ld PILE: %ld\n", x->state, FREE(x), (C)(x->here - BOTTOM(x)), (C)(x->there - (C)x->here), length(x->p));
 		do {
 			printf("IN: ");
 			fgets(buf, 255, stdin);
@@ -103,6 +104,7 @@ void main(int argc, char *argv[]) {
 				//printf("TIB: %s\n", x->tib + x->token);
 				return;
 			}
+		printf("STATE: %ld FREE PAIRS: %ld CONTIGUOUS: %ld TRANSIENT: %ld PILE: %ld\n", x->state, FREE(x), (C)(x->here - BOTTOM(x)), (C)(x->there - (C)x->here), length(x->p));
 			dump_stack(x);
 		} while(1);
 	}

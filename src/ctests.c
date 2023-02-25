@@ -51,7 +51,7 @@ void test_X_block_initialization() {
 	TEST_ASSERT_EQUAL_INT(ALIGN(((B*)x) + size - 2*sizeof(C) - 1, 2*sizeof(C)), TOP(x));
 	TEST_ASSERT_EQUAL_INT(TOP(x) - 2*sizeof(C), x->free);
 
-	TEST_ASSERT_EQUAL_INT(0, x->d);
+	TEST_ASSERT_EQUAL_INT(0, x->dict);
 	TEST_ASSERT_EQUAL_INT(0, S(x));
 	TEST_ASSERT_EQUAL_INT(0, x->state);
 }
