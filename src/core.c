@@ -57,6 +57,7 @@ C words(X* x) {
 }
 
 // ----------------------------
+
 char *strlwr(char *str)
 {
   unsigned char *p = (unsigned char *)str;
