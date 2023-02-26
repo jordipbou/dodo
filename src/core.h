@@ -231,7 +231,9 @@ C compile_str(X* x) {
 	while (*(x->ib + x->in) != 0 && *(x->ib + x->in) != '"') { x->in++; }
 	B* here = x->here;
 	while (RESERVED(x) < (TL(x) + 1)) { ERR(x, grow(x) != 0, ERR_NOT_ENOUGH_MEMORY); }
-	for (C i; i < TL(x); i++) { here[i] = *(x->ib + x->tk + i); }
+	for (C i = 0; i < TL(x); i++) { 
+		here[i] = *(x->ib + x->tk + i); 
+	}
 	here[TL(x)] = 0;
 	S(x) = cns(x, (C)here, AS(ATOM, S(x)));
 	S(x) = cns(x, TL(x), AS(ATOM, S(x)));
@@ -258,6 +260,12 @@ C append(X* x) {
 	}
 	return 0;
 }
+
+#define POP(x, v)		C v = A(S(x)); A(S(x)) = 0; /* <- Not reclaim lists now */ S(x) = rcl(x, S(x));
+#define PUSH(x, v)	S(x) = cns(x, (C)v, AS(ATOM, S(x)));
+
+C parse(X* x) { POP(x, c); x->tk = x->in; PUSH(x, TK(x)); PRS(x, TC(x) != c); if (TC(x) != 0) x->in++; PUSH(x, TL(x)); return 0; }
+C parse_name(X* x) { prs_tk(x); PUSH(x, TK(x)); PUSH(x, TL(x)); return 0; }
 
 #define ADD_PRIMITIVE(x, name, func, immediate) \
 	x->dict = cns(x, \
@@ -308,6 +316,9 @@ X* bootstrap(X* x) {
 
 	ADD_PRIMITIVE(x, "latest", &latest, 0);
 	ADD_PRIMITIVE(x, "append", &append, 0);
+
+	ADD_PRIMITIVE(x, "parse", &parse, 0);
+	ADD_PRIMITIVE(x, "parse-name", &parse_name, 0);
 
 	return x;
 }

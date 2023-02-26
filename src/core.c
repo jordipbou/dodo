@@ -56,6 +56,15 @@ C words(X* x) {
 	printf("\n");
 }
 
+C see(X* x) {
+	C w;
+	if (prs_tk(x) == 0) return ERR_UNDEFINED_WORD;
+	if ((w = fnd_tk(x)) == 0) return ERR_UNDEFINED_WORD;
+	printf(": %s ", NFA(w));
+	dump_list(x, XT(w), 1);
+	printf(";\n");
+}
+
 // ----------------------------
 
 char *strlwr(char *str)
@@ -78,6 +87,7 @@ void main(int argc, char *argv[]) {
 	ADD_PRIMITIVE(x, ".s", &dump_stack, 0);
 	ADD_PRIMITIVE(x, "words", &words, 0);
 	ADD_PRIMITIVE(x, "type", &type, 0);
+	ADD_PRIMITIVE(x, "see", &see, 0);
 
 	FILE *fptr;
 	B buf[255];
@@ -104,6 +114,9 @@ void main(int argc, char *argv[]) {
 		}
 	} else {
 		printf("STATE: %ld FREE PAIRS: %ld CONTIGUOUS: %ld TRANSIENT: %ld PILE: %ld\n", x->state, FREE(x), (C)(x->here - BOTTOM(x)), (C)(x->t - (C)x->here), lth(x->p));
+		printf("CONTIGUOUS MEMORY: ");
+		for (C i = 0; i < (C)(x->here - BOTTOM(x)); i++) { printf("%c", (BOTTOM(x))[i]); }
+		printf("\n");
 		do {
 			printf("IN: ");
 			fgets(buf, 255, stdin);
@@ -114,6 +127,9 @@ void main(int argc, char *argv[]) {
 					case -2: 
 						printf("Stack underflow\n"); 
 						printf("STATE: %ld FREE PAIRS: %ld CONTIGUOUS: %ld TRANSIENT: %ld PILE: %ld\n", x->state, FREE(x), (C)(x->here - BOTTOM(x)), (C)(x->t - (C)x->here), lth(x->p));
+		printf("CONTIGUOUS MEMORY: ");
+		for (C i = 0; i < (C)(x->here - BOTTOM(x)); i++) { printf("%c", (BOTTOM(x))[i]); }
+		printf("\n");
 						printf("TOKEN: %.*s\n", TL(x), TK(x));
 						printf("x->p %ld x->s %ld x->o %ld\n", x->p, x->s, x->o);
 						printf("lth(S(x)) %ld lth(O(x)) %ld\n", lth(S(x)), lth(O(x)));
@@ -132,6 +148,9 @@ void main(int argc, char *argv[]) {
 				return;
 			}
 		printf("STATE: %ld FREE PAIRS: %ld CONTIGUOUS: %ld TRANSIENT: %ld PILE: %ld\n", x->state, FREE(x), (C)(x->here - BOTTOM(x)), (C)(x->t - (C)x->here), lth(x->p));
+		printf("CONTIGUOUS MEMORY: ");
+		for (C i = 0; i < (C)(x->here - BOTTOM(x)); i++) { printf("%c", (BOTTOM(x))[i]); }
+		printf("\n");
 			dump_stack(x);
 		} while(1);
 	}
