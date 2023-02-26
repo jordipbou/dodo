@@ -338,6 +338,31 @@ void test_INNER_execute_call() {
 	TEST_ASSERT_EQUAL_INT(20, A(N(S(x))));
 }
 
+void test_INNER_execute_branch() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	C b = 
+		cns(x, BRANCH, AS(PRIM,
+		cns(x, cns(x, 7, AS(ATOM, 0)), AS(LIST,
+		cns(x, cns(x, 11, AS(ATOM, 0)), AS(LIST, 0))))));
+
+	S(x) = cns(x, 1, AS(ATOM, 0));
+
+	execute(x, b);
+
+	TEST_ASSERT_EQUAL_INT(1, lth(S(x)));
+	TEST_ASSERT_EQUAL_INT(7, A(S(x)));
+
+	S(x) = cns(x, 0, AS(ATOM, 0));
+
+	execute (x, b);
+
+	TEST_ASSERT_EQUAL_INT(1, lth(S(x)));
+	TEST_ASSERT_EQUAL_INT(11, A(S(x)));
+}
+
 // PILE PRIMITIVES
 
 void test_PILE_spush() {
@@ -2170,6 +2195,7 @@ int main() {
 	RUN_TEST(test_INNER_execute_list);
 	RUN_TEST(test_INNER_execute_primitive);
 	RUN_TEST(test_INNER_execute_call);
+	RUN_TEST(test_INNER_execute_branch);
 
 	// PILE PRIMITIVES
 	RUN_TEST(test_PILE_spush);

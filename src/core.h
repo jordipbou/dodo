@@ -13,9 +13,10 @@ typedef int8_t			B;
 typedef intptr_t		C;
 typedef struct { 
 	B* here, * ib;
-	C t, f, p, s, o;
+	C t, f, p, s, o, r;
 	C dict, size, state;
 	C tk, in;
+	C ip;
 } X;
 typedef C (*FUNC)(X*);
 
@@ -81,7 +82,7 @@ X* init(B* block, C size) {
 		D(pair) = pair == x->t ? 0 : pair - 2*sizeof(C);
 	}
 
-	x->dict = x->state = 0;
+	x->r = x->dict = x->state = 0;
 
 	return x;
 }
@@ -93,24 +94,42 @@ C rcl(X* x, C p) { C t; RL(x, p); return !p ? 0 : (t = N(p), D(p) = x->f, A(p) =
 C rvs(C p, C l) { C t; return p ? t = N(p), D(p) = AS(T(p), l), rvs(t, p) : l; }
 C lth(C p) { C c = 0; while (p) { c++; p = N(p); } return c; }
 
-#define CALL(x, i, n)		((n) ? (execute(x, i), (n)) : (i))
+#define NEXT					x->ip = N(x->ip)
 C execute(X* x, C xlist) {
-	C r, p = xlist;
-	while (p) {
-		switch (T(p)) {
-			case ATOM: ERR_OF(x, (S(x) = cns(x, A(p), AS(ATOM, S(x)))) == 0); p = N(p); break;
-			case LIST: ERR_OF(x, (S(x) = cns(x, cln(x, A(p)), AS(LIST, S(x)))) == 0); p = N(p); break;
-			case PRIM:
-				switch (A(p)) {
-					case BRANCH: r = A(S(x)); RSX;	p = CALL(x, r ? A(N(p)) : A(N(N(p))), N(N(N(p)))); break;
+	C r;
+	x->ip = xlist;	
+	do {
+		if (x->ip == 0) {
+			if (x->r) {	x->ip = A(x->r); x->r = rcl(x, rcl(x, x->r)); } 
+			else { return 0; }
+		}
+		switch (T(x->ip)) {
+			case ATOM: ERR_OF(x, (S(x) = cns(x, A(x->ip), AS(ATOM, S(x)))) == 0); NEXT; break;
+			case LIST: ERR_OF(x, (S(x) = cns(x, cln(x, A(x->ip)), AS(LIST, S(x)))) == 0); NEXT; break;
+			case PRIM: 
+				switch (A(x->ip)) {
+					case BRANCH:
+						r = A(S(x)); RSX;
+						if (N(N(N(x->ip)))) {
+							x->r = cns(x, r, AS(ATOM, x->r));								// Branch called (0 / 1)
+							x->r = cns(x, N(N(N(x->ip))), AS(ATOM, x->r));	// Return address
+						}
+						x->ip = r ? A(N(x->ip)) : A(N(N(x->ip)));
+						break;
 					case JUMP: break;
 					case ZJUMP: break;
-					default: ERR(x, (r = ((FUNC)A(p))(x)) < 0, r); p = N(p); break;
-				};
+					default: ERR(x, (r = ((FUNC)A(x->ip))(x)) < 0, r); if (r != 1) NEXT; break;
+				}
 				break;
-			case WORD: p = CALL(x, XT(A(p)), N(p)); break;
+			case WORD: 
+				if (N(x->ip)) {
+					x->r = cns(x, A(x->ip), AS(ATOM, x->r));	// Word called
+					x->r = cns(x, N(x->ip), AS(ATOM, x->r));	// Return address
+				}
+				x->ip = XT(A(x->ip));
+				break;
 		}
-	} 
+	} while(1);
 }
 
 C prs_tk(X* x) { PRS(x, isspace(TC(x))); x->tk = x->in; PRS(x, !isspace(TC(x))); return TL(x); }
@@ -211,7 +230,16 @@ C interpret(X* x) {
 	rcl(x, t); 
 	return r; 
 }
-C exec(X* x) { UF1(x); /* TODO: Expects a list? */ return execute(x, A(S(x))); }
+//C exec(X* x) { UF1(x); /* TODO: Expects a list? */ return execute(x, A(S(x))); }
+C exec(X* x) {
+	UF1(x);
+	if (N(x->ip)) {
+		x->r = cns(x, -1, AS(ATOM, x->r));
+		x->r = cns(x, N(x->ip), AS(ATOM, x->r));
+	}
+	x->ip = A(S(x));
+	return 1;
+}
 
 C grow(X* x) { 
 	if (A(x->t) == (x->t + 2*sizeof(C))) { 
