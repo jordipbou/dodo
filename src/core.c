@@ -151,6 +151,7 @@ void main(int argc, char *argv[]) {
 		printf("CONTIGUOUS MEMORY: ");
 		for (C i = 0; i < (C)(x->here - BOTTOM(x)); i++) { printf("%c", (BOTTOM(x))[i]); }
 		printf("\n");
+		if (x->state) { printf("Old Data Stack\n"); dump_list(x, O(x), 0); }
 			dump_stack(x);
 		} while(1);
 	}

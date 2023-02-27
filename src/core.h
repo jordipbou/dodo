@@ -93,6 +93,9 @@ C rcl(X* x, C p) { C t; RL(x, p); return !p ? 0 : (t = N(p), D(p) = x->f, A(p) =
 C rvs(C p, C l) { C t; return p ? t = N(p), D(p) = AS(T(p), l), rvs(t, p) : l; }
 C lth(C p) { C c = 0; while (p) { c++; p = N(p); } return c; }
 
+#define POP(x, v)		C v = A(S(x)); A(S(x)) = 0; /* <- Not reclaim lists now */ S(x) = rcl(x, S(x));
+#define PUSH(x, v)	S(x) = cns(x, (C)v, AS(ATOM, S(x)));
+
 #define CALL(x, i, n)		((n) ? (execute(x, i), (n)) : (i))
 C execute(X* x, C xlist) {
 	C r, p = xlist;
@@ -173,11 +176,11 @@ C swap(X* x) {
 	return 0;
 }
 C drop(X* x) { RSX; return 0; }
-C over(X* x) {
-	UF2(x); OF1(x);
-	S(x) = cns(x, T(N(S(x))) == LIST ? cln(x, A(N(S(x)))) : A(N(S(x))), AS(LIST, S(x)));
-	return 0;
-}
+C over(X* x) { POP(x, a); POP(x, b); PUSH(x, b); PUSH(x, a); PUSH(x, b); return 0; }
+	//UF2(x); OF1(x);
+	//S(x) = cns(x, T(N(S(x))) == LIST ? cln(x, A(N(S(x)))) : A(N(S(x))), AS(LIST, S(x)));
+	//return 0;
+//}
 C rot(X* x) { 
 	UF3(x); 
 	C t = S(x); S(x) = N(N(S(x))); D(N(t)) = AS(T(N(t)), N(S(x))); D(S(x)) = AS(T(S(x)), t); return 0;
@@ -242,8 +245,6 @@ C compile_str(X* x) {
 	return 0;
 }
 
-C latest(X* x) { S(x) = cns(x, (C)&x->dict, AS(ATOM, S(x))); return 0; }
-
 C append(X* x) {
 	UF2(x);
 	if (T(N(S(x))) == LIST) {
@@ -261,11 +262,65 @@ C append(X* x) {
 	return 0;
 }
 
-#define POP(x, v)		C v = A(S(x)); A(S(x)) = 0; /* <- Not reclaim lists now */ S(x) = rcl(x, S(x));
-#define PUSH(x, v)	S(x) = cns(x, (C)v, AS(ATOM, S(x)));
+C latest(X* x) { S(x) = cns(x, (C)&x->dict, AS(ATOM, S(x))); return 0; }
+C here(X* x) { PUSH(x, x->here); return 0; }
 
 C parse(X* x) { POP(x, c); x->tk = x->in; PUSH(x, TK(x)); PRS(x, TC(x) != c); if (TC(x) != 0) x->in++; PUSH(x, TL(x)); return 0; }
 C parse_name(X* x) { prs_tk(x); PUSH(x, TK(x)); PUSH(x, TL(x)); return 0; }
+
+C allot(X* x) {
+	POP(x, b);
+	if (b == 0) {
+		return 0;
+	} else if (b > 0) { 
+		while (RESERVED(x) < b) { ERR(x, grow(x) != 0, ERR_NOT_ENOUGH_MEMORY); }
+		x->here += b;
+	} else if (b < 0) {
+		// TODO
+	}
+}
+
+C sliteral(X* x) {
+	duplicate(x);
+	B* here = x->here;
+	allot(x);
+	POP(x, l);
+	POP(x, a);
+	strncpy(here, a, l);
+	here[l] = 0;
+	PUSH(x, here);
+	PUSH(x, l);
+	return 0;
+}
+
+C colon(X* x) {
+	latest(x);
+	parse_name(x);
+	sliteral(x);
+	drop(x);
+	lbrace(x);
+	literal(x);
+	return 0;
+}
+
+C semicolon(X* x) {
+	rbrace(x);
+	append(x);
+	return 0;
+}
+
+C postpone(X* x) {
+	prs_tk(x);
+	C w = fnd_tk(x);
+	if (!w) return ERR_UNDEFINED_WORD;
+	S(x) = cns(x, w, AS(WORD, S(x)));
+	return 0;
+}
+
+C store(X* x) { POP(x, a); POP(x, v); *((C*)a) = (C)v; return 0; }
+C fetch(X* x) { POP(x, a); PUSH(x, *((C*)a)); return 0; }
+C bstore(X* x) { POP(x, a); POP(x, v); *((B*)a) = (B)v; return 0; }
+C bfetch(X* x) { POP(x, a); PUSH(x, *((B*)a)); return 0; }
 
 #define ADD_PRIMITIVE(x, name, func, immediate) \
 	x->dict = cns(x, \
@@ -319,6 +374,22 @@ X* bootstrap(X* x) {
 
 	ADD_PRIMITIVE(x, "parse", &parse, 0);
 	ADD_PRIMITIVE(x, "parse-name", &parse_name, 0);
+
+	ADD_PRIMITIVE(x, ":", &colon, 2);
+	ADD_PRIMITIVE(x, ";", &semicolon, 2);
+
+	ADD_PRIMITIVE(x, "here", &here, 0);
+	ADD_PRIMITIVE(x, "allot", &allot, 0);
+
+	ADD_PRIMITIVE(x, "!", &store, 0);
+	ADD_PRIMITIVE(x, "@", &fetch, 0);
+	ADD_PRIMITIVE(x, "b!", &bstore, 0);
+	ADD_PRIMITIVE(x, "b@", &bfetch, 0);
+
+	ADD_PRIMITIVE(x, "sliteral", &sliteral, 2);
+
+	ADD_PRIMITIVE(x, "postpone", &postpone, 2);
+	ADD_PRIMITIVE(x, "p", &postpone, 2);
 
 	return x;
 }
