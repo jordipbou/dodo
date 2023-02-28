@@ -1,13 +1,11 @@
-latest { s" \" 10 parse drop drop } append
-latest { s" decimal" 10 base ! } append
-latest { s" :" parse-name postpone { postpone sliteral } append immediate
-latest { s" ;" postpone } latest swap append } append immediate
-\ It seems to work up until here. Next words should be created with : ;
-latest { s" create"
-	parse-name postpone { postpone sliteral
-	postpone [ align here postpone ] postpone literal
-	postpone } latest swap append } append
-latest { s" variable" create 0 , } append
+: \ 10 parse drop drop ;
+: , here cell allot ! ;
+: create p : p [ here p ] p literal p ; ;
+: variable create 0 , ;
+variable base
+: decimal ;
+: cells cell * ;
+: execute i ;
 
 \ This file contains the code for ttester, a utility for testing Forth words,
 \ as developed by several authors (see below), together with some explanations

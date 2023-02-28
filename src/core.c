@@ -2,12 +2,19 @@
 #include<stdio.h>
 #include<ctype.h>
 #include"core.h"
+#include<signal.h>
+
+void sig_handler(int signo) {
+	if (signo == SIGINT) printf("received SIGINT\n");
+	if (signo == SIGSEGV) printf("received SIGSEGV\n");
+}
 
 // -------------------------
 C find_prim(X* x, C xt) {
 	C word = x->dict;
-	while (word && A(XT(word)) != xt) { 
-		word = N(word); }
+	while (word && !(A(XT(word)) == xt && N(XT(word)) == 0)) {
+		word = N(word); 
+	}
 	return word;
 }
 
@@ -54,15 +61,17 @@ C words(X* x) {
 	printf("WORDS: ");
 	while (w) { printf("%s ", NFA(w)); w = N(w); }
 	printf("\n");
+	return 0;
 }
 
 C see(X* x) {
 	C w;
-	if (prs_tk(x) == 0) return ERR_UNDEFINED_WORD;
-	if ((w = fnd_tk(x)) == 0) return ERR_UNDEFINED_WORD;
+	if (prs_tk(x) == 0) return ERR_UW;
+	if ((w = fnd_tk(x)) == 0) return ERR_UW;
 	printf(": %s ", NFA(w));
 	dump_list(x, XT(w), 1);
 	printf(";\n");
+	return 0;
 }
 
 // ----------------------------
@@ -80,6 +89,10 @@ char *strlwr(char *str)
 }
 
 void main(int argc, char *argv[]) {
+	if (signal(SIGINT, sig_handler) == SIG_ERR) printf("can't catch SIGINT\n");
+	if (signal(SIGSEGV, sig_handler) == SIG_ERR) printf("can't catch SIGSEGV\n");
+
+
 	C size = 4096;
 	B block[size];
 	X* x = bootstrap(init(block, size));
@@ -97,18 +110,13 @@ void main(int argc, char *argv[]) {
 		while (fgets(buf, 255, fptr)) {
 			result = evaluate(x, strlwr(buf));
 			if (result != 0) { 
-				switch (result) {
-					case -1: printf("Stack overflow\n"); break;
-					case -2: printf("Stack underflow\n"); break;
-					//case -3: printf("Undefined word: %.*s\n", (int)(x->in - x->tk), x->ib + x->tk); break;
-					//case -4: printf("Not enough memory\n"); break;
-					//case -5: printf("Zero lth name\n"); break;
-					case -3: printf("Atom expected\n"); break;
-					//case -7: printf("Return s underflow\n"); break;
-					//case -8: break;
-					default: printf("ERROR: %ld\n", result); break;
-				}
-				//printf("TIB: %s\n", x->ib + x->tk);
+				printf("ERROR: %ld\n", result);
+				printf("STATE: %ld FREE PAIRS: %ld CONTIGUOUS: %ld TRANSIENT: %ld PILE: %ld\n", x->state, FREE(x), (C)(x->here - BOTTOM(x)), (C)(x->t - (C)x->here), lth(x->p));
+				printf("CONTIGUOUS MEMORY: ");
+				for (C i = 0; i < (C)(x->here - BOTTOM(x)); i++) { printf("%c", (BOTTOM(x))[i]); }
+				printf("\n");
+				printf("TIB: %s\n", x->ib + x->tk);
+				printf("TOKEN: %.*s\n", TL(x), TK(x));
 				return;
 			}
 		}
@@ -145,12 +153,23 @@ void main(int argc, char *argv[]) {
 					default: printf("ERROR: %ld\n", result); break;
 				}
 				//printf("TIB: %s\n", x->ib + x->tk);
+			if (result != 0) { 
+				printf("ERROR: %ld\n", result);
+				printf("STATE: %ld FREE PAIRS: %ld CONTIGUOUS: %ld TRANSIENT: %ld PILE: %ld\n", x->state, FREE(x), (C)(x->here - BOTTOM(x)), (C)(x->t - (C)x->here), lth(x->p));
+				printf("CONTIGUOUS MEMORY: ");
+				for (C i = 0; i < (C)(x->here - BOTTOM(x)); i++) { printf("%c", (BOTTOM(x))[i]); }
+				printf("\n");
+				printf("TIB: %s\n", x->ib + x->tk);
+				printf("TOKEN: %.*s\n", TL(x), TK(x));
+				return;
+			}
 				return;
 			}
 		printf("STATE: %ld FREE PAIRS: %ld CONTIGUOUS: %ld TRANSIENT: %ld PILE: %ld\n", x->state, FREE(x), (C)(x->here - BOTTOM(x)), (C)(x->t - (C)x->here), lth(x->p));
 		printf("CONTIGUOUS MEMORY: ");
 		for (C i = 0; i < (C)(x->here - BOTTOM(x)); i++) { printf("%c", (BOTTOM(x))[i]); }
 		printf("\n");
+		printf("TIB: %s", x->ib);
 		if (x->state) { printf("Old Data Stack\n"); dump_list(x, O(x), 0); }
 			dump_stack(x);
 		} while(1);

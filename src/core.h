@@ -49,22 +49,23 @@ enum Prims { BRANCH, JUMP, ZJUMP };
 #define BOTTOM(x)							(((B*)x) + sizeof(X))
 #define TOP(x)								(ALIGN(((B*)x) + x->size - (2*sizeof(C)) - 1, (2*sizeof(C))))
 
-#define ERR_STACK_OVERFLOW		-1
-#define ERR_STACK_UNDERFLOW		-2
-#define ERR_UNDEFINED_WORD		-3
-#define ERR_ATOM_EXPECTED			-4
-#define ERR_NOT_ENOUGH_MEMORY	-5
+#define ERR_SOF								-1		// Stack overflow
+#define ERR_SUF								-2		// Stack underflow
+#define ERR_UW								-3		// Undefined word
+#define ERR_AE								-4		// Atom expected
+#define ERR_NEM								-5		// Not enough memory
+#define ERR_ZLN								-6		// Zero length name
 
 #define ERR(x, cond, err)		if (cond) { return err; }
-#define ERR_OF(x, cond)			ERR(x, cond, ERR_STACK_OVERFLOW)
-#define ERR_UF(x, cond)			ERR(x, cond, ERR_STACK_UNDERFLOW)
+#define ERR_OF(x, cond)			ERR(x, cond, ERR_SOF)
+#define ERR_UF(x, cond)			ERR(x, cond, ERR_SUF)
 #define OF(x)								(x->f == x->t)
 #define OF1(x)							ERR_OF(x, OF(x))
 #define UF1(x)							ERR_UF(x, S(x) == 0)
 #define UF2(x)							ERR_UF(x, S(x) == 0 || N(S(x)) == 0)
 #define UF3(x)							ERR_UF(x, S(x) == 0 || N(S(x)) == 0 || N(N(S(x))) == 0)
-#define AE1(x)							ERR(x, T(S(x)) != ATOM, ERR_ATOM_EXPECTED)
-#define AE2(x)							ERR(x, T(S(x)) != ATOM || T(N(S(x))) != ATOM, ERR_ATOM_EXPECTED)
+#define AE1(x)							ERR(x, T(S(x)) != ATOM, ERR_AE)
+#define AE2(x)							ERR(x, T(S(x)) != ATOM || T(N(S(x))) != ATOM, ERR_AE)
 
 X* init(B* block, C size) {
 	if (size < sizeof(C) + 3*(2*sizeof(C))) return 0;
@@ -122,10 +123,18 @@ C fnd_tk(X* x) { C w = x->dict; while (w && !(NAME_AS_TOKEN(w))) { w = N(w); } r
 
 // OUTER INTERPRETER
 
-C evaluate(X* x, B* str) {
-	C word, result;
+C compile_word(X* x, C w) {
+	if (T(w) == ATOM || T(w) == PRIM) {
+		return (S(x) = cns(x, A(XT(w)), AS(PRIM, S(x))));
+	} else {
+		return (S(x) = cns(x, w, AS(WORD, S(x))));
+	}
+}
+
+C evaluate(X* x, B* str) { 
+	C word, result; 
 	char *endptr;
-	x->ib = str;
+	x->ib = str; 
 	x->tk = x->in = 0;
 	do {
 		if (prs_tk(x) == 0) { return 0; }
@@ -133,22 +142,67 @@ C evaluate(X* x, B* str) {
 			if (!x->state || (T(word) == PRIM || T(word) == WORD)) {
 				ERR(x, (result = execute(x, XT(word))) != 0, result);
 			} else {
-				OF1(x);
-				if (T(word) == ATOM || T(word) == PRIM) {
-					S(x) = cns(x, A(XT(word)), AS(PRIM, S(x)));
-				} else {
-					S(x) = cns(x, word, AS(WORD, S(x)));
-				}
+				ERR_OF(x, compile_word(x, word) == 0);
 			}
 		} else {
 			intmax_t number = strtoimax(TK(x), &endptr, 10);
 			if (number == 0 && endptr == (char*)(TK(x))) {
-				return ERR_UNDEFINED_WORD;
+				return ERR_UW;
 			} else {
 				OF1(x); S(x) = cns(x, number, AS(ATOM, S(x)));
 			}
 		}
 	} while (1);
+}
+
+C grow(X* x) { 
+	if (A(x->t) == (x->t + 2*sizeof(C))) { 
+		x->t += 2*sizeof(C);
+		D(x->t) = 0;
+		return 0;
+	} else {
+		return ERR_NEM;
+	}
+}
+
+C shrink(X* x) {
+	// TODO
+}
+
+C allot(X* x) {
+	POP(x, b);
+	if (b == 0) {
+		return 0;
+	} else if (b > 0) { 
+		while (RESERVED(x) < b) { ERR(x, grow(x) != 0, ERR_NEM); }
+		x->here += b;
+	} else if (b < 0) {
+		// TODO
+	}
+}
+
+C postpone(X* x) { 
+	C w;
+	ERR(x, prs_tk(x) == 0, ERR_ZLN);
+	ERR(x, (w = fnd_tk(x)) == 0, ERR_UW);
+	return compile_word(x, w) == 0 ? ERR_SOF : 0;
+}
+
+C parse(X* x) { 
+	POP(x, c); 
+	x->tk = x->in; 
+	PUSH(x, TK(x)); 
+	PRS(x, TC(x) != c); 
+	if (TC(x) != 0) x->in++; 
+	PUSH(x, TL(x)); 
+	return 0; 
+}
+
+C parse_name(X* x) { 
+	prs_tk(x); 
+	PUSH(x, TK(x)); 
+	PUSH(x, TL(x)); 
+	return 0; 
 }
 
 C add(X* x) { UF2(x); AE2(x); A(N(S(x))) = A(N(S(x))) + A(S(x)); RSX; return 0; }
@@ -201,11 +255,6 @@ C lbracket(X* x) { x->s = x->o; x->state = 0; return 0; }
 C rbracket(X* x) { if (!x->state) { x->o = x->s; }; x->s = x->p; x->state = 1; return 0; }
 C lbrace(X* x) { rbracket(x); spush(x); return 0; }
 C rbrace(X* x) { lbracket(x); stack_to_list(x); return 0; }
-C literal(X* x) { 
-	// TODO: Must check underflow on O(x) !!!
-	C t = O(x); O(x) = N(O(x)); D(t) = AS(T(t), S(x)); S(x) = t; return 0; 
-}
-
 C interpret(X* x) { 
 	UF1(x); 
 	// TODO: Expects a list?
@@ -216,24 +265,11 @@ C interpret(X* x) {
 }
 C exec(X* x) { UF1(x); /* TODO: Expects a list? */ return execute(x, A(S(x))); }
 
-C grow(X* x) { 
-	if (A(x->t) == (x->t + 2*sizeof(C))) { 
-		x->t += 2*sizeof(C);
-		D(x->t) = 0;
-		return 0;
-	} else {
-		return ERR_NOT_ENOUGH_MEMORY;
-	}
-}
-C shrink(X* x) {
-	// TODO
-}
-
 C compile_str(X* x) {
 	x->tk = ++x->in;
 	while (*(x->ib + x->in) != 0 && *(x->ib + x->in) != '"') { x->in++; }
 	B* here = x->here;
-	while (RESERVED(x) < (TL(x) + 1)) { ERR(x, grow(x) != 0, ERR_NOT_ENOUGH_MEMORY); }
+	while (RESERVED(x) < (TL(x) + 1)) { ERR(x, grow(x) != 0, ERR_NEM); }
 	for (C i = 0; i < TL(x); i++) { 
 		here[i] = *(x->ib + x->tk + i); 
 	}
@@ -242,6 +278,26 @@ C compile_str(X* x) {
 	S(x) = cns(x, TL(x), AS(ATOM, S(x)));
 	x->here += TL(x) + 1;
 	x->in++;
+	return 0;
+}
+
+C literal(X* x) { 
+	// TODO: Must check underflow on O(x) !!!
+	C t = O(x); O(x) = N(O(x)); D(t) = AS(T(t), S(x)); S(x) = t; return 0; 
+}
+
+C sliteral(X* x) {
+	duplicate(x);
+	B* here = x->here;
+	allot(x);
+	PUSH(x, 1);
+	allot(x);
+	POP(x, l);
+	POP(x, a);
+	strncpy(here, a, l);
+	here[l] = 0;
+	PUSH(x, here);
+	PUSH(x, l);
 	return 0;
 }
 
@@ -265,34 +321,6 @@ C append(X* x) {
 C latest(X* x) { S(x) = cns(x, (C)&x->dict, AS(ATOM, S(x))); return 0; }
 C here(X* x) { PUSH(x, x->here); return 0; }
 
-C parse(X* x) { POP(x, c); x->tk = x->in; PUSH(x, TK(x)); PRS(x, TC(x) != c); if (TC(x) != 0) x->in++; PUSH(x, TL(x)); return 0; }
-C parse_name(X* x) { prs_tk(x); PUSH(x, TK(x)); PUSH(x, TL(x)); return 0; }
-
-C allot(X* x) {
-	POP(x, b);
-	if (b == 0) {
-		return 0;
-	} else if (b > 0) { 
-		while (RESERVED(x) < b) { ERR(x, grow(x) != 0, ERR_NOT_ENOUGH_MEMORY); }
-		x->here += b;
-	} else if (b < 0) {
-		// TODO
-	}
-}
-
-C sliteral(X* x) {
-	duplicate(x);
-	B* here = x->here;
-	allot(x);
-	POP(x, l);
-	POP(x, a);
-	strncpy(here, a, l);
-	here[l] = 0;
-	PUSH(x, here);
-	PUSH(x, l);
-	return 0;
-}
-
 C colon(X* x) {
 	latest(x);
 	parse_name(x);
@@ -309,18 +337,12 @@ C semicolon(X* x) {
 	return 0;
 }
 
-C postpone(X* x) {
-	prs_tk(x);
-	C w = fnd_tk(x);
-	if (!w) return ERR_UNDEFINED_WORD;
-	S(x) = cns(x, w, AS(WORD, S(x)));
-	return 0;
-}
-
 C store(X* x) { POP(x, a); POP(x, v); *((C*)a) = (C)v; return 0; }
 C fetch(X* x) { POP(x, a); PUSH(x, *((C*)a)); return 0; }
 C bstore(X* x) { POP(x, a); POP(x, v); *((B*)a) = (B)v; return 0; }
 C bfetch(X* x) { POP(x, a); PUSH(x, *((B*)a)); return 0; }
+
+C cell(X* x) { PUSH(x, sizeof(C)); return 0; }
 
 #define ADD_PRIMITIVE(x, name, func, immediate) \
 	x->dict = cns(x, \
@@ -385,6 +407,8 @@ X* bootstrap(X* x) {
 	ADD_PRIMITIVE(x, "@", &fetch, 0);
 	ADD_PRIMITIVE(x, "b!", &bstore, 0);
 	ADD_PRIMITIVE(x, "b@", &bfetch, 0);
+
+	ADD_PRIMITIVE(x, "cell", &cell, 0);
 
 	ADD_PRIMITIVE(x, "sliteral", &sliteral, 2);
 
