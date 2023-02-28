@@ -65,6 +65,45 @@ void test_BASIC_link_pairs() {
 	TEST_ASSERT_NOT_EQUAL_INT(WORD, TYPE(pair));
 }
 
+void test_BASIC_words() {
+	CELL w = (CELL)malloc(sizeof(CELL) * 2);
+	CELL nfa = (CELL)malloc(sizeof(CELL) * 2);
+	CELL xt = (CELL)malloc(sizeof(CELL) * 2);
+
+	CAR(w) = nfa;
+	CDR(w) = AS(CMP_PRIMITIVE, 0);
+	CAR(nfa) = (CELL)"word-name";
+	CDR(nfa) = AS(ATOM, xt);
+	CAR(xt) = 7;
+	CDR(xt) = 0;
+
+	TEST_ASSERT_EQUAL_INT(1, PRIMITIVE(w));
+	TEST_ASSERT_EQUAL_INT(0, IMMEDIATE(w));
+	TEST_ASSERT_EQUAL_STRING("word-name", NFA(w));
+	TEST_ASSERT_EQUAL_INT(xt, XT(w));
+
+	CDR(w) = AS(IMM_PRIMITIVE, 0);
+
+	TEST_ASSERT_EQUAL_INT(1, PRIMITIVE(w));
+	TEST_ASSERT_EQUAL_INT(1, IMMEDIATE(w));
+	TEST_ASSERT_EQUAL_STRING("word-name", NFA(w));
+	TEST_ASSERT_EQUAL_INT(xt, XT(w));
+
+	CDR(w) = AS(CMP_COLON_DEF, 0);
+
+	TEST_ASSERT_EQUAL_INT(0, PRIMITIVE(w));
+	TEST_ASSERT_EQUAL_INT(0, IMMEDIATE(w));
+	TEST_ASSERT_EQUAL_STRING("word-name", NFA(w));
+	TEST_ASSERT_EQUAL_INT(xt, XT(w));
+
+	CDR(w) = AS(IMM_COLON_DEF, 0);
+
+	TEST_ASSERT_EQUAL_INT(0, PRIMITIVE(w));
+	TEST_ASSERT_EQUAL_INT(1, IMMEDIATE(w));
+	TEST_ASSERT_EQUAL_STRING("word-name", NFA(w));
+	TEST_ASSERT_EQUAL_INT(xt, XT(w));
+}
+
 //// CONTEXT
 //
 //#define free_nodes(ctx)			(((ctx->size - sizeof(CTX)) / (2*sizeof(CELL))) - 1)
@@ -2180,6 +2219,7 @@ int main() {
 	// TAGGED POINTER BASED TYPING INFORMATION
 	RUN_TEST(test_BASIC_pairs);
 	RUN_TEST(test_BASIC_link_pairs);
+	RUN_TEST(test_BASIC_words);
 
 	//// CONTEXT
 	//RUN_TEST(test_CTX_block_size);

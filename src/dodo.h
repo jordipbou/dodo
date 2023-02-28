@@ -23,6 +23,13 @@ enum Types { ATOM, LIST, PRIM, WORD };
 #define AS(type, ref)						((ref & -4) | type)
 #define LINK(pair, next)				(CDR(pair) = AS(TYPE(pair), next))
 
+enum Words { CMP_PRIMITIVE, CMP_COLON_DEF, IMM_PRIMITIVE, IMM_COLON_DEF };
+
+#define NFA(word)								((BYTE*)CAR(CAR(word)))
+#define XT(word)								(NEXT(CAR(word)))
+#define PRIMITIVE(word)					((TYPE(word) & 1) == 0)
+#define IMMEDIATE(word)					((TYPE(word) & 2) == 2)
+
 // Throughly tested until here
 
 typedef struct {
@@ -32,13 +39,8 @@ typedef struct {
 	CELL ip, latest, state, token, in;
 	CELL base;
 } CTX;
+
 typedef CELL (*FUNC)(CTX*);
-
-
-#define NFA(word)								(CAR(CAR(word)))
-#define XT(word)								(NEXT(CAR(word)))
-#define PRIMITIVE(word)					((TYPE(word) & 1) == 0)
-#define IMMEDIATE(word)					((TYPE(word) & 2) == 2)
 
 #define ERR_STACK_OVERFLOW			-1
 #define ERR_STACK_UNDERFLOW			-2
