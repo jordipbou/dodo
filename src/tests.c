@@ -229,73 +229,112 @@ void test_LIST_clone() {
 	TEST_ASSERT_NOT_EQUAL_INT(NEXT(NEXT(NEXT(list))), NEXT(NEXT(NEXT(c))));
 }
 
-//void test_LIST_reclaim() {
-//	CELL size = 512;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//
-//	CELL list = cons(ctx, 7, cons(ctx, 11, cons(ctx, 13, 0)));
-//	CELL tail = reclaim(ctx, list);
-//
-//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 2, FREE(ctx));
-//	TEST_ASSERT_EQUAL_INT(2, length(tail));
-//	TEST_ASSERT_EQUAL_INT(11, CAR(tail));
-//	TEST_ASSERT_EQUAL_INT(13, CAR(CDR(tail)));
-//}
-//
-//void test_LIST_reclaim_list() {
-//	CELL size = 512;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//
-//	CELL list = 
-//		cons(ctx, 5, AS(ATOM,
-//		cons(ctx, 
-//			cons(ctx, 7,  AS(ATOM,
-//			cons(ctx, 11, AS(ATOM,
-//			cons(ctx, 13, AS(ATOM, 0)))))), AS(LIST, 
-//		cons(ctx, 17, AS(ATOM, 0))))));
-//
-//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 6, FREE(ctx));
-//	TEST_ASSERT_EQUAL(ATOM, TYPE(list));
-//	TEST_ASSERT_EQUAL_INT(5, CAR(list));
-//	TEST_ASSERT_EQUAL(LIST, TYPE(NEXT(list)));
-//	TEST_ASSERT_EQUAL_INT(3, length(CAR(NEXT(list))));
-//	TEST_ASSERT_EQUAL(ATOM, TYPE(CAR(NEXT(list))));
-//	TEST_ASSERT_EQUAL_INT(7, CAR(CAR(NEXT(list))));
-//	TEST_ASSERT_EQUAL(ATOM, TYPE(NEXT(CAR(NEXT(list)))));
-//	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(CAR(NEXT(list)))));
-//	TEST_ASSERT_EQUAL(ATOM, TYPE(NEXT(NEXT(CAR(NEXT(list))))));
-//	TEST_ASSERT_EQUAL_INT(13, CAR(NEXT(NEXT(CAR(NEXT(list))))));
-//	TEST_ASSERT_EQUAL(ATOM, TYPE(NEXT(NEXT(list))));
-//	TEST_ASSERT_EQUAL_INT(17, CAR(NEXT(NEXT(list))));
-//
-//	CELL tail = reclaim(ctx, list);
-//
-//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 5, FREE(ctx));
-//	TEST_ASSERT_EQUAL(LIST, TYPE(tail));
-//	TEST_ASSERT_EQUAL_INT(3, length(CAR(tail)));
-//	TEST_ASSERT_EQUAL(ATOM, TYPE(CAR(tail)));
-//	TEST_ASSERT_EQUAL_INT(7, CAR(CAR(tail)));
-//	TEST_ASSERT_EQUAL(ATOM, TYPE(NEXT(CAR(tail))));
-//	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(CAR(tail))));
-//	TEST_ASSERT_EQUAL(ATOM, TYPE(NEXT(NEXT(CAR(tail)))));
-//	TEST_ASSERT_EQUAL_INT(13, CAR(NEXT(NEXT(CAR(tail)))));
-//	TEST_ASSERT_EQUAL(ATOM, TYPE(NEXT(tail)));
-//	TEST_ASSERT_EQUAL_INT(17, CAR(NEXT(tail)));
-//
-//	tail = reclaim(ctx, tail);
-//
-//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 1, FREE(ctx));
-//	TEST_ASSERT_EQUAL(ATOM, TYPE(tail));
-//	TEST_ASSERT_EQUAL_INT(17, CAR(tail));
-//
-//	tail = reclaim(ctx, tail);
-//
-//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx), FREE(ctx));
-//	TEST_ASSERT_EQUAL_INT(0, tail);
-//}
-//
+void test_LIST_reclaim() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	CELL list = cons(ctx, 7, cons(ctx, 11, cons(ctx, 13, 0)));
+	CELL tail = reclaim(ctx, list);
+
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 2, FREE(ctx));
+	TEST_ASSERT_EQUAL_INT(2, length(tail));
+	TEST_ASSERT_EQUAL_INT(11, CAR(tail));
+	TEST_ASSERT_EQUAL_INT(13, CAR(CDR(tail)));
+}
+
+void test_LIST_reclaim_list() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	CELL list = 
+		cons(ctx, 5, AS(ATOM,
+		cons(ctx, 
+			cons(ctx, 7,  AS(ATOM,
+			cons(ctx, 11, AS(ATOM,
+			cons(ctx, 13, AS(ATOM, 0)))))), AS(LIST, 
+		cons(ctx, 17, AS(ATOM, 0))))));
+
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 6, FREE(ctx));
+	TEST_ASSERT_EQUAL(ATOM, TYPE(list));
+	TEST_ASSERT_EQUAL_INT(5, CAR(list));
+	TEST_ASSERT_EQUAL(LIST, TYPE(NEXT(list)));
+	TEST_ASSERT_EQUAL_INT(3, length(CAR(NEXT(list))));
+	TEST_ASSERT_EQUAL(ATOM, TYPE(CAR(NEXT(list))));
+	TEST_ASSERT_EQUAL_INT(7, CAR(CAR(NEXT(list))));
+	TEST_ASSERT_EQUAL(ATOM, TYPE(NEXT(CAR(NEXT(list)))));
+	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(CAR(NEXT(list)))));
+	TEST_ASSERT_EQUAL(ATOM, TYPE(NEXT(NEXT(CAR(NEXT(list))))));
+	TEST_ASSERT_EQUAL_INT(13, CAR(NEXT(NEXT(CAR(NEXT(list))))));
+	TEST_ASSERT_EQUAL(ATOM, TYPE(NEXT(NEXT(list))));
+	TEST_ASSERT_EQUAL_INT(17, CAR(NEXT(NEXT(list))));
+
+	CELL tail = reclaim(ctx, list);
+
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 5, FREE(ctx));
+	TEST_ASSERT_EQUAL(LIST, TYPE(tail));
+	TEST_ASSERT_EQUAL_INT(3, length(CAR(tail)));
+	TEST_ASSERT_EQUAL(ATOM, TYPE(CAR(tail)));
+	TEST_ASSERT_EQUAL_INT(7, CAR(CAR(tail)));
+	TEST_ASSERT_EQUAL(ATOM, TYPE(NEXT(CAR(tail))));
+	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(CAR(tail))));
+	TEST_ASSERT_EQUAL(ATOM, TYPE(NEXT(NEXT(CAR(tail)))));
+	TEST_ASSERT_EQUAL_INT(13, CAR(NEXT(NEXT(CAR(tail)))));
+	TEST_ASSERT_EQUAL(ATOM, TYPE(NEXT(tail)));
+	TEST_ASSERT_EQUAL_INT(17, CAR(NEXT(tail)));
+
+	tail = reclaim(ctx, tail);
+
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 1, FREE(ctx));
+	TEST_ASSERT_EQUAL(ATOM, TYPE(tail));
+	TEST_ASSERT_EQUAL_INT(17, CAR(tail));
+
+	tail = reclaim(ctx, tail);
+
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx), FREE(ctx));
+	TEST_ASSERT_EQUAL_INT(0, tail);
+}
+
+void test_STACK_push() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	PUSH(ctx, 7);
+
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(7, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 1, FREE(ctx));
+
+	PUSH(ctx, 11);
+
+	TEST_ASSERT_EQUAL_INT(2, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(11, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 2, FREE(ctx));
+}
+
+void test_STACK_pop() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	PUSH(ctx, 11);
+	PUSH(ctx, 7);
+
+	CELL v = pop(ctx);
+
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(7, v);
+	TEST_ASSERT_EQUAL_INT(11, CAR(S(ctx)));
+
+	v = pop(ctx);
+
+	TEST_ASSERT_EQUAL_INT(0, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(11, v);
+}
+
 //void test_LIST_reverse() {
 //	CELL p1 = (CELL)malloc(2*sizeof(CELL));
 //	CELL p2 = (CELL)malloc(2*sizeof(CELL));
@@ -2235,10 +2274,14 @@ int main() {
 	// LIST CREATION AND DESTRUCTION (AUTOMATIC MEMORY MANAGEMENT)
 	RUN_TEST(test_LIST_cons);
 	RUN_TEST(test_LIST_clone);
-	//RUN_TEST(test_LIST_reclaim);
-	//RUN_TEST(test_LIST_reclaim_list);
+	RUN_TEST(test_LIST_reclaim);
+	RUN_TEST(test_LIST_reclaim_list);
 	//RUN_TEST(test_LIST_reverse);
 	//RUN_TEST(test_LIST_length);
+
+	// BASIC STACK OPERATIONS
+	RUN_TEST(test_STACK_push);
+	RUN_TEST(test_STACK_pop);
 
 	//// INNER INTERPRETER
 	//RUN_TEST(test_INNER_execute_atom);

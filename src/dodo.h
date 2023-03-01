@@ -89,6 +89,29 @@ CELL clone(CTX* ctx, CELL pair) {
 	}
 }
 
+CELL reclaim(CTX* ctx, CELL pair) {
+	if (!pair) return 0;
+	if (TYPE(pair) == LIST) { 
+		while (CAR(pair) != 0) { 
+			CAR(pair) = reclaim(ctx, CAR(pair)); 
+		} 
+	}
+	CELL tail = NEXT(pair);
+	CDR(pair) = ctx->free;
+	CAR(pair) = 0;
+	ctx->free = pair;
+	return tail;
+}
+
+#define PUSH(ctx, v)			S(ctx) = cons(ctx, (CELL)v, AS(ATOM, S(ctx)))
+
+CELL pop(CTX* ctx) {
+	if (S(ctx) == 0) { /* ERROR */ }
+	CELL v = CAR(S(ctx));
+	S(ctx) = reclaim(ctx, S(ctx));
+	return v;
+}
+
 // Throughly tested until here
 
 typedef CELL (*FUNC)(CTX*);
@@ -104,20 +127,6 @@ typedef CELL (*FUNC)(CTX*);
 #define ERR_EXIT								-9
 
 #define RESERVED(ctx)				((ctx->there) - ((CELL)ctx->here))
-
-CELL reclaim(CTX* ctx, CELL pair) {
-	if (!pair) return 0;
-	if (TYPE(pair) == LIST) { 
-		while (CAR(pair) != 0) { 
-			CAR(pair) = reclaim(ctx, CAR(pair)); 
-		} 
-	}
-	CELL tail = NEXT(pair);
-	CDR(pair) = ctx->free;
-	CAR(pair) = 0;
-	ctx->free = pair;
-	return tail;
-}
 
 CELL reverse(CELL pair, CELL list) {
 	if (pair != 0) {
