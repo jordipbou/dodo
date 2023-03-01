@@ -149,86 +149,86 @@ void test_CTX_block_initialization() {
 	TEST_ASSERT_EQUAL_INT(10, ctx->base);
 }
 
-//// LIST CREATION AND DESTRUCTION (AUTOMATIC MEMORY MANAGEMENT)
-//
-//void test_LIST_cons() {
-//	CELL size = 512;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//
-//	CELL list = cons(ctx, 7, cons(ctx, 11, cons(ctx, 13, 0)));
-//
-//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 3, FREE(ctx));
-//	TEST_ASSERT_EQUAL_INT(3, length(list));
-//	TEST_ASSERT_EQUAL_INT(7, CAR(list));
-//	TEST_ASSERT_EQUAL_INT(11, CAR(CDR(list)));
-//	TEST_ASSERT_EQUAL_INT(13, CAR(CDR(CDR(list))));
-//
-//	CELL pair = cons(ctx, 7, 0);
-//
-//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 4, FREE(ctx));
-//	TEST_ASSERT_EQUAL_INT(7, CAR(pair));
-//	TEST_ASSERT_EQUAL_INT(0, CDR(pair));
-//	
-//	while (ctx->free != ctx->there) { cons(ctx, 1, 0); }
-//
-//	CELL p3 = cons(ctx, 13, 0);
-//	TEST_ASSERT_EQUAL_INT(0, p3);
-//}
-//
-//void test_LIST_clone() {
-//	CELL size = 512;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//
-//	CELL list = 
-//		cons(ctx, 7, AS(ATOM, 
-//		cons(ctx, 11, AS(PRIM, 
-//		cons(ctx, 
-//			cons(ctx, 13, AS(ATOM,
-//			cons(ctx, 17, AS(ATOM, 0)))), AS(LIST,
-//		cons(ctx, 19, AS(ATOM, 0))))))));
-//
-//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 6, FREE(ctx));
-//	TEST_ASSERT_EQUAL_INT(4, length(list));
-//	TEST_ASSERT_EQUAL(ATOM, TYPE(list));
-//	TEST_ASSERT_EQUAL_INT(7, CAR(list));
-//	TEST_ASSERT_EQUAL(PRIM, TYPE(NEXT(list)));
-//	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(list)));
-//	TEST_ASSERT_EQUAL(LIST, TYPE(NEXT(NEXT(list))));
-//	TEST_ASSERT_EQUAL_INT(2, length(NEXT(NEXT(list))));
-//	TEST_ASSERT_EQUAL(ATOM, TYPE(CAR(NEXT(NEXT(list)))));
-//	TEST_ASSERT_EQUAL_INT(13, CAR(CAR(NEXT(NEXT(list)))));
-//	TEST_ASSERT_EQUAL(ATOM, TYPE(NEXT(CAR(NEXT(NEXT(list))))));
-//	TEST_ASSERT_EQUAL_INT(17, CAR(NEXT(CAR(NEXT(NEXT(list))))));
-//	TEST_ASSERT_EQUAL(ATOM, TYPE(NEXT(NEXT(NEXT(list)))));
-//	TEST_ASSERT_EQUAL_INT(19, CAR(NEXT(NEXT(NEXT(list)))));
-//
-//	CELL c = clone(ctx, list);
-//
-//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 12, FREE(ctx));
-//	TEST_ASSERT_EQUAL_INT(4, length(c));
-//	TEST_ASSERT_EQUAL(ATOM, TYPE(c));
-//	TEST_ASSERT_EQUAL_INT(7, CAR(c));
-//	TEST_ASSERT_EQUAL(PRIM, TYPE(NEXT(c)));
-//	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(c)));
-//	TEST_ASSERT_EQUAL(LIST, TYPE(NEXT(NEXT(c))));
-//	TEST_ASSERT_EQUAL_INT(2, length(NEXT(NEXT(c))));
-//	TEST_ASSERT_EQUAL(ATOM, TYPE(CAR(NEXT(NEXT(c)))));
-//	TEST_ASSERT_EQUAL_INT(13, CAR(CAR(NEXT(NEXT(c)))));
-//	TEST_ASSERT_EQUAL(ATOM, TYPE(NEXT(CAR(NEXT(NEXT(c))))));
-//	TEST_ASSERT_EQUAL_INT(17, CAR(NEXT(CAR(NEXT(NEXT(c))))));
-//	TEST_ASSERT_EQUAL(ATOM, TYPE(NEXT(NEXT(NEXT(c)))));
-//	TEST_ASSERT_EQUAL_INT(19, CAR(NEXT(NEXT(NEXT(c)))));
-//
-//	TEST_ASSERT_NOT_EQUAL_INT(list, c);
-//	TEST_ASSERT_NOT_EQUAL_INT(NEXT(list), NEXT(c));
-//	TEST_ASSERT_NOT_EQUAL_INT(NEXT(NEXT(list)), NEXT(NEXT(c)));
-//	TEST_ASSERT_NOT_EQUAL_INT(CAR(NEXT(NEXT(list))), CAR(NEXT(NEXT(c))));
-//	TEST_ASSERT_NOT_EQUAL_INT(NEXT(CAR(NEXT(NEXT(list)))), NEXT(CAR(NEXT(NEXT(c)))));
-//	TEST_ASSERT_NOT_EQUAL_INT(NEXT(NEXT(NEXT(list))), NEXT(NEXT(NEXT(c))));
-//}
-//
+// LIST CREATION AND DESTRUCTION (AUTOMATIC MEMORY MANAGEMENT)
+
+void test_LIST_cons() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	CELL list = cons(ctx, 7, cons(ctx, 11, cons(ctx, 13, 0)));
+
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 3, FREE(ctx));
+	TEST_ASSERT_EQUAL_INT(3, length(list));
+	TEST_ASSERT_EQUAL_INT(7, CAR(list));
+	TEST_ASSERT_EQUAL_INT(11, CAR(CDR(list)));
+	TEST_ASSERT_EQUAL_INT(13, CAR(CDR(CDR(list))));
+
+	CELL pair = cons(ctx, 7, 0);
+
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 4, FREE(ctx));
+	TEST_ASSERT_EQUAL_INT(7, CAR(pair));
+	TEST_ASSERT_EQUAL_INT(0, CDR(pair));
+	
+	while (ctx->free != ctx->there) { cons(ctx, 1, 0); }
+
+	CELL p3 = cons(ctx, 13, 0);
+	TEST_ASSERT_EQUAL_INT(0, p3);
+}
+
+void test_LIST_clone() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	CELL list = 
+		cons(ctx, 7, AS(ATOM, 
+		cons(ctx, 11, AS(PRIM, 
+		cons(ctx, 
+			cons(ctx, 13, AS(ATOM,
+			cons(ctx, 17, AS(ATOM, 0)))), AS(LIST,
+		cons(ctx, 19, AS(ATOM, 0))))))));
+
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 6, FREE(ctx));
+	TEST_ASSERT_EQUAL_INT(4, length(list));
+	TEST_ASSERT_EQUAL(ATOM, TYPE(list));
+	TEST_ASSERT_EQUAL_INT(7, CAR(list));
+	TEST_ASSERT_EQUAL(PRIM, TYPE(NEXT(list)));
+	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(list)));
+	TEST_ASSERT_EQUAL(LIST, TYPE(NEXT(NEXT(list))));
+	TEST_ASSERT_EQUAL_INT(2, length(NEXT(NEXT(list))));
+	TEST_ASSERT_EQUAL(ATOM, TYPE(CAR(NEXT(NEXT(list)))));
+	TEST_ASSERT_EQUAL_INT(13, CAR(CAR(NEXT(NEXT(list)))));
+	TEST_ASSERT_EQUAL(ATOM, TYPE(NEXT(CAR(NEXT(NEXT(list))))));
+	TEST_ASSERT_EQUAL_INT(17, CAR(NEXT(CAR(NEXT(NEXT(list))))));
+	TEST_ASSERT_EQUAL(ATOM, TYPE(NEXT(NEXT(NEXT(list)))));
+	TEST_ASSERT_EQUAL_INT(19, CAR(NEXT(NEXT(NEXT(list)))));
+
+	CELL c = clone(ctx, list);
+
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 12, FREE(ctx));
+	TEST_ASSERT_EQUAL_INT(4, length(c));
+	TEST_ASSERT_EQUAL(ATOM, TYPE(c));
+	TEST_ASSERT_EQUAL_INT(7, CAR(c));
+	TEST_ASSERT_EQUAL(PRIM, TYPE(NEXT(c)));
+	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(c)));
+	TEST_ASSERT_EQUAL(LIST, TYPE(NEXT(NEXT(c))));
+	TEST_ASSERT_EQUAL_INT(2, length(NEXT(NEXT(c))));
+	TEST_ASSERT_EQUAL(ATOM, TYPE(CAR(NEXT(NEXT(c)))));
+	TEST_ASSERT_EQUAL_INT(13, CAR(CAR(NEXT(NEXT(c)))));
+	TEST_ASSERT_EQUAL(ATOM, TYPE(NEXT(CAR(NEXT(NEXT(c))))));
+	TEST_ASSERT_EQUAL_INT(17, CAR(NEXT(CAR(NEXT(NEXT(c))))));
+	TEST_ASSERT_EQUAL(ATOM, TYPE(NEXT(NEXT(NEXT(c)))));
+	TEST_ASSERT_EQUAL_INT(19, CAR(NEXT(NEXT(NEXT(c)))));
+
+	TEST_ASSERT_NOT_EQUAL_INT(list, c);
+	TEST_ASSERT_NOT_EQUAL_INT(NEXT(list), NEXT(c));
+	TEST_ASSERT_NOT_EQUAL_INT(NEXT(NEXT(list)), NEXT(NEXT(c)));
+	TEST_ASSERT_NOT_EQUAL_INT(CAR(NEXT(NEXT(list))), CAR(NEXT(NEXT(c))));
+	TEST_ASSERT_NOT_EQUAL_INT(NEXT(CAR(NEXT(NEXT(list)))), NEXT(CAR(NEXT(NEXT(c)))));
+	TEST_ASSERT_NOT_EQUAL_INT(NEXT(NEXT(NEXT(list))), NEXT(NEXT(NEXT(c))));
+}
+
 //void test_LIST_reclaim() {
 //	CELL size = 512;
 //	BYTE block[size];
@@ -2232,9 +2232,9 @@ int main() {
 	RUN_TEST(test_CTX_minimum_block_size);
 	RUN_TEST(test_CTX_block_initialization);
 
-	//// LIST CREATION AND DESTRUCTION (AUTOMATIC MEMORY MANAGEMENT)
-	//RUN_TEST(test_LIST_cons);
-	//RUN_TEST(test_LIST_clone);
+	// LIST CREATION AND DESTRUCTION (AUTOMATIC MEMORY MANAGEMENT)
+	RUN_TEST(test_LIST_cons);
+	RUN_TEST(test_LIST_clone);
 	//RUN_TEST(test_LIST_reclaim);
 	//RUN_TEST(test_LIST_reclaim_list);
 	//RUN_TEST(test_LIST_reverse);

@@ -71,24 +71,6 @@ CTX* init(BYTE* block, CELL size) {
 	return ctx;
 }
 
-// Throughly tested until here
-
-typedef CELL (*FUNC)(CTX*);
-
-#define ERR_STACK_OVERFLOW			-1
-#define ERR_STACK_UNDERFLOW			-2
-#define ERR_UNDEFINED_WORD			-3
-#define ERR_NOT_ENOUGH_MEMORY		-4
-#define ERR_ZERO_LENGTH_NAME		-5
-#define ERR_ATOM_EXPECTED				-6
-#define ERR_LIST_EXPECTED				-7
-#define ERR_RSTACK_UNDERFLOW		-8
-#define ERR_EXIT								-9
-
-#define RESERVED(ctx)				((ctx->there) - ((CELL)ctx->here))
-
-// LINKED LISTS
-
 CELL cons(CTX* ctx, CELL car, CELL cdr) {
 	if (ctx->free == ctx->there) return 0;
 	CELL pair = ctx->free;
@@ -106,6 +88,22 @@ CELL clone(CTX* ctx, CELL pair) {
 		return cons(ctx, CAR(pair), AS(TYPE(pair), clone(ctx, NEXT(pair))));
 	}
 }
+
+// Throughly tested until here
+
+typedef CELL (*FUNC)(CTX*);
+
+#define ERR_STACK_OVERFLOW			-1
+#define ERR_STACK_UNDERFLOW			-2
+#define ERR_UNDEFINED_WORD			-3
+#define ERR_NOT_ENOUGH_MEMORY		-4
+#define ERR_ZERO_LENGTH_NAME		-5
+#define ERR_ATOM_EXPECTED				-6
+#define ERR_LIST_EXPECTED				-7
+#define ERR_RSTACK_UNDERFLOW		-8
+#define ERR_EXIT								-9
+
+#define RESERVED(ctx)				((ctx->there) - ((CELL)ctx->here))
 
 CELL reclaim(CTX* ctx, CELL pair) {
 	if (!pair) return 0;
