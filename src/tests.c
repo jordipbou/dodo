@@ -104,44 +104,51 @@ void test_BASIC_words() {
 	TEST_ASSERT_EQUAL_INT(xt, XT(w));
 }
 
-//// CONTEXT
-//
-//#define free_nodes(ctx)			(((ctx->size - sizeof(CTX)) / (2*sizeof(CELL))) - 1)
-//
-//void test_CTX_block_size() {
-//	CELL size = 2;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//
-//	TEST_ASSERT_EQUAL_PTR(0, ctx);
-//}
-//
-//void test_CTX_block_initialization() {
-//	CELL size = 512;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//		
-//	TEST_ASSERT_NOT_EQUAL(0, ctx);
-//
-//	TEST_ASSERT_EQUAL_INT(0, length(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx), FREE(ctx));
-//
-//	TEST_ASSERT_EQUAL_INT(((BYTE*)ctx) + sizeof(CTX), BOTTOM(ctx));
-//	TEST_ASSERT_EQUAL_INT(BOTTOM(ctx), ctx->here);
-//	TEST_ASSERT_EQUAL_INT(ALIGN(ctx->here, 2*sizeof(CELL)), ctx->there);
-//	TEST_ASSERT_EQUAL_INT(ALIGN(((BYTE*)ctx) + size - 2*sizeof(CELL) - 1, 2*sizeof(CELL)), TOP(ctx));
-//	TEST_ASSERT_EQUAL_INT(TOP(ctx), ctx->free);
-//
-//	TEST_ASSERT_EQUAL_INT(0, ctx->latest);
-//	TEST_ASSERT_EQUAL_INT(0, ctx->stack);
-//	TEST_ASSERT_EQUAL_INT(0, ctx->rstack);
-//	TEST_ASSERT_EQUAL_INT(0, ctx->cpile);
-//	TEST_ASSERT_EQUAL_INT(0, ctx->state);
-//	TEST_ASSERT_EQUAL_PTR(0, ctx->tib);
-//	TEST_ASSERT_EQUAL_INT(0, ctx->token);
-//	TEST_ASSERT_EQUAL_INT(0, ctx->in);
-//}
-//
+// CONTEXT
+
+#define free_nodes(ctx)	((ctx->size - ALIGN(sizeof(CTX), 2*sizeof(CELL))) / (2*sizeof(CELL)) - 2)
+
+void test_CTX_minimum_block_size() {
+	CELL size = 2;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	TEST_ASSERT_NULL(ctx);
+
+	CELL size2 = sizeof(CTX) + 2*2*sizeof(CELL);
+	BYTE block2[size2];
+	CTX* ctx2 = init(block2, size2);
+
+	TEST_ASSERT_NOT_NULL(ctx2);
+}
+
+void test_CTX_block_initialization() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+		
+	TEST_ASSERT_NOT_NULL(ctx);
+
+	TEST_ASSERT_EQUAL_INT(0, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx), FREE(ctx));
+
+	TEST_ASSERT_EQUAL_INT(((BYTE*)ctx) + sizeof(CTX), BOTTOM(ctx));
+	TEST_ASSERT_EQUAL_INT(BOTTOM(ctx), ctx->here);
+	TEST_ASSERT_EQUAL_INT(ALIGN(ctx->here, 2*sizeof(CELL)), ctx->there);
+	TEST_ASSERT_EQUAL_INT(ALIGN(((BYTE*)ctx) + size - 2*sizeof(CELL) - 1, 2*sizeof(CELL)), TOP(ctx));
+	TEST_ASSERT_EQUAL_INT(TOP(ctx), ctx->pile);
+	TEST_ASSERT_EQUAL_INT(ctx->pile, ctx->stack);
+	TEST_ASSERT_EQUAL_INT(TOP(ctx) - 2*sizeof(CELL), ctx->free);
+
+	TEST_ASSERT_EQUAL_INT(0, ctx->latest);
+	TEST_ASSERT_EQUAL_INT(0, ctx->rstack);
+	TEST_ASSERT_EQUAL_INT(0, ctx->state);
+	TEST_ASSERT_EQUAL_PTR(0, ctx->tib);
+	TEST_ASSERT_EQUAL_INT(0, ctx->token);
+	TEST_ASSERT_EQUAL_INT(0, ctx->in);
+	TEST_ASSERT_EQUAL_INT(10, ctx->base);
+}
+
 //// LIST CREATION AND DESTRUCTION (AUTOMATIC MEMORY MANAGEMENT)
 //
 //void test_LIST_cons() {
@@ -2221,9 +2228,9 @@ int main() {
 	RUN_TEST(test_BASIC_link_pairs);
 	RUN_TEST(test_BASIC_words);
 
-	//// CONTEXT
-	//RUN_TEST(test_CTX_block_size);
-	//RUN_TEST(test_CTX_block_initialization);
+	// CONTEXT
+	RUN_TEST(test_CTX_minimum_block_size);
+	RUN_TEST(test_CTX_block_initialization);
 
 	//// LIST CREATION AND DESTRUCTION (AUTOMATIC MEMORY MANAGEMENT)
 	//RUN_TEST(test_LIST_cons);
