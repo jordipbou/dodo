@@ -699,6 +699,94 @@ void test_PARSING_find_token() {
 	TEST_ASSERT_EQUAL_INT(NEXT(NEXT(NEXT(ctx->latest))), word);
 }
 
+void test_COMPILATION_compile_word() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	CELL word1 =
+		cons(ctx,
+			cons(ctx, (CELL)"word1", AS(ATOM,
+			cons(ctx, 0, AS(PRIM, 0)))),
+		AS(ATOM, 0));
+		
+	CELL word1_imm =
+		cons(ctx,
+			cons(ctx, (CELL)"word1_imm", AS(ATOM,
+			cons(ctx, 0, AS(PRIM, 0)))),
+		AS(PRIM, 0));
+
+	CELL word2 =
+		cons(ctx,
+			cons(ctx, (CELL)"word2", AS(ATOM,
+			cons(ctx, 7, AS(ATOM, 0)))),
+		AS(LIST, 0));
+
+	CELL word2_imm =
+		cons(ctx,
+			cons(ctx, (CELL)"word2_imm", AS(ATOM,
+			cons(ctx, 7, AS(ATOM, 0)))),
+		AS(WORD, 0));
+
+	CELL compilation = compile_word(ctx, word1);
+
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(PRIM, TYPE(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(0, CAR(S(ctx)));
+
+	compilation = compile_word(ctx, word1_imm);
+
+	TEST_ASSERT_EQUAL_INT(2, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(PRIM, TYPE(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(0, CAR(S(ctx)));
+
+	compilation = compile_word(ctx, word2);
+
+	TEST_ASSERT_EQUAL_INT(3, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(WORD, TYPE(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(word2, CAR(S(ctx)));
+
+	compilation = compile_word(ctx, word2_imm);
+
+	TEST_ASSERT_EQUAL_INT(4, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(WORD, TYPE(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(word2_imm, CAR(S(ctx)));
+}
+
+void test_OUTER_evaluate_numbers() {
+	CELL size = 4096;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	evaluate(ctx, "   7 11    13  ");
+
+	TEST_ASSERT_EQUAL_INT(3, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(13, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(NEXT(S(ctx)))));
+}
+
+void test_OUTER_evaluate_words() {
+	CELL size = 4096;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	ctx->latest = 
+		cons(ctx,
+			cons(ctx, (CELL)"test", AS(ATOM,
+			cons(ctx, 7, AS(ATOM,
+			cons(ctx, 11, AS(ATOM,
+			cons(ctx, 13, AS(ATOM, 0)))))))),
+		AS(LIST, 0));
+
+	evaluate(ctx, " test   ");
+
+	TEST_ASSERT_EQUAL_INT(3, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(13, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(NEXT(S(ctx)))));
+}
+
 //// IP PRIMITIVEs
 //
 //void test_IP_branch() {
@@ -1205,40 +1293,6 @@ void test_PARSING_find_token() {
 //// PARSING
 //
 //// OUTER INTERPRETER
-//
-//void test_OUTER_evaluate_numbers() {
-//	CELL size = 4096;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//
-//	evaluate(ctx, "   7 11    13  ");
-//
-//	TEST_ASSERT_EQUAL_INT(3, length(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(13, CAR(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(ctx->stack)));
-//	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(NEXT(ctx->stack))));
-//}
-//
-//void test_OUTER_evaluate_words() {
-//	CELL size = 4096;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//
-//	ctx->latest = 
-//		cons(ctx,
-//			cons(ctx, (CELL)"test", AS(ATOM,
-//			cons(ctx, 7, AS(ATOM,
-//			cons(ctx, 11, AS(ATOM,
-//			cons(ctx, 13, AS(ATOM, 0)))))))),
-//		AS(LIST, 0));
-//
-//	evaluate(ctx, " test   ");
-//
-//	TEST_ASSERT_EQUAL_INT(3, length(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(13, CAR(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(ctx->stack)));
-//	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(NEXT(ctx->stack))));
-//}
 //
 //// CONTIGUOUS MEMORY
 //
@@ -2415,6 +2469,13 @@ int main() {
 	RUN_TEST(test_PARSING_parse_token);
 	RUN_TEST(test_PARSING_find_token);
 
+	// COMPILATION
+	RUN_TEST(test_COMPILATION_compile_word);
+
+	// OUTER INTERPRETER
+	RUN_TEST(test_OUTER_evaluate_numbers);
+	RUN_TEST(test_OUTER_evaluate_words);
+
 	//// IP PRIMITIVES
 	//RUN_TEST(test_IP_branch);
 	//RUN_TEST(test_IP_jump);
@@ -2445,10 +2506,6 @@ int main() {
 	//RUN_TEST(test_BIT_and);
 	//RUN_TEST(test_BIT_or);
 	//RUN_TEST(test_BIT_invert);
-
-	//// OUTER INTERPRETER
-	//RUN_TEST(test_OUTER_evaluate_numbers);
-	//RUN_TEST(test_OUTER_evaluate_words);
 
 	//// CONTIGUOUS MEMORY
 	//RUN_TEST(test_MEM_allot);
