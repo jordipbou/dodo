@@ -103,31 +103,6 @@ CELL reclaim(CTX* ctx, CELL pair) {
 	return tail;
 }
 
-#define PUSH(ctx, v)			S(ctx) = cons(ctx, (CELL)v, AS(ATOM, S(ctx)))
-
-CELL pop(CTX* ctx) {
-	if (S(ctx) == 0) { /* ERROR */ }
-	CELL v = CAR(S(ctx));
-	S(ctx) = reclaim(ctx, S(ctx));
-	return v;
-}
-
-// Throughly tested until here
-
-typedef CELL (*FUNC)(CTX*);
-
-#define ERR_STACK_OVERFLOW			-1
-#define ERR_STACK_UNDERFLOW			-2
-#define ERR_UNDEFINED_WORD			-3
-#define ERR_NOT_ENOUGH_MEMORY		-4
-#define ERR_ZERO_LENGTH_NAME		-5
-#define ERR_ATOM_EXPECTED				-6
-#define ERR_LIST_EXPECTED				-7
-#define ERR_RSTACK_UNDERFLOW		-8
-#define ERR_EXIT								-9
-
-#define RESERVED(ctx)				((ctx->there) - ((CELL)ctx->here))
-
 CELL reverse(CELL pair, CELL list) {
 	if (pair != 0) {
 		CELL t = NEXT(pair);
@@ -147,31 +122,34 @@ CELL length(CELL pair) {
 	return c; 
 }
 
-// INNER INTERPRETER
+#define PUSH(ctx, v, stack)			(*(stack) = cons(ctx, (CELL)v, AS(ATOM, *(stack))))
+#define PUSHL(ctx, v, stack)			(*(stack) = cons(ctx, (CELL)v, AS(LIST, *(stack))))
+
+CELL pop(CTX* ctx, CELL* stack) {
+	if (stack == 0 || *stack == 0) { return 0; /* ERROR */ }
+	CELL v = CAR(*stack);
+	*stack = reclaim(ctx, *stack);
+	return v;
+}
+
+typedef CELL (*FUNC)(CTX*);
 
 CELL execute(CTX* ctx, CELL xlist) {
 	CELL result;
 	ctx->ip = xlist;
 	do {
 		if (ctx->ip == 0) {
-			if (ctx->rstack) {
-				ctx->ip = CAR(ctx->rstack);
-				ctx->rstack = reclaim(ctx, ctx->rstack);
-			} else {
+			if ((ctx->ip = pop(ctx, &R(ctx))) == 0) {
 				return 0;
-			}	
+			}
 		}
 		switch (TYPE(ctx->ip)) {
 			case ATOM: 
-				if ((ctx->stack = cons(ctx, CAR(ctx->ip), AS(ATOM, ctx->stack))) == 0) { 
-					return ERR_STACK_OVERFLOW; 
-				}
+				if (PUSH(ctx, CAR(ctx->ip), &S(ctx)) == 0) { /* Error, stack overflow */ return -1; }
 				ctx->ip = NEXT(ctx->ip); 
 				break;
 			case LIST:
-				if ((ctx->stack = cons(ctx, clone(ctx, CAR(ctx->ip)), AS(LIST, ctx->stack))) == 0) {
-					return ERR_STACK_OVERFLOW;
-				}
+				if (PUSHL(ctx, clone(ctx, CAR(ctx->ip)), &S(ctx)) == 0) { /* Stack overflow */ return -1; }
 				ctx->ip = NEXT(ctx->ip);
 				break;
 			case PRIM:
@@ -181,7 +159,7 @@ CELL execute(CTX* ctx, CELL xlist) {
 				break;
 			case WORD:
 				if (NEXT(ctx->ip) != 0) {
-					if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
+					if (ctx->free == ctx->there) { return -1; /*ERR_STACK_OVERFLOW;*/ }
 					ctx->rstack = cons(ctx, NEXT(ctx->ip), AS(ATOM, ctx->rstack));
 				}
 				ctx->ip = CAR(ctx->ip);
@@ -189,6 +167,20 @@ CELL execute(CTX* ctx, CELL xlist) {
 		}
 	} while (1);
 }
+
+// Throughly tested until here
+
+#define ERR_STACK_OVERFLOW			-1
+#define ERR_STACK_UNDERFLOW			-2
+#define ERR_UNDEFINED_WORD			-3
+#define ERR_NOT_ENOUGH_MEMORY		-4
+#define ERR_ZERO_LENGTH_NAME		-5
+#define ERR_ATOM_EXPECTED				-6
+#define ERR_LIST_EXPECTED				-7
+#define ERR_RSTACK_UNDERFLOW		-8
+#define ERR_EXIT								-9
+
+#define RESERVED(ctx)				((ctx->there) - ((CELL)ctx->here))
 
 // IP PRIMITIVES
 
