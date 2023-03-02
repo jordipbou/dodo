@@ -138,11 +138,12 @@ CELL pop(CTX* ctx, CELL* stack) {
 #define ERR_RSTACK_UNDERFLOW		-4
 #define ERR_UNDEFINED_WORD			-5
 #define ERR_NOT_ENOUGH_MEMORY		-6
-#define ERR_ZERO_LENGTH_NAME		-7
-#define ERR_ATOM_EXPECTED				-8
-#define ERR_LIST_EXPECTED				-9
-#define ERR_END_OF_XLIST				-10
-#define ERR_EXIT								-11
+#define ERR_NOT_ENOUGH_RESERVED	-7
+#define ERR_ZERO_LENGTH_NAME		-8
+#define ERR_ATOM_EXPECTED				-9
+#define ERR_LIST_EXPECTED				-10
+#define ERR_END_OF_XLIST				-11
+#define ERR_EXIT								-12
 
 CELL error(CTX* ctx, CELL err) {
 	// TODO
@@ -252,9 +253,57 @@ CELL evaluate(CTX* ctx, BYTE* str) {
 	} while (1);
 }
 
-// --------------------------------------------------------------- Throughly tested until here
+CELL grow(CTX* ctx) { 
+	if (CAR(ctx->there) == (ctx->there + 2*sizeof(CELL))) { 
+		ctx->there += 2*sizeof(CELL);
+		CDR(ctx->there) = 0;
+		return 0;
+	} else {
+		return ERR_NOT_ENOUGH_MEMORY;
+	}
+}
 
 #define RESERVED(ctx)				((ctx->there) - ((CELL)ctx->here))
+
+CELL shrink(CTX* ctx) {
+	if (RESERVED(ctx) >= 2*sizeof(CELL)) {
+		CDR(ctx->there) = ctx->there - 2*sizeof(CELL);
+		ctx->there -= 2*sizeof(CELL);
+		CAR(ctx->there) = ctx->there + 2*sizeof(CELL);
+		CDR(ctx->there) = 0;
+		return 0;
+	} else {
+		return ERR_NOT_ENOUGH_RESERVED;
+	}
+}
+
+CELL allot(CTX* ctx) {
+	CELL bytes = pop(ctx, &S(ctx));
+	if (bytes == 0) {
+		return 0;
+	} else if (bytes > 0) { 
+		if (bytes < (TOP(ctx) - ((CELL)ctx->here))) {
+			while (RESERVED(ctx) < bytes) { 
+				if (grow(ctx) != 0) { ERR(ctx, ERR_NOT_ENOUGH_MEMORY); } 
+			}
+			ctx->here += bytes;
+		} else {
+			ERR(ctx, ERR_NOT_ENOUGH_MEMORY);
+		}
+	} else if (bytes < 0) {
+		if (bytes < (BOTTOM(ctx) - ctx->here)) {
+			ctx->here = BOTTOM(ctx);
+		} else {
+			ctx->here += bytes;
+		}
+		while (RESERVED(ctx) >= 2*sizeof(CELL)) { 
+			if (shrink(ctx) != 0) { ERR(ctx, ERR_NOT_ENOUGH_RESERVED); } 
+		}
+	}
+	return 0;
+}
+
+// --------------------------------------------------------------- Throughly tested until here
 
 // IP PRIMITIVES
 

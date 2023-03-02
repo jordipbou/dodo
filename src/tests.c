@@ -787,6 +787,119 @@ void test_OUTER_evaluate_words() {
 	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(NEXT(S(ctx)))));
 }
 
+void test_MEM_grow() {
+	CELL size = 4096;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	grow(ctx);
+
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 1, FREE(ctx));
+	TEST_ASSERT_EQUAL_INT(2*sizeof(CELL), RESERVED(ctx));
+
+	grow(ctx);
+
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 2, FREE(ctx));
+	TEST_ASSERT_EQUAL_INT(4*sizeof(CELL), RESERVED(ctx));
+}
+
+void test_MEM_shrink() {
+	CELL size = 4096;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	grow(ctx);
+	grow(ctx);
+	shrink(ctx);
+
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 1, FREE(ctx));
+	TEST_ASSERT_EQUAL_INT(2*sizeof(CELL), RESERVED(ctx));
+
+	shrink(ctx);
+
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx), FREE(ctx));
+	TEST_ASSERT_EQUAL_INT(0, RESERVED(ctx));
+}
+
+void test_MEM_allot() {
+	CELL size = 1024;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	BYTE* here = ctx->here;
+	PUSH(ctx, 0, &S(ctx));
+	CELL result = allot(ctx);
+	TEST_ASSERT_EQUAL_INT(0, result);
+	TEST_ASSERT_EQUAL_INT(here, ctx->here);
+
+	PUSH(ctx, 13, &S(ctx));
+	result = allot(ctx);
+	TEST_ASSERT_EQUAL_INT(0, result);
+	TEST_ASSERT_EQUAL_INT(here + 13, ctx->here);
+
+	CELL fnodes = FREE(ctx);
+	here = ctx->here;
+	CELL reserved = RESERVED(ctx);
+
+	// Ensure reserved memory is 0 to allow next tests to pass
+	PUSH(ctx, RESERVED(ctx), &S(ctx));
+	result = allot(ctx);
+	TEST_ASSERT_EQUAL_INT(0, result);
+	TEST_ASSERT_EQUAL_PTR(here + reserved, ctx->here);
+	TEST_ASSERT_EQUAL_INT(0, RESERVED(ctx));
+	TEST_ASSERT_EQUAL_INT(fnodes, FREE(ctx));
+
+	here = ctx->here;
+
+	PUSH(ctx, 8*sizeof(CELL), &S(ctx));
+	result = allot(ctx);
+	TEST_ASSERT_EQUAL_INT(0, result);
+	TEST_ASSERT_EQUAL_PTR(here + 8*sizeof(CELL), ctx->here);
+	TEST_ASSERT_EQUAL_INT(fnodes - 4, FREE(ctx));
+	TEST_ASSERT_EQUAL_INT(0, RESERVED(ctx));
+
+	here = ctx->here;
+
+	PUSH(ctx, 2*sizeof(CELL) - 3, &S(ctx));
+	result = allot(ctx);
+	TEST_ASSERT_EQUAL_INT(0, result);
+	TEST_ASSERT_EQUAL_PTR(here + 2*sizeof(CELL) - 3, ctx->here);
+	TEST_ASSERT_EQUAL_INT(fnodes - 5, FREE(ctx));
+	TEST_ASSERT_EQUAL_INT(3, RESERVED(ctx));
+
+	PUSH(ctx, -(2*sizeof(CELL) - 3), &S(ctx));
+	result = allot(ctx);
+	TEST_ASSERT_EQUAL_INT(0, result);
+	TEST_ASSERT_EQUAL_PTR(here, ctx->here);
+	TEST_ASSERT_EQUAL_INT(fnodes - 4, FREE(ctx));
+	TEST_ASSERT_EQUAL_INT(0, RESERVED(ctx));
+
+	PUSH(ctx, -1, &S(ctx));
+	result = allot(ctx);
+	TEST_ASSERT_EQUAL_INT(0, result);
+	TEST_ASSERT_EQUAL_PTR(here - 1, ctx->here);
+	TEST_ASSERT_EQUAL_INT(fnodes - 4, FREE(ctx));
+	TEST_ASSERT_EQUAL_INT(1, RESERVED(ctx));
+
+	here = ctx->here;
+	reserved = RESERVED(ctx);
+	fnodes = FREE(ctx);
+
+	PUSH(ctx, 2048, &S(ctx));
+	result = allot(ctx);
+	TEST_ASSERT_EQUAL_INT(ERR_NOT_ENOUGH_MEMORY, result);
+	TEST_ASSERT_EQUAL_PTR(here, ctx->here);
+	TEST_ASSERT_EQUAL_INT(reserved, RESERVED(ctx));
+	TEST_ASSERT_EQUAL_INT(fnodes, FREE(ctx));
+
+	PUSH(ctx, -2048, &S(ctx));
+	result = allot(ctx);
+	TEST_ASSERT_EQUAL_INT(0, result);
+	TEST_ASSERT_EQUAL_PTR(BOTTOM(ctx), ctx->here);
+	TEST_ASSERT_EQUAL_INT((CELL)ALIGN(ctx->here, 2*sizeof(CELL)), ctx->there);
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx), FREE(ctx));
+}
+
 //// IP PRIMITIVEs
 //
 //void test_IP_branch() {
@@ -1295,85 +1408,6 @@ void test_OUTER_evaluate_words() {
 //// OUTER INTERPRETER
 //
 //// CONTIGUOUS MEMORY
-//
-//void test_MEM_allot() {
-//	CELL size = 1024;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//
-//	BYTE* here = ctx->here;
-//	ctx->stack = cons(ctx, 0, AS(ATOM, ctx->stack));
-//	CELL result = allot(ctx);
-//	TEST_ASSERT_EQUAL_INT(0, result);
-//	TEST_ASSERT_EQUAL_INT(here, ctx->here);
-//
-//	ctx->stack = cons(ctx, 13, AS(ATOM, ctx->stack));
-//	result = allot(ctx);
-//	TEST_ASSERT_EQUAL_INT(0, result);
-//	TEST_ASSERT_EQUAL_INT(here + 13, ctx->here);
-//
-//	CELL fnodes = FREE(ctx);
-//	here = ctx->here;
-//	CELL reserved = RESERVED(ctx);
-//
-//	// Ensure reserved memory is 0 to allow next tests to pass
-//	ctx->stack = cons(ctx, RESERVED(ctx), AS(ATOM, ctx->stack));
-//	result = allot(ctx);
-//	TEST_ASSERT_EQUAL_INT(0, result);
-//	TEST_ASSERT_EQUAL_PTR(here + reserved, ctx->here);
-//	TEST_ASSERT_EQUAL_INT(0, RESERVED(ctx));
-//	TEST_ASSERT_EQUAL_INT(fnodes, FREE(ctx));
-//
-//	here = ctx->here;
-//
-//	ctx->stack = cons(ctx, 8*sizeof(CELL), AS(ATOM, ctx->stack));
-//	result = allot(ctx);
-//	TEST_ASSERT_EQUAL_INT(0, result);
-//	TEST_ASSERT_EQUAL_PTR(here + 8*sizeof(CELL), ctx->here);
-//	TEST_ASSERT_EQUAL_INT(fnodes - 4, FREE(ctx));
-//	TEST_ASSERT_EQUAL_INT(0, RESERVED(ctx));
-//
-//	here = ctx->here;
-//
-//	ctx->stack = cons(ctx, 2*sizeof(CELL) - 3, AS(ATOM, ctx->stack));
-//	result = allot(ctx);
-//	TEST_ASSERT_EQUAL_INT(0, result);
-//	TEST_ASSERT_EQUAL_PTR(here + 2*sizeof(CELL) - 3, ctx->here);
-//	TEST_ASSERT_EQUAL_INT(fnodes - 5, FREE(ctx));
-//	TEST_ASSERT_EQUAL_INT(3, RESERVED(ctx));
-//
-//	ctx->stack = cons(ctx, -(2*sizeof(CELL) - 3), AS(ATOM, ctx->stack));
-//	result = allot(ctx);
-//	TEST_ASSERT_EQUAL_INT(0, result);
-//	TEST_ASSERT_EQUAL_PTR(here, ctx->here);
-//	TEST_ASSERT_EQUAL_INT(fnodes - 4, FREE(ctx));
-//	TEST_ASSERT_EQUAL_INT(0, RESERVED(ctx));
-//
-//	ctx->stack = cons(ctx, -1, AS(ATOM, ctx->stack));
-//	result = allot(ctx);
-//	TEST_ASSERT_EQUAL_INT(0, result);
-//	TEST_ASSERT_EQUAL_PTR(here - 1, ctx->here);
-//	TEST_ASSERT_EQUAL_INT(fnodes - 4, FREE(ctx));
-//	TEST_ASSERT_EQUAL_INT(1, RESERVED(ctx));
-//
-//	here = ctx->here;
-//	reserved = RESERVED(ctx);
-//	fnodes = FREE(ctx);
-//
-//	ctx->stack = cons(ctx, 2048, AS(ATOM, ctx->stack));
-//	result = allot(ctx);
-//	TEST_ASSERT_EQUAL_INT(ERR_NOT_ENOUGH_MEMORY, result);
-//	TEST_ASSERT_EQUAL_PTR(here, ctx->here);
-//	TEST_ASSERT_EQUAL_INT(reserved, RESERVED(ctx));
-//	TEST_ASSERT_EQUAL_INT(fnodes, FREE(ctx));
-//
-//	ctx->stack = cons(ctx, -2048, AS(ATOM, ctx->stack));
-//	result = allot(ctx);
-//	TEST_ASSERT_EQUAL_INT(0, result);
-//	TEST_ASSERT_EQUAL_PTR(BOTTOM(ctx), ctx->here);
-//	TEST_ASSERT_EQUAL_INT((CELL)ALIGN(ctx->here, 2*sizeof(CELL)), ctx->there);
-//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx), FREE(ctx));
-//}
 //
 //void test_MEM_compile_str() {
 //	CELL size = 512;
@@ -2475,6 +2509,11 @@ int main() {
 	// OUTER INTERPRETER
 	RUN_TEST(test_OUTER_evaluate_numbers);
 	RUN_TEST(test_OUTER_evaluate_words);
+
+	// MEMORY
+	RUN_TEST(test_MEM_grow);
+	RUN_TEST(test_MEM_shrink);
+	RUN_TEST(test_MEM_allot);
 
 	//// IP PRIMITIVES
 	//RUN_TEST(test_IP_branch);
