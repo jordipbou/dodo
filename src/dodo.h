@@ -132,43 +132,6 @@ CELL pop(CTX* ctx, CELL* stack) {
 	return v;
 }
 
-typedef CELL (*FUNC)(CTX*);
-
-CELL execute(CTX* ctx, CELL xlist) {
-	CELL result;
-	ctx->ip = xlist;
-	do {
-		if (ctx->ip == 0) {
-			if ((ctx->ip = pop(ctx, &R(ctx))) == 0) {
-				return 0;
-			}
-		}
-		switch (TYPE(ctx->ip)) {
-			case ATOM: 
-				if (PUSH(ctx, CAR(ctx->ip), &S(ctx)) == 0) { /* Error, stack overflow */ return -1; }
-				ctx->ip = NEXT(ctx->ip); 
-				break;
-			case LIST:
-				if (PUSHL(ctx, clone(ctx, CAR(ctx->ip)), &S(ctx)) == 0) { /* Stack overflow */ return -1; }
-				ctx->ip = NEXT(ctx->ip);
-				break;
-			case PRIM:
-				result = ((FUNC)CAR(ctx->ip))(ctx);
-				if (result < 0) { /* Error */ return result; }
-				if (result != 1) { ctx->ip = NEXT(ctx->ip); }
-				break;
-			case WORD:
-				if (NEXT(ctx->ip) != 0) {
-					if (PUSH(ctx, NEXT(ctx->ip), &R(ctx)) == 0) { /* Error, rstack overflow */ return -1; }
-				}
-				ctx->ip = CAR(ctx->ip);
-				break;
-		}
-	} while (1);
-}
-
-// Throughly tested until here
-
 #define ERR_STACK_OVERFLOW			-1
 #define ERR_STACK_UNDERFLOW			-2
 #define ERR_UNDEFINED_WORD			-3
@@ -178,6 +141,54 @@ CELL execute(CTX* ctx, CELL xlist) {
 #define ERR_LIST_EXPECTED				-7
 #define ERR_RSTACK_UNDERFLOW		-8
 #define ERR_EXIT								-9
+
+CELL error(CTX* ctx, CELL err) {
+	// TODO
+	/* Lookup on exception stack for a correct handler for current error */
+	/* The debugger must be installed on the exception stack for it to work */
+	/* If a handler its found execute it and return its return value */
+	/* If none its found, just return the error */
+	return err;
+}
+
+#define ERR(ctx, err)		{ CELL __err__ = error(ctx, err); if (__err__) { return __err__; } }
+
+typedef CELL (*FUNC)(CTX*);
+
+CELL execute(CTX* ctx, CELL xlist) {
+	CELL result, err;
+	ctx->ip = xlist;
+	do {
+		if (ctx->ip == 0) {
+			if ((ctx->ip = pop(ctx, &R(ctx))) == 0) {
+				return 0;
+			}
+		}
+		switch (TYPE(ctx->ip)) {
+			case ATOM: 
+				if (PUSH(ctx, CAR(ctx->ip), &S(ctx)) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
+				ctx->ip = NEXT(ctx->ip); 
+				break;
+			case LIST:
+				if (PUSHL(ctx, clone(ctx, CAR(ctx->ip)), &S(ctx)) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
+				ctx->ip = NEXT(ctx->ip);
+				break;
+			case PRIM:
+				result = ((FUNC)CAR(ctx->ip))(ctx);
+				if (result < 0) { ERR(ctx, result); }
+				if (result != 1) { ctx->ip = NEXT(ctx->ip); }
+				break;
+			case WORD:
+				if (NEXT(ctx->ip) != 0) {
+					if (PUSH(ctx, NEXT(ctx->ip), &R(ctx)) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
+				}
+				ctx->ip = CAR(ctx->ip);
+				break;
+		}
+	} while (1);
+}
+
+// Throughly tested until here
 
 #define RESERVED(ctx)				((ctx->there) - ((CELL)ctx->here))
 
