@@ -368,6 +368,44 @@ void test_STACK_pop() {
 
 // INNER INTERPRETER
 
+void test_INNER_execute_step_atom() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	CELL xlist =
+		cons(ctx, 7, AS(ATOM,
+		cons(ctx, 11, AS(ATOM,
+		cons(ctx, 13, AS(ATOM, 0))))));
+
+	ctx->ip = xlist;
+
+	step(ctx);
+
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(7, CAR(S(ctx)));
+
+	step(ctx);
+
+	TEST_ASSERT_EQUAL_INT(2, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(11, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(S(ctx))));
+
+	step(ctx);
+
+	TEST_ASSERT_EQUAL_INT(3, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(13, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(NEXT(S(ctx)))));
+
+	step(ctx);
+
+	TEST_ASSERT_EQUAL_INT(3, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(13, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(NEXT(S(ctx)))));
+}
+
 void test_INNER_execute_atom() {
 	CELL size = 512;
 	BYTE block[size];
@@ -447,10 +485,13 @@ void test_INNER_execute_word() {
 	BYTE block[size];
 	CTX* ctx = init(block, size);
 
-	CELL xt = 
-		cons(ctx, (CELL)&test_dup_t, AS(PRIM, 
-		cons(ctx, (CELL)&test_add_t, AS(PRIM, 0))));
-	CELL call = cons(ctx, xt, AS(WORD, 0));
+	CELL word = 
+		cons(ctx, 
+			cons(ctx, (CELL)"test_word", AS(ATOM,
+			cons(ctx, (CELL)&test_dup_t, AS(PRIM, 
+			cons(ctx, (CELL)&test_add_t, AS(PRIM, 0)))))),
+		AS(LIST, 0));
+	CELL call = cons(ctx, word, AS(WORD, 0));
 
 	PUSH(ctx, 5, &S(ctx));
 
@@ -459,13 +500,91 @@ void test_INNER_execute_word() {
 	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
 	TEST_ASSERT_EQUAL_INT(10, CAR(S(ctx)));
 
-	call = cons(ctx, xt, AS(WORD, cons(ctx, 13, AS(ATOM, 0))));
+	call = cons(ctx, word, AS(WORD, cons(ctx, 13, AS(ATOM, 0))));
 
 	execute(ctx, call);
 
 	TEST_ASSERT_EQUAL_INT(2, length(S(ctx)));
 	TEST_ASSERT_EQUAL_INT(13, CAR(S(ctx)));
 	TEST_ASSERT_EQUAL_INT(20, CAR(NEXT(S(ctx))));
+}
+
+void test_INNER_execute_words() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	CELL dup_ = 
+		cons(ctx,
+			cons(ctx, (CELL)"dup", AS(ATOM,
+			cons(ctx, (CELL)&test_dup_t, AS(PRIM, 0)))),
+		AS(LIST, 0));
+
+	CELL add_ =
+		cons(ctx,
+			cons(ctx, (CELL)"+", AS(ATOM,
+			cons(ctx, (CELL)&test_add_t, AS(PRIM, 0)))),
+		AS(LIST, 0));
+
+	CELL double_ =
+		cons(ctx,
+			cons(ctx, (CELL)"double", AS(ATOM,
+			cons(ctx, dup_, AS(WORD,
+			cons(ctx, add_, AS(WORD, 0)))))),
+		AS(LIST, 0));
+
+	CELL call = cons(ctx, double_, AS(WORD, 0));
+
+	PUSH(ctx, 7, &S(ctx));
+
+	execute(ctx, call);
+
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(14, CAR(S(ctx)));
+}
+
+void test_INNER_execute_step_words() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	CELL continuation = cons(ctx, 11, AS(ATOM, 0));
+
+	CELL dup_ = 
+		cons(ctx,
+			cons(ctx, (CELL)"dup", AS(ATOM,
+			cons(ctx, (CELL)&test_dup_t, AS(PRIM, 0)))),
+		AS(LIST, 0));
+
+	CELL double_ =
+		cons(ctx,
+			cons(ctx, (CELL)"double", AS(ATOM,
+			cons(ctx, dup_, AS(WORD, 0)))),
+		AS(LIST, 0));
+
+	CELL call = cons(ctx, double_, AS(WORD, continuation));
+
+	PUSH(ctx, 7, &S(ctx));
+
+	ctx->ip = call;
+
+	step(ctx);
+
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(7, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(XT(double_), ctx->ip);
+	TEST_ASSERT_EQUAL_INT(2, length(R(ctx)));
+	TEST_ASSERT_EQUAL_INT(double_, CAR(R(ctx)));
+	TEST_ASSERT_EQUAL_INT(continuation, CAR(NEXT(R(ctx))));
+
+	step(ctx);
+
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(7, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(XT(dup_), ctx->ip);
+	TEST_ASSERT_EQUAL_INT(2, length(R(ctx)));
+	TEST_ASSERT_EQUAL_INT(double_, CAR(R(ctx)));
+	TEST_ASSERT_EQUAL_INT(continuation, CAR(NEXT(R(ctx))));
 }
 
 //// IP PRIMITIVEs
@@ -2284,10 +2403,13 @@ int main() {
 	RUN_TEST(test_STACK_pop);
 
 	// INNER INTERPRETER
+	RUN_TEST(test_INNER_execute_step_atom);
 	RUN_TEST(test_INNER_execute_atom);
 	RUN_TEST(test_INNER_execute_list);
 	RUN_TEST(test_INNER_execute_primitive);
 	RUN_TEST(test_INNER_execute_word);
+	RUN_TEST(test_INNER_execute_words);
+	RUN_TEST(test_INNER_execute_step_words);
 
 	//// IP PRIMITIVES
 	//RUN_TEST(test_IP_branch);

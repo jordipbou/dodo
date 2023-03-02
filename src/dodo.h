@@ -133,14 +133,16 @@ CELL pop(CTX* ctx, CELL* stack) {
 }
 
 #define ERR_STACK_OVERFLOW			-1
-#define ERR_STACK_UNDERFLOW			-2
-#define ERR_UNDEFINED_WORD			-3
-#define ERR_NOT_ENOUGH_MEMORY		-4
-#define ERR_ZERO_LENGTH_NAME		-5
-#define ERR_ATOM_EXPECTED				-6
-#define ERR_LIST_EXPECTED				-7
-#define ERR_RSTACK_UNDERFLOW		-8
-#define ERR_EXIT								-9
+#define ERR_RSTACK_OVERFLOW			-2
+#define ERR_STACK_UNDERFLOW			-3
+#define ERR_RSTACK_UNDERFLOW		-4
+#define ERR_UNDEFINED_WORD			-5
+#define ERR_NOT_ENOUGH_MEMORY		-6
+#define ERR_ZERO_LENGTH_NAME		-7
+#define ERR_ATOM_EXPECTED				-8
+#define ERR_LIST_EXPECTED				-9
+#define ERR_END_OF_XLIST				-10
+#define ERR_EXIT								-11
 
 CELL error(CTX* ctx, CELL err) {
 	// TODO
@@ -155,36 +157,43 @@ CELL error(CTX* ctx, CELL err) {
 
 typedef CELL (*FUNC)(CTX*);
 
+CELL step(CTX* ctx) {
+	CELL result;
+	if (ctx->ip == 0) { return 0; }
+	switch (TYPE(ctx->ip)) {
+		case ATOM: 
+			if (PUSH(ctx, CAR(ctx->ip), &S(ctx)) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
+			ctx->ip = NEXT(ctx->ip); 
+			break;
+		case LIST:
+			if (PUSHL(ctx, clone(ctx, CAR(ctx->ip)), &S(ctx)) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
+			ctx->ip = NEXT(ctx->ip);
+			break;
+		case PRIM:
+			result = ((FUNC)CAR(ctx->ip))(ctx);
+			if (result < 0) { ERR(ctx, result); }
+			if (result != 1) { ctx->ip = NEXT(ctx->ip); }
+			break;
+		case WORD:
+			if (NEXT(ctx->ip) != 0) {
+				if (PUSH(ctx, NEXT(ctx->ip), &R(ctx)) == 0) { ERR(ctx, ERR_RSTACK_OVERFLOW); }
+				if (PUSH(ctx, CAR(ctx->ip), &R(ctx)) == 0) { ERR(ctx, ERR_RSTACK_OVERFLOW); }
+			}
+			ctx->ip = XT(CAR(ctx->ip));
+			break;
+	}
+	return 0;
+}
+
 CELL execute(CTX* ctx, CELL xlist) {
-	CELL result, err;
+	CELL err;
 	ctx->ip = xlist;
 	do {
 		if (ctx->ip == 0) {
-			if ((ctx->ip = pop(ctx, &R(ctx))) == 0) {
-				return 0;
-			}
+			if (pop(ctx, &R(ctx)) == 0) { return 0; }
+			if ((ctx->ip = pop(ctx, &R(ctx))) == 0) { return 0; }
 		}
-		switch (TYPE(ctx->ip)) {
-			case ATOM: 
-				if (PUSH(ctx, CAR(ctx->ip), &S(ctx)) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
-				ctx->ip = NEXT(ctx->ip); 
-				break;
-			case LIST:
-				if (PUSHL(ctx, clone(ctx, CAR(ctx->ip)), &S(ctx)) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
-				ctx->ip = NEXT(ctx->ip);
-				break;
-			case PRIM:
-				result = ((FUNC)CAR(ctx->ip))(ctx);
-				if (result < 0) { ERR(ctx, result); }
-				if (result != 1) { ctx->ip = NEXT(ctx->ip); }
-				break;
-			case WORD:
-				if (NEXT(ctx->ip) != 0) {
-					if (PUSH(ctx, NEXT(ctx->ip), &R(ctx)) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
-				}
-				ctx->ip = CAR(ctx->ip);
-				break;
-		}
+		if ((err = step(ctx)) != 0) { ERR(ctx, err); }
 	} while (1);
 }
 
