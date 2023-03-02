@@ -122,7 +122,7 @@ CELL length(CELL pair) {
 	return c; 
 }
 
-#define PUSH(ctx, v, stack)			(*(stack) = cons(ctx, (CELL)v, AS(ATOM, *(stack))))
+#define PUSH(ctx, v, stack)				(*(stack) = cons(ctx, (CELL)v, AS(ATOM, *(stack))))
 #define PUSHL(ctx, v, stack)			(*(stack) = cons(ctx, (CELL)v, AS(LIST, *(stack))))
 
 CELL pop(CTX* ctx, CELL* stack) {
@@ -197,8 +197,71 @@ CELL execute(CTX* ctx, CELL xlist) {
 	} while (1);
 }
 
-// Throughly tested until here
+#define TC(ctx)									(*(ctx->tib + ctx->in))
+#define TK(ctx)									(ctx->tib + ctx->token)
+#define TL(ctx)									(ctx->in - ctx->token)
 
+CELL parse_token(CTX* ctx) {
+	ctx->token = ctx->in;	while (TC(ctx) != 0 && isspace(TC(ctx))) { ctx->in++;	}
+	ctx->token = ctx->in;	while (TC(ctx) != 0 && !isspace(TC(ctx))) { ctx->in++; }
+	return ctx->in - ctx->token;
+}
+
+CELL find_token(CTX* ctx) {
+	CELL w = ctx->latest;
+	while (w && !(strlen(NFA(w)) == TL(ctx) && strncmp(NFA(w), TK(ctx), TL(ctx)) == 0)) {
+		w = NEXT(w);
+	}
+	return w;
+}
+
+// --------------------------------------------------------------- Throughly tested until here
+
+CELL compile_word(CTX* ctx, CELL word) {
+	if (TYPE(word) == ATOM || TYPE(word) == PRIM) {
+		return (S(ctx) = cons(ctx, CAR(XT(word)), AS(PRIM, S(ctx))));
+	} else {
+		return (S(ctx) = cons(ctx, word, AS(WORD, S(ctx))));
+	}
+}
+
+//CELL evaluate(CTX* ctx, BYTE* str) {
+//	CELL word, result;
+//	char *endptr;
+//	ctx->tib = str;
+//	ctx->token = 0;
+//	ctx->in = 0;
+//	do {
+//		if (parse_token(ctx) == 0) { return 0; }
+//		if ((word = find_token(ctx)) != 0) {
+//			if (!ctx->state || IMMEDIATE(word)) {
+//				if ((result = execute(ctx, XT(word))) != 0) {
+//					return result;
+//				}
+//			} else {
+//				if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
+//				if (PRIMITIVE(word)) {
+//					CAR(ctx->cpile) = cons(ctx, CAR(XT(word)), AS(PRIM, CAR(ctx->cpile)));
+//				} else {
+//					CAR(ctx->cpile) = cons(ctx, XT(word), AS(WORD, CAR(ctx->cpile)));
+//				}
+//			}
+//		} else {
+//			intmax_t number = strtoimax(ctx->tib + ctx->token, &endptr, ctx->base);
+//			if (number == 0 && endptr == (char*)(ctx->tib + ctx->token)) {
+//				return ERR_UNDEFINED_WORD;
+//			} else {
+//				if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
+//				if (ctx->state) {
+//					CAR(ctx->cpile) = cons(ctx, number, AS(ATOM, CAR(ctx->cpile)));
+//				} else {
+//					ctx->stack = cons(ctx, number, AS(ATOM, ctx->stack));
+//				}
+//			}
+//		}
+//	} while (1);
+//}
+//
 #define RESERVED(ctx)				((ctx->there) - ((CELL)ctx->here))
 
 // IP PRIMITIVES
@@ -415,70 +478,6 @@ CELL invert(CTX* ctx) {
 
 
 
-// PARSING
-
-CELL parse_token(CTX* ctx) {
-	while (*(ctx->tib + ctx->in) != 0 && isspace(*(ctx->tib + ctx->in))) {
-		ctx->in++;
-	}
-	ctx->token = ctx->in;
-	while (*(ctx->tib + ctx->in) != 0 && !isspace(*(ctx->tib + ctx->in))) {
-		ctx->in++;
-	}
-	return ctx->in - ctx->token;
-}
-
-CELL find_token(CTX* ctx) {
-	CELL word = ctx->latest;
-	while (
-	word
-	&& !(strlen((BYTE*)NFA(word)) == (ctx->in - ctx->token) 
-	     && strncmp((BYTE*)NFA(word), ctx->tib + ctx->token, ctx->in - ctx->token) == 0
-	)) {
-		word = NEXT(word);
-	}
-	return word;
-}
-
-// OUTER INTERPRETER
-
-//CELL evaluate(CTX* ctx, BYTE* str) {
-//	CELL word, result;
-//	char *endptr;
-//	ctx->tib = str;
-//	ctx->token = 0;
-//	ctx->in = 0;
-//	do {
-//		if (parse_token(ctx) == 0) { return 0; }
-//		if ((word = find_token(ctx)) != 0) {
-//			if (!ctx->state || IMMEDIATE(word)) {
-//				if ((result = execute(ctx, XT(word))) != 0) {
-//					return result;
-//				}
-//			} else {
-//				if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
-//				if (PRIMITIVE(word)) {
-//					CAR(ctx->cpile) = cons(ctx, CAR(XT(word)), AS(PRIM, CAR(ctx->cpile)));
-//				} else {
-//					CAR(ctx->cpile) = cons(ctx, XT(word), AS(WORD, CAR(ctx->cpile)));
-//				}
-//			}
-//		} else {
-//			intmax_t number = strtoimax(ctx->tib + ctx->token, &endptr, ctx->base);
-//			if (number == 0 && endptr == (char*)(ctx->tib + ctx->token)) {
-//				return ERR_UNDEFINED_WORD;
-//			} else {
-//				if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
-//				if (ctx->state) {
-//					CAR(ctx->cpile) = cons(ctx, number, AS(ATOM, CAR(ctx->cpile)));
-//				} else {
-//					ctx->stack = cons(ctx, number, AS(ATOM, ctx->stack));
-//				}
-//			}
-//		}
-//	} while (1);
-//}
-//
 //// CONTIGUOUS MEMORY
 //
 //CELL allot(CTX* ctx) {

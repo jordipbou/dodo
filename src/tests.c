@@ -587,6 +587,118 @@ void test_INNER_execute_step_words() {
 	TEST_ASSERT_EQUAL_INT(continuation, CAR(NEXT(R(ctx))));
 }
 
+void test_PARSING_parse_token() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+	BYTE* str = "   test  ";
+
+	ctx->tib = str;
+	ctx->token = 0;
+	ctx->in = 0;
+
+	parse_token(ctx);
+
+	TEST_ASSERT_EQUAL_INT(4, ctx->in - ctx->token);
+	TEST_ASSERT_EQUAL_INT((CELL)str + 3, ctx->tib + ctx->token);
+
+	parse_token(ctx);
+
+	TEST_ASSERT_EQUAL_INT(0, ctx->in - ctx->token);
+	TEST_ASSERT_EQUAL_INT((CELL)str + 9, ctx->tib + ctx->token);
+
+	BYTE* str2 = "";
+	ctx->tib = str2;
+	ctx->token = 0;
+	ctx->in = 0;
+
+	parse_token(ctx);
+
+	TEST_ASSERT_EQUAL_INT(0, ctx->in - ctx->token);
+	TEST_ASSERT_EQUAL_INT((CELL)str2, ctx->tib + ctx->token);
+
+	BYTE* str3 = ": name    word1 ;";
+	ctx->tib = str3;
+	ctx->token = 0;
+	ctx->in = 0;
+
+	parse_token(ctx);
+
+	TEST_ASSERT_EQUAL_INT(1, ctx->in - ctx->token);
+	TEST_ASSERT(!strncmp(":", ctx->tib + ctx->token, ctx->in - ctx->token));
+	TEST_ASSERT_EQUAL_INT((CELL)str3, ctx->tib + ctx->token);
+
+	parse_token(ctx);
+
+	TEST_ASSERT_EQUAL_INT(4, ctx->in - ctx->token);
+	TEST_ASSERT(!strncmp("name", ctx->tib + ctx->token, ctx->in - ctx->token));
+	TEST_ASSERT_EQUAL_INT((CELL)str3 + 2, ctx->tib + ctx->token);
+
+	parse_token(ctx);
+
+	TEST_ASSERT_EQUAL_INT(5, ctx->in - ctx->token);
+	TEST_ASSERT(!strncmp("word1", ctx->tib + ctx->token, ctx->in - ctx->token));
+	TEST_ASSERT_EQUAL_INT((CELL)str3 + 10, ctx->tib + ctx->token);
+
+	parse_token(ctx);
+
+	TEST_ASSERT_EQUAL_INT(1, ctx->in - ctx->token);
+	TEST_ASSERT(!strncmp(";", ctx->tib + ctx->token, ctx->in - ctx->token));
+	TEST_ASSERT_EQUAL_INT((CELL)str3 + 16, ctx->tib + ctx->token);
+
+	parse_token(ctx);
+
+	TEST_ASSERT_EQUAL_INT(0, ctx->in - ctx->token);
+	TEST_ASSERT_EQUAL_INT((CELL)str3 + 17, ctx->tib + ctx->token);
+
+	parse_token(ctx);
+
+	TEST_ASSERT_EQUAL_INT(0, ctx->in - ctx->token);
+	TEST_ASSERT_EQUAL_INT((CELL)str3 + 17, ctx->tib + ctx->token);
+}
+
+void test_PARSING_find_token() {
+	CELL size = 4096;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	ctx->latest =	
+		cons(ctx, cons(ctx, (CELL)"test2", AS(ATOM, 0)), AS(LIST,
+		cons(ctx, cons(ctx, (CELL)"dup", AS(ATOM, 0)), AS(WORD,
+		cons(ctx, cons(ctx, (CELL)"join", AS(ATOM, 0)), AS(LIST,
+		cons(ctx, cons(ctx, (CELL)"test", AS(ATOM, 0)), AS(LIST, 0))))))));
+
+	ctx->tib = "dup";
+	ctx->token = 0;
+	ctx->in = 3;
+
+	CELL word = find_token(ctx);
+
+	TEST_ASSERT_NOT_EQUAL_INT(0, word);
+	TEST_ASSERT_EQUAL_INT(1, IMMEDIATE(word));
+	TEST_ASSERT_EQUAL_INT(NEXT(ctx->latest), word);
+
+	ctx->tib = "   join  ";
+	ctx->token = 0;
+	ctx->in = 0;
+
+	parse_token(ctx);
+	word = find_token(ctx);
+
+	TEST_ASSERT_EQUAL_INT(0, IMMEDIATE(word));
+	TEST_ASSERT_EQUAL_INT(NEXT(NEXT(ctx->latest)), word);
+
+	ctx->tib = "test";
+	ctx->token = 0;
+	ctx->in = 0;
+
+	parse_token(ctx);
+	word = find_token(ctx);
+
+	TEST_ASSERT_EQUAL_STRING("test", (BYTE*)NFA(word));
+	TEST_ASSERT_EQUAL_INT(NEXT(NEXT(NEXT(ctx->latest))), word);
+}
+
 //// IP PRIMITIVEs
 //
 //void test_IP_branch() {
@@ -1091,118 +1203,6 @@ void test_INNER_execute_step_words() {
 //}
 //
 //// PARSING
-//
-//void test_PARSING_parse_token() {
-//	CELL size = 512;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//	BYTE* str = "   test  ";
-//
-//	ctx->tib = str;
-//	ctx->token = 0;
-//	ctx->in = 0;
-//
-//	parse_token(ctx);
-//
-//	TEST_ASSERT_EQUAL_INT(4, ctx->in - ctx->token);
-//	TEST_ASSERT_EQUAL_INT((CELL)str + 3, ctx->tib + ctx->token);
-//
-//	parse_token(ctx);
-//
-//	TEST_ASSERT_EQUAL_INT(0, ctx->in - ctx->token);
-//	TEST_ASSERT_EQUAL_INT((CELL)str + 9, ctx->tib + ctx->token);
-//
-//	BYTE* str2 = "";
-//	ctx->tib = str2;
-//	ctx->token = 0;
-//	ctx->in = 0;
-//
-//	parse_token(ctx);
-//
-//	TEST_ASSERT_EQUAL_INT(0, ctx->in - ctx->token);
-//	TEST_ASSERT_EQUAL_INT((CELL)str2, ctx->tib + ctx->token);
-//
-//	BYTE* str3 = ": name    word1 ;";
-//	ctx->tib = str3;
-//	ctx->token = 0;
-//	ctx->in = 0;
-//
-//	parse_token(ctx);
-//
-//	TEST_ASSERT_EQUAL_INT(1, ctx->in - ctx->token);
-//	TEST_ASSERT(!strncmp(":", ctx->tib + ctx->token, ctx->in - ctx->token));
-//	TEST_ASSERT_EQUAL_INT((CELL)str3, ctx->tib + ctx->token);
-//
-//	parse_token(ctx);
-//
-//	TEST_ASSERT_EQUAL_INT(4, ctx->in - ctx->token);
-//	TEST_ASSERT(!strncmp("name", ctx->tib + ctx->token, ctx->in - ctx->token));
-//	TEST_ASSERT_EQUAL_INT((CELL)str3 + 2, ctx->tib + ctx->token);
-//
-//	parse_token(ctx);
-//
-//	TEST_ASSERT_EQUAL_INT(5, ctx->in - ctx->token);
-//	TEST_ASSERT(!strncmp("word1", ctx->tib + ctx->token, ctx->in - ctx->token));
-//	TEST_ASSERT_EQUAL_INT((CELL)str3 + 10, ctx->tib + ctx->token);
-//
-//	parse_token(ctx);
-//
-//	TEST_ASSERT_EQUAL_INT(1, ctx->in - ctx->token);
-//	TEST_ASSERT(!strncmp(";", ctx->tib + ctx->token, ctx->in - ctx->token));
-//	TEST_ASSERT_EQUAL_INT((CELL)str3 + 16, ctx->tib + ctx->token);
-//
-//	parse_token(ctx);
-//
-//	TEST_ASSERT_EQUAL_INT(0, ctx->in - ctx->token);
-//	TEST_ASSERT_EQUAL_INT((CELL)str3 + 17, ctx->tib + ctx->token);
-//
-//	parse_token(ctx);
-//
-//	TEST_ASSERT_EQUAL_INT(0, ctx->in - ctx->token);
-//	TEST_ASSERT_EQUAL_INT((CELL)str3 + 17, ctx->tib + ctx->token);
-//}
-//
-//void test_PARSING_find_token() {
-//	CELL size = 4096;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//
-//	ctx->latest =	
-//		cons(ctx, cons(ctx, (CELL)"test2", AS(ATOM, 0)), AS(LIST,
-//		cons(ctx, cons(ctx, (CELL)"dup", AS(ATOM, 0)), AS(CALL,
-//		cons(ctx, cons(ctx, (CELL)"join", AS(ATOM, 0)), AS(LIST,
-//		cons(ctx, cons(ctx, (CELL)"test", AS(ATOM, 0)), AS(LIST, 0))))))));
-//
-//	ctx->tib = "dup";
-//	ctx->token = 0;
-//	ctx->in = 3;
-//
-//	CELL word = find_token(ctx);
-//
-//	TEST_ASSERT_NOT_EQUAL_INT(0, word);
-//	TEST_ASSERT_EQUAL_INT(1, IMMEDIATE(word));
-//	TEST_ASSERT_EQUAL_INT(NEXT(ctx->latest), word);
-//
-//	ctx->tib = "   join  ";
-//	ctx->token = 0;
-//	ctx->in = 0;
-//
-//	parse_token(ctx);
-//	word = find_token(ctx);
-//
-//	TEST_ASSERT_EQUAL_INT(0, IMMEDIATE(word));
-//	TEST_ASSERT_EQUAL_INT(NEXT(NEXT(ctx->latest)), word);
-//
-//	ctx->tib = "test";
-//	ctx->token = 0;
-//	ctx->in = 0;
-//
-//	parse_token(ctx);
-//	word = find_token(ctx);
-//
-//	TEST_ASSERT_EQUAL_STRING("test", (BYTE*)NFA(word));
-//	TEST_ASSERT_EQUAL_INT(NEXT(NEXT(NEXT(ctx->latest))), word);
-//}
 //
 //// OUTER INTERPRETER
 //
@@ -2411,6 +2411,10 @@ int main() {
 	RUN_TEST(test_INNER_execute_words);
 	RUN_TEST(test_INNER_execute_step_words);
 
+	// PARSING
+	RUN_TEST(test_PARSING_parse_token);
+	RUN_TEST(test_PARSING_find_token);
+
 	//// IP PRIMITIVES
 	//RUN_TEST(test_IP_branch);
 	//RUN_TEST(test_IP_jump);
@@ -2441,10 +2445,6 @@ int main() {
 	//RUN_TEST(test_BIT_and);
 	//RUN_TEST(test_BIT_or);
 	//RUN_TEST(test_BIT_invert);
-
-	//// PARSING
-	//RUN_TEST(test_PARSING_parse_token);
-	//RUN_TEST(test_PARSING_find_token);
 
 	//// OUTER INTERPRETER
 	//RUN_TEST(test_OUTER_evaluate_numbers);
