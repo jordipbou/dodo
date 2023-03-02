@@ -154,13 +154,12 @@ CELL execute(CTX* ctx, CELL xlist) {
 				break;
 			case PRIM:
 				result = ((FUNC)CAR(ctx->ip))(ctx);
-				if (result < 0) { return result; }
+				if (result < 0) { /* Error */ return result; }
 				if (result != 1) { ctx->ip = NEXT(ctx->ip); }
 				break;
 			case WORD:
 				if (NEXT(ctx->ip) != 0) {
-					if (ctx->free == ctx->there) { return -1; /*ERR_STACK_OVERFLOW;*/ }
-					ctx->rstack = cons(ctx, NEXT(ctx->ip), AS(ATOM, ctx->rstack));
+					if (PUSH(ctx, NEXT(ctx->ip), &R(ctx)) == 0) { /* Error, rstack overflow */ return -1; }
 				}
 				ctx->ip = CAR(ctx->ip);
 				break;

@@ -406,68 +406,68 @@ void test_INNER_execute_list() {
 	TEST_ASSERT_NOT_EQUAL_INT(NEXT(NEXT(CAR(xlist))), NEXT(NEXT(CAR(S(ctx)))));
 }
 
-//CELL test_add_t(CTX* ctx) {
-//	CELL a = CAR(ctx->stack);
-//	CELL b = CAR(NEXT(ctx->stack));
-//	ctx->stack = reclaim(ctx, reclaim(ctx, ctx->stack));
-//	ctx->stack = cons(ctx, b + a, AS(ATOM, 0));
-//
-//	return 0;
-//}
-//
-//
-//CELL test_dup_t(CTX* ctx) {
-//	CELL a = CAR(ctx->stack);
-//	ctx->stack = cons(ctx, a, AS(ATOM, ctx->stack));
-//
-//	return 0;
-//}
-//
-//
-//void test_INNER_execute_primitive() {
-//	CELL size = 512;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//
-//	CELL xlist = 
-//		cons(ctx, 13, AS(ATOM, 
-//		cons(ctx, 7, AS(ATOM, 
-//		cons(ctx, (CELL)&test_add_t, AS(PRIM, 
-//		cons(ctx, (CELL)&test_dup_t, AS(PRIM, 0))))))));
-//
-//	execute(ctx, xlist);
-//
-//	TEST_ASSERT_EQUAL_INT(2, length(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(20, CAR(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(20, CAR(NEXT(ctx->stack)));
-//}
-//
-//void test_INNER_execute_call() {
-//	CELL size = 512;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//
-//	CELL xt = 
-//		cons(ctx, (CELL)&test_dup_t, AS(PRIM, 
-//		cons(ctx, (CELL)&test_add_t, AS(PRIM, 0))));
-//	CELL call = cons(ctx, xt, AS(CALL, 0));
-//
-//	ctx->stack = cons(ctx, 5, AS(ATOM, ctx->stack));
-//
-//	execute(ctx, call);
-//
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(10, CAR(ctx->stack));
-//
-//	call = cons(ctx, xt, AS(CALL, cons(ctx, 13, AS(ATOM, 0))));
-//
-//	execute(ctx, call);
-//
-//	TEST_ASSERT_EQUAL_INT(2, length(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(13, CAR(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(20, CAR(NEXT(ctx->stack)));
-//}
-//
+CELL test_add_t(CTX* ctx) {
+	CELL a = pop(ctx, &S(ctx));
+	CELL b = pop(ctx, &S(ctx));
+	PUSH(ctx, b + a, &S(ctx));
+
+	return 0;
+}
+
+
+CELL test_dup_t(CTX* ctx) {
+	CELL v = pop(ctx, &S(ctx));
+	PUSH(ctx, v, &S(ctx));
+	PUSH(ctx, v, &S(ctx));
+
+	return 0;
+}
+
+
+void test_INNER_execute_primitive() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	CELL xlist = 
+		cons(ctx, 13, AS(ATOM, 
+		cons(ctx, 7, AS(ATOM, 
+		cons(ctx, (CELL)&test_add_t, AS(PRIM, 
+		cons(ctx, (CELL)&test_dup_t, AS(PRIM, 0))))))));
+
+	execute(ctx, xlist);
+
+	TEST_ASSERT_EQUAL_INT(2, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(20, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(20, CAR(NEXT(S(ctx))));
+}
+
+void test_INNER_execute_word() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	CELL xt = 
+		cons(ctx, (CELL)&test_dup_t, AS(PRIM, 
+		cons(ctx, (CELL)&test_add_t, AS(PRIM, 0))));
+	CELL call = cons(ctx, xt, AS(WORD, 0));
+
+	PUSH(ctx, 5, &S(ctx));
+
+	execute(ctx, call);
+
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(10, CAR(S(ctx)));
+
+	call = cons(ctx, xt, AS(WORD, cons(ctx, 13, AS(ATOM, 0))));
+
+	execute(ctx, call);
+
+	TEST_ASSERT_EQUAL_INT(2, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(13, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(20, CAR(NEXT(S(ctx))));
+}
+
 //// IP PRIMITIVEs
 //
 //void test_IP_branch() {
@@ -2286,8 +2286,8 @@ int main() {
 	// INNER INTERPRETER
 	RUN_TEST(test_INNER_execute_atom);
 	RUN_TEST(test_INNER_execute_list);
-	//RUN_TEST(test_INNER_execute_primitive);
-	//RUN_TEST(test_INNER_execute_call);
+	RUN_TEST(test_INNER_execute_primitive);
+	RUN_TEST(test_INNER_execute_word);
 
 	//// IP PRIMITIVES
 	//RUN_TEST(test_IP_branch);
