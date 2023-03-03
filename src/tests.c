@@ -924,6 +924,51 @@ void test_PRIMITIVES_postpone() {
 	TEST_ASSERT_EQUAL_INT(7, CAR(S(ctx)));
 }
 
+void test_PRIMITIVES_parse() {
+	CELL size = 1024;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	ctx->latest = 
+		cons(ctx,
+			cons(ctx, (CELL)"parse", AS(ATOM,
+			cons(ctx, (CELL)&parse, AS(PRIM, 0)))),
+		AS(CMP_PRIMITIVE, 0));
+
+	evaluate(ctx, "39 parse just a string that ends on a single quote'");
+
+	TEST_ASSERT_EQUAL_INT(2, length(S(ctx)));
+	CELL l = pop(ctx, &S(ctx));
+	CELL a = pop(ctx, &S(ctx));
+	TEST_ASSERT_EQUAL_MEMORY(" just a string that ends on a single quote", a, l);
+}
+
+void test_PRIMITIVES_parse_name() {
+	CELL size = 1024;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	ctx->latest = 
+		cons(ctx,
+			cons(ctx, (CELL)"parse-name", AS(ATOM,
+			cons(ctx, (CELL)&parse_name, AS(PRIM, 0)))),
+		AS(CMP_PRIMITIVE, 0));
+
+	evaluate(ctx, "parse-name");
+
+	TEST_ASSERT_EQUAL_INT(2, length(S(ctx)));
+	CELL l = pop(ctx, &S(ctx));
+	CELL a = pop(ctx, &S(ctx));
+	TEST_ASSERT_EQUAL_INT(0, l);	
+
+	evaluate(ctx, "parse-name    my-name  ");
+
+	TEST_ASSERT_EQUAL_INT(2, length(S(ctx)));
+	l = pop(ctx, &S(ctx));
+	a = pop(ctx, &S(ctx));
+	TEST_ASSERT_EQUAL_MEMORY("my-name", a, l);
+}
+
 //// IP PRIMITIVEs
 //
 //void test_IP_branch() {
@@ -2541,6 +2586,8 @@ int main() {
 
 	// PRIMITIVES
 	RUN_TEST(test_PRIMITIVES_postpone);
+	RUN_TEST(test_PRIMITIVES_parse);
+	RUN_TEST(test_PRIMITIVES_parse_name);
 
 	//// IP PRIMITIVES
 	//RUN_TEST(test_IP_branch);

@@ -156,6 +156,13 @@ CELL error(CTX* ctx, CELL err) {
 
 #define ERR(ctx, err)		{ CELL __err__ = error(ctx, err); if (__err__) { return __err__; } }
 
+#define ERR_POP(ctx, v) \
+	if (S(ctx) == 0) { \
+		ERR(ctx, ERR_STACK_UNDERFLOW); \
+	} else { \
+		v = pop(ctx, &S(ctx)); \
+	}
+
 typedef CELL (*FUNC)(CTX*);
 
 CELL step(CTX* ctx) {
@@ -273,7 +280,7 @@ CELL shrink(CTX* ctx) {
 }
 
 CELL allot(CTX* ctx) {
-	CELL bytes = pop(ctx, &S(ctx));
+	CELL bytes; ERR_POP(ctx, bytes);
 	if (bytes == 0) {
 		return 0;
 	} else if (bytes > 0) { 
@@ -304,6 +311,23 @@ CELL postpone(CTX* ctx) {
 	if ((word = find_token(ctx)) == 0) { ERR(ctx, ERR_UNDEFINED_WORD); }
 	if (compile_word(ctx, word) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
 	return 0;
+}
+
+CELL parse(CTX* ctx) { 
+	CELL c; ERR_POP(ctx, c);
+	ctx->token = ctx->in;	
+	if (PUSH(ctx, TK(ctx), &S(ctx)) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
+	while (TC(ctx) != 0 && TC(ctx) != c) { ctx->in++;	}
+	if (PUSH(ctx, TL(ctx), &S(ctx)) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
+	if (TC(ctx) != 0) ctx->in++;
+	return 0;
+}
+
+CELL parse_name(CTX* ctx) { 
+	parse_token(ctx);
+	if (PUSH(ctx, TK(ctx), &S(ctx)) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
+	if (PUSH(ctx, TL(ctx), &S(ctx)) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
+	return 0; 
 }
 
 // --------------------------------------------------------------- Throughly tested until here
