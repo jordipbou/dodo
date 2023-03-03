@@ -969,6 +969,64 @@ void test_PRIMITIVES_parse_name() {
 	TEST_ASSERT_EQUAL_MEMORY("my-name", a, l);
 }
 
+void test_PRIMITIVES_spush() {
+	CELL size = 1024;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	PUSH(ctx, 13, &S(ctx));
+	PUSH(ctx, 11, &S(ctx));
+	PUSH(ctx, 7, &S(ctx));
+
+	spush(ctx);
+
+	TEST_ASSERT_EQUAL_INT(0, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(2, length(ctx->pile));
+	TEST_ASSERT_EQUAL_INT(3, length(CAR(NEXT(ctx->pile))));
+	TEST_ASSERT_EQUAL_INT(7, CAR(CAR(NEXT(ctx->pile))));
+	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(CAR(NEXT(ctx->pile)))));
+	TEST_ASSERT_EQUAL_INT(13, CAR(NEXT(NEXT(CAR(NEXT(ctx->pile))))));
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 4, FREE(ctx));
+}
+
+void test_PRIMITIVES_clear() {
+	CELL size = 1024;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	PUSH(ctx, 13, &S(ctx));
+	PUSH(ctx, 11, &S(ctx));
+	PUSH(ctx, 7, &S(ctx));
+
+	clear(ctx);
+
+	TEST_ASSERT_EQUAL_INT(0, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx), FREE(ctx));
+}
+
+void test_PRIMITIVES_sdrop() {
+	CELL size = 1024;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	PUSH(ctx, 13, &S(ctx));
+	PUSH(ctx, 11, &S(ctx));
+	PUSH(ctx, 7, &S(ctx));
+
+	spush(ctx);
+
+	PUSH(ctx, 19, &S(ctx));
+	PUSH(ctx, 17, &S(ctx));
+
+	sdrop(ctx);
+
+	TEST_ASSERT_EQUAL_INT(3, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(7, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(13, CAR(NEXT(NEXT(S(ctx)))));
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 3, FREE(ctx));
+}
+
 //// IP PRIMITIVEs
 //
 //void test_IP_branch() {
@@ -2588,6 +2646,9 @@ int main() {
 	RUN_TEST(test_PRIMITIVES_postpone);
 	RUN_TEST(test_PRIMITIVES_parse);
 	RUN_TEST(test_PRIMITIVES_parse_name);
+	RUN_TEST(test_PRIMITIVES_spush);
+	RUN_TEST(test_PRIMITIVES_clear);
+	RUN_TEST(test_PRIMITIVES_sdrop);
 
 	//// IP PRIMITIVES
 	//RUN_TEST(test_IP_branch);

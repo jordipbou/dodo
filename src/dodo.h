@@ -330,6 +330,22 @@ CELL parse_name(CTX* ctx) {
 	return 0; 
 }
 
+CELL spush(CTX* ctx) {
+	if (PUSHL(ctx, 0, &ctx->pile) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
+	ctx->stack = ctx->pile;
+	return 0;
+}
+
+CELL clear(CTX* ctx) {
+	while (S(ctx)) S(ctx) = reclaim(ctx, S(ctx));
+}
+
+CELL sdrop(CTX* ctx) {
+	if (NEXT(ctx->pile) == 0) { return clear(ctx); }
+	ctx->stack = ctx->pile = reclaim(ctx, ctx->pile);
+	return 0;
+}
+
 // --------------------------------------------------------------- Throughly tested until here
 
 // IP PRIMITIVES
