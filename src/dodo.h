@@ -233,12 +233,7 @@ CELL evaluate(CTX* ctx, BYTE* str) {
 		if (parse_token(ctx) == 0) { return 0; }
 		if ((word = find_token(ctx)) != 0) {
 			if (!ctx->state || IMMEDIATE(word)) {
-				if (TYPE(word) == ATOM || TYPE(word) == PRIM) {
-					if ((result = execute(ctx, CAR(XT(word)))) != 0) { ERR(ctx, result); }
-				} else {
-					// TODO: Should we save info of current execution on return stack ?!
-					if ((result = execute(ctx, XT(word))) != 0) { ERR(ctx, result); }
-				}
+				if ((result = execute(ctx, XT(word))) != 0) { ERR(ctx, result); }
 			} else {
 				if (compile_word(ctx, word) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
 			}
@@ -300,6 +295,14 @@ CELL allot(CTX* ctx) {
 			if (shrink(ctx) != 0) { ERR(ctx, ERR_NOT_ENOUGH_RESERVED); } 
 		}
 	}
+	return 0;
+}
+
+CELL postpone(CTX* ctx) {
+	CELL word;
+	if (parse_token(ctx) == 0) { ERR(ctx, ERR_ZERO_LENGTH_NAME); }
+	if ((word = find_token(ctx)) == 0) { ERR(ctx, ERR_UNDEFINED_WORD); }
+	if (compile_word(ctx, word) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
 	return 0;
 }
 
@@ -856,26 +859,6 @@ CELL invert(CTX* ctx) {
 //	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
 //	if (TYPE(ctx->stack) != ATOM) { return ERR_ATOM_EXPECTED; }
 //	CAR(ctx->stack) = CAR(ctx->stack) * sizeof(CELL);
-//	return 0;
-//}
-//
-//CELL postpone(CTX* ctx) {
-//	CELL word;
-//	parse_token(ctx);
-//	if ((word = find_token(ctx)) == 0) { return ERR_UNDEFINED_WORD; }
-//	if (ctx->state) {
-//		if (PRIMITIVE(word)) {
-//			CAR(ctx->cpile) = cons(ctx, CAR(XT(word)), AS(PRIM, CAR(ctx->cpile)));
-//		} else {
-//			CAR(ctx->cpile) = cons(ctx, XT(word), AS(LIST, CAR(ctx->cpile)));
-//		}
-//	} else {
-//		if (PRIMITIVE(word)) {
-//			ctx->stack = cons(ctx, CAR(XT(word)), AS(PRIM, ctx->stack));
-//		} else {
-//			ctx->stack = cons(ctx, XT(word), AS(LIST, ctx->stack));
-//		}
-//	}
 //	return 0;
 //}
 //

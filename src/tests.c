@@ -900,6 +900,30 @@ void test_MEM_allot() {
 	TEST_ASSERT_EQUAL_INT(free_nodes(ctx), FREE(ctx));
 }
 
+void test_PRIMITIVES_postpone() {
+	CELL size = 1024;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	CELL imm_word =
+		cons(ctx,
+			cons(ctx, (CELL)"imm-word", AS(ATOM,
+			cons(ctx, 7, AS(PRIM, 0)))),
+		AS(IMM_PRIMITIVE, 0));
+
+	ctx->latest =
+		cons(ctx,
+			cons(ctx, (CELL)"postpone", AS(ATOM,
+			cons(ctx, (CELL)&postpone, AS(PRIM, 0)))),
+		AS(IMM_PRIMITIVE, imm_word));
+
+	evaluate(ctx, "postpone imm-word");
+
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(PRIM, TYPE(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(7, CAR(S(ctx)));
+}
+
 //// IP PRIMITIVEs
 //
 //void test_IP_branch() {
@@ -2514,6 +2538,9 @@ int main() {
 	RUN_TEST(test_MEM_grow);
 	RUN_TEST(test_MEM_shrink);
 	RUN_TEST(test_MEM_allot);
+
+	// PRIMITIVES
+	RUN_TEST(test_PRIMITIVES_postpone);
 
 	//// IP PRIMITIVES
 	//RUN_TEST(test_IP_branch);
