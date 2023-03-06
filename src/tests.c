@@ -1027,6 +1027,94 @@ void test_PRIMITIVES_sdrop() {
 	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 3, FREE(ctx));
 }
 
+void test_PRIMITIVES_stack_to_list() {
+	CELL size = 1024;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	PUSH(ctx, 11, &S(ctx));
+	PUSH(ctx, 7, &S(ctx));
+
+	spush(ctx);
+
+	PUSH(ctx, 17, &S(ctx));
+	PUSH(ctx, 13, &S(ctx));
+
+	stack_to_list(ctx);
+
+	TEST_ASSERT_EQUAL_INT(1, length(ctx->pile));
+	TEST_ASSERT_EQUAL_INT(3, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(LIST, TYPE(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(2, length(CAR(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(13, CAR(CAR(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(17, CAR(NEXT(CAR(S(ctx)))));
+	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(NEXT(S(ctx)))));
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 5, FREE(ctx));
+
+	pop(ctx, &S(ctx));
+
+	stack_to_list(ctx);
+
+	TEST_ASSERT_EQUAL_INT(1, length(ctx->pile));
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(LIST, TYPE(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(2, length(CAR(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(7, CAR(CAR(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(CAR(S(ctx)))));
+}
+
+void test_PRIMITIVES_list_to_stack() {
+	CELL size = 1024;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	spush(ctx);
+
+	PUSH(ctx, 11, &S(ctx));
+	PUSH(ctx, 7, &S(ctx));
+
+	stack_to_list(ctx);
+
+	list_to_stack(ctx);
+
+	TEST_ASSERT_EQUAL_INT(2, length(ctx->pile));
+	TEST_ASSERT_EQUAL_INT(2, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(7, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(0, CAR(NEXT(ctx->pile)));
+}
+
+void test_PRIMITIVES_list_to_stack_2() {
+	CELL size = 1024;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	list_to_stack(ctx);
+
+	TEST_ASSERT_EQUAL_INT(2, length(ctx->pile));
+	TEST_ASSERT_EQUAL_INT(0, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(0, CAR(NEXT(ctx->pile)));
+}
+
+void test_PRIMITIVES_brackets() {
+	CELL size = 1024;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	lbracket(ctx);	
+
+	TEST_ASSERT_EQUAL_INT(0, ctx->state);
+
+	rbracket(ctx);
+
+	TEST_ASSERT_EQUAL_INT(1, ctx->state);
+
+	lbracket(ctx);
+
+	TEST_ASSERT_EQUAL_INT(0, ctx->state);
+}
+
 //// IP PRIMITIVEs
 //
 //void test_IP_branch() {
@@ -2649,6 +2737,10 @@ int main() {
 	RUN_TEST(test_PRIMITIVES_spush);
 	RUN_TEST(test_PRIMITIVES_clear);
 	RUN_TEST(test_PRIMITIVES_sdrop);
+	RUN_TEST(test_PRIMITIVES_stack_to_list);
+	RUN_TEST(test_PRIMITIVES_list_to_stack);
+	RUN_TEST(test_PRIMITIVES_list_to_stack_2);
+	RUN_TEST(test_PRIMITIVES_brackets);
 
 	//// IP PRIMITIVES
 	//RUN_TEST(test_IP_branch);

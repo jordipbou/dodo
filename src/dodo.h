@@ -54,7 +54,7 @@ CTX* init(BYTE* block, CELL size) {
 	ctx->there = ALIGN(BOTTOM(ctx), 2*sizeof(CELL));
 	ctx->pile = TOP(ctx);
 	CAR(ctx->pile) = 0;
-	CDR(ctx->pile) = 0;
+	CDR(ctx->pile) = AS(LIST, 0);
 	ctx->stack = ctx->pile;
 	ctx->free = TOP(ctx) - 2*sizeof(CELL);
 
@@ -346,7 +346,41 @@ CELL sdrop(CTX* ctx) {
 	return 0;
 }
 
+CELL stack_to_list(CTX* ctx) {
+	if (NEXT(ctx->pile) == 0) {
+		ctx->stack = ctx->pile = cons(ctx, ctx->pile, AS(LIST, 0));
+	} else {
+		CELL t = ctx->pile;
+		ctx->stack = ctx->pile = NEXT(ctx->pile);
+		LINK(t, CAR(ctx->pile));
+		CAR(ctx->pile) = t;
+	}
+	return 0;
+}
+
+CELL list_to_stack(CTX* ctx) {
+	if (S(ctx) == 0) {
+		spush(ctx);
+	} else {
+		CELL t = S(ctx);
+		S(ctx) = NEXT(S(ctx));
+		LINK(t, ctx->pile);
+		ctx->stack = ctx->pile = t;
+	}
+}
+
+CELL lbracket(CTX* ctx) {
+	ctx->state = 0;
+	return 0;
+}
+
+CELL rbracket(CTX* ctx) {
+	ctx->state = 1;
+	return 0;
+}
+
 // --------------------------------------------------------------- Throughly tested until here
+
 
 // IP PRIMITIVES
 
