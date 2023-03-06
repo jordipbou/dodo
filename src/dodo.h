@@ -149,7 +149,7 @@ CELL error(CTX* ctx, CELL err) {
 	// TODO
 	/* Lookup on exception stack for a correct handler for current error */
 	/* The debugger must be installed on the exception stack for it to work */
-	/* If a handler its found execute it and return its return value */
+	/* If a handler its found then execute it and return its return value */
 	/* If none its found, just return the error */
 	return err;
 }
@@ -379,6 +379,24 @@ CELL rbracket(CTX* ctx) {
 	return 0;
 }
 
+CELL reverse_stack(CTX* ctx) {
+	S(ctx) = reverse(S(ctx), 0);
+	return 0;
+}
+
+CELL lbrace(CTX* ctx) {
+	spush(ctx);
+	rbracket(ctx);
+	return 0;
+}
+
+CELL rbrace(CTX* ctx) {
+	lbracket(ctx);
+	reverse_stack(ctx);
+	stack_to_list(ctx);
+	return 0;
+}
+
 // --------------------------------------------------------------- Throughly tested until here
 
 
@@ -596,40 +614,6 @@ CELL invert(CTX* ctx) {
 
 
 
-//// CONTIGUOUS MEMORY
-//
-//CELL allot(CTX* ctx) {
-//	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
-//	CELL bytes = CAR(ctx->stack);
-//	ctx->stack = reclaim(ctx, ctx->stack);
-// 	BYTE* here = ctx->here;
-// 	if (!bytes) { 
-//		return 0;
-// 	} else if (bytes < 0) { 
-// 		ctx->here = (ctx->here + bytes) > BOTTOM(ctx) ? ctx->here + bytes : BOTTOM(ctx);
-// 		while (ctx->there - (2*sizeof(CELL)) >= ALIGN(ctx->here, (2*sizeof(CELL)))) { 
-// 			CELL t = ctx->there;
-// 			ctx->there -= (2*sizeof(CELL));
-// 			CAR(ctx->there) = t;
-// 			CDR(ctx->there) = 0;
-// 			CDR(t) = ctx->there;
-// 		}
-// 	} else {
-// 		CELL p = ctx->there;
-// 		while(CAR(p) == (p + (2*sizeof(CELL))) && p < (CELL)(ctx->here + bytes) && p < TOP(ctx)) { 
-//			p = CAR(p);	
-//		}
-// 		if (p >= (CELL)(here + bytes)) {
-// 			ctx->there = p;
-// 			CDR(ctx->there) = 0;
-// 			ctx->here += bytes;
-// 		} else {
-// 			return ERR_NOT_ENOUGH_MEMORY;
-// 		}
-// 	}
-// 	return 0;
-//}
-//
 //CELL compile_str(CTX* ctx) {
 //	CELL str_start;
 //	while (*(ctx->tib + ctx->in) != 0 && isspace(*(ctx->tib + ctx->in))) {
@@ -772,44 +756,12 @@ CELL invert(CTX* ctx) {
 //	return 0;
 //}
 //
-//CELL rbracket(CTX* ctx) {
-//	if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
-//	if (ctx->cpile == 0) { ctx->cpile = cons(ctx, 0, AS(LIST, ctx->cpile)); }
-//	ctx->state = 1;
-//
-//	return 0;
-//}
-//
-//CELL lbracket(CTX* ctx) {
-//	ctx->state = 0;
-//
-//	return 0;
-//}
-//
 //CELL literal(CTX* ctx) {
 //	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
 //	if (TYPE(ctx->stack) != ATOM) { return ERR_ATOM_EXPECTED; }
 //	CELL x = CAR(ctx->stack);
 //	ctx->stack = reclaim(ctx, ctx->stack);
 //	CAR(ctx->cpile) = cons(ctx, x, AS(ATOM, CAR(ctx->cpile)));
-//	return 0;
-//}
-//
-//CELL parse(CTX* ctx) {
-//	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
-//	if (ctx->free == ctx->there || NEXT(ctx->free) == ctx->there) { return ERR_STACK_OVERFLOW; }
-//	CELL c = CAR(ctx->stack);
-//	ctx->stack = reclaim(ctx, ctx->stack);
-//	ctx->stack = cons(ctx, (CELL)(ctx->tib + ctx->in), AS(ATOM, ctx->stack));
-//	CELL start = ctx->in;
-//	while (*(ctx->tib + ctx->in) != 0 && *(ctx->tib + ctx->in) != c) {
-//		ctx->in++;
-//	}
-//	if (*(ctx->tib + ctx->in) == c) { 
-//		ctx->in++;
-//	}
-//	ctx->stack = cons(ctx, ctx->in - start, AS(ATOM, ctx->stack));
-//
 //	return 0;
 //}
 //
@@ -854,14 +806,6 @@ CELL invert(CTX* ctx) {
 //	ctx->ip = xt;
 //
 //	return 1;
-//}
-//
-//CELL parse_name(CTX* ctx) {
-//	if (ctx->free == ctx->there || NEXT(ctx->free) == ctx->there) { return ERR_STACK_OVERFLOW; }
-//	parse_token(ctx);
-//	ctx->stack = cons(ctx, (CELL)(ctx->tib + ctx->token), AS(ATOM, ctx->stack));
-//	ctx->stack = cons(ctx, ctx->in - ctx->token, AS(ATOM, ctx->stack));
-//	return 0;
 //}
 //
 //CELL type(CTX* ctx) {

@@ -1115,6 +1115,63 @@ void test_PRIMITIVES_brackets() {
 	TEST_ASSERT_EQUAL_INT(0, ctx->state);
 }
 
+void test_PRIMITIVES_reverse_stack() {
+	CELL size = 1024;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	PUSH(ctx, 11, &S(ctx));
+	PUSH(ctx, 7, &S(ctx));
+
+	reverse_stack(ctx);
+
+	TEST_ASSERT_EQUAL_INT(1, length(ctx->pile));
+	TEST_ASSERT_EQUAL_INT(2, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(11, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(S(ctx))));
+}
+
+void test_PRIMITIVES_reverse_stack_2() {
+	CELL size = 1024;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	spush(ctx);
+
+	PUSH(ctx, 11, &S(ctx));
+	PUSH(ctx, 7, &S(ctx));
+
+	reverse_stack(ctx);
+
+	TEST_ASSERT_EQUAL_INT(2, length(ctx->pile));
+	TEST_ASSERT_EQUAL_INT(2, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(11, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(0, length(CAR(NEXT(ctx->pile))));	
+}
+
+void test_PRIMITIVES_braces() {
+	CELL size = 1024;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	lbrace(ctx);
+
+	PUSH(ctx, 1, &S(ctx));
+	PUSH(ctx, 2, &S(ctx));
+	PUSH(ctx, 3, &S(ctx));
+
+	rbrace(ctx);
+
+	TEST_ASSERT_EQUAL_INT(1, length(ctx->pile));
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(LIST, TYPE(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(3, length(CAR(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(1, CAR(CAR(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(2, CAR(NEXT(CAR(S(ctx)))));
+	TEST_ASSERT_EQUAL_INT(3, CAR(NEXT(NEXT(CAR(S(ctx))))));
+}
+
 //// IP PRIMITIVEs
 //
 //void test_IP_branch() {
@@ -2741,6 +2798,10 @@ int main() {
 	RUN_TEST(test_PRIMITIVES_list_to_stack);
 	RUN_TEST(test_PRIMITIVES_list_to_stack_2);
 	RUN_TEST(test_PRIMITIVES_brackets);
+	RUN_TEST(test_PRIMITIVES_reverse_stack);
+	RUN_TEST(test_PRIMITIVES_reverse_stack_2);
+	RUN_TEST(test_PRIMITIVES_braces);
+
 
 	//// IP PRIMITIVES
 	//RUN_TEST(test_IP_branch);
