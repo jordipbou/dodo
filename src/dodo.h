@@ -38,7 +38,6 @@ typedef struct {
 } CTX;
 
 #define S(ctx)									CAR(ctx->stack)
-#define R(ctx)									ctx->rstack
 
 #define FREE(ctx)						(length(ctx->free) - 1)		// Don't count ctx->there
 #define ALIGN(addr, bound)	((((CELL)addr) + (bound - 1)) & ~(bound - 1))
@@ -122,8 +121,8 @@ CELL length(CELL pair) {
 	return c; 
 }
 
-#define PUSH(ctx, v, stack)				(*(stack) = cons(ctx, (CELL)v, AS(ATOM, *(stack))))
-#define PUSHL(ctx, v, stack)			(*(stack) = cons(ctx, (CELL)v, AS(LIST, *(stack))))
+#define PUSH(ctx, v)				(S(ctx) = cons(ctx, (CELL)v, AS(ATOM, S(ctx))))
+#define PUSHL(ctx, v)				(S(ctx) = cons(ctx, (CELL)v, AS(LIST, S(ctx))))
 
 CELL pop(CTX* ctx, CELL* stack) {
 	if (stack == 0 || *stack == 0) { return 0; /* ERROR */ }
@@ -151,6 +150,11 @@ CELL error(CTX* ctx, CELL err) {
 	/* The debugger must be installed on the exception stack for it to work */
 	/* If a handler its found then execute it and return its return value */
 	/* If none its found, just return the error */
+	// TODO
+	/* The error function should have the ability to not just modify the context */
+	/* but of returning a compleletely new context to work on. For example, in the case */
+	/* of a memory error, a new context with a bigger buffer could be created, cloning */
+	/* the current context on it and returning it as the new context. */
 	return err;
 }
 
@@ -165,44 +169,43 @@ CELL error(CTX* ctx, CELL err) {
 
 typedef CELL (*FUNC)(CTX*);
 
-CELL step(CTX* ctx) {
-	CELL result;
-	if (ctx->ip == 0) { return 0; }
-	switch (TYPE(ctx->ip)) {
-		case ATOM: 
-			if (PUSH(ctx, CAR(ctx->ip), &S(ctx)) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
-			ctx->ip = NEXT(ctx->ip); 
-			break;
-		case LIST:
-			if (PUSHL(ctx, clone(ctx, CAR(ctx->ip)), &S(ctx)) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
-			ctx->ip = NEXT(ctx->ip);
-			break;
-		case PRIM:
-			result = ((FUNC)CAR(ctx->ip))(ctx);
-			if (result < 0) { ERR(ctx, result); }
-			if (result != 1) { ctx->ip = NEXT(ctx->ip); }
-			break;
-		case WORD:
-			if (NEXT(ctx->ip) != 0) {
-				if (PUSH(ctx, NEXT(ctx->ip), &R(ctx)) == 0) { ERR(ctx, ERR_RSTACK_OVERFLOW); }
-				if (PUSH(ctx, CAR(ctx->ip), &R(ctx)) == 0) { ERR(ctx, ERR_RSTACK_OVERFLOW); }
-			}
-			ctx->ip = XT(CAR(ctx->ip));
-			break;
-	}
-	return 0;
+#define EXECUTE_PRIMITIVE(ctx, primitive) { \
+	CELL result = ((FUNC)primitive)(ctx); \
+	if (result < 0) { ERR(ctx, result); } \
 }
 
 CELL execute(CTX* ctx, CELL xlist) {
-	CELL err;
-	ctx->ip = xlist;
-	do {
-		if (ctx->ip == 0) {
-			if (pop(ctx, &R(ctx)) == 0) { return 0; }
-			if ((ctx->ip = pop(ctx, &R(ctx))) == 0) { return 0; }
+	CELL result;
+	CELL p = xlist;
+	while (p) {
+		switch (TYPE(p)) {
+			case ATOM:
+				if (PUSH(ctx, CAR(p)) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
+				p = NEXT(p);
+				break;
+			case LIST:
+				if (PUSHL(ctx, clone(ctx, CAR(p))) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
+				p = NEXT(p);
+				break;
+			case PRIM:
+				switch (CAR(p)) {
+					case 0: /* ZJUMP */ break;
+					case 1: /* JUMP */ break;
+					default:
+						EXECUTE_PRIMITIVE(ctx, CAR(p));
+						p = NEXT(p);
+						break;
+				}
+				break;
+			case WORD:
+				if (NEXT(p)) { 
+					execute(ctx, XT(CAR(p))); p = NEXT(p); 
+				} else { 
+					p = XT(CAR(p));
+				}
+				break;
 		}
-		if ((err = step(ctx)) != 0) { ERR(ctx, err); }
-	} while (1);
+	}
 }
 
 #define TC(ctx)									(*(ctx->tib + ctx->in))
@@ -249,7 +252,7 @@ CELL evaluate(CTX* ctx, BYTE* str) {
 			if (number == 0 && endptr == (char*)(TK(ctx))) {
 				ERR(ctx, ERR_UNDEFINED_WORD);
 			} else {
-				if (PUSH(ctx, number, &S(ctx)) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
+				if (PUSH(ctx, number) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
 			}
 		}
 	} while (1);
@@ -316,22 +319,22 @@ CELL postpone(CTX* ctx) {
 CELL parse(CTX* ctx) { 
 	CELL c; ERR_POP(ctx, c);
 	ctx->token = ctx->in;	
-	if (PUSH(ctx, TK(ctx), &S(ctx)) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
+	if (PUSH(ctx, TK(ctx)) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
 	while (TC(ctx) != 0 && TC(ctx) != c) { ctx->in++;	}
-	if (PUSH(ctx, TL(ctx), &S(ctx)) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
+	if (PUSH(ctx, TL(ctx)) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
 	if (TC(ctx) != 0) ctx->in++;
 	return 0;
 }
 
 CELL parse_name(CTX* ctx) { 
 	parse_token(ctx);
-	if (PUSH(ctx, TK(ctx), &S(ctx)) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
-	if (PUSH(ctx, TL(ctx), &S(ctx)) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
+	if (PUSH(ctx, TK(ctx)) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
+	if (PUSH(ctx, TL(ctx)) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
 	return 0; 
 }
 
 CELL spush(CTX* ctx) {
-	if (PUSHL(ctx, 0, &ctx->pile) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
+	if ((ctx->pile = cons(ctx, 0, AS(LIST, ctx->pile))) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
 	ctx->stack = ctx->pile;
 	return 0;
 }
@@ -397,28 +400,68 @@ CELL rbrace(CTX* ctx) {
 	return 0;
 }
 
+CELL swap(CTX* ctx) {
+	CELL a = pop(ctx, &S(ctx));
+	CELL b = pop(ctx, &S(ctx));
+	PUSH(ctx, a);
+	PUSH(ctx, b);
+	return 0;
+}
+
+CELL drop(CTX* ctx) {
+	S(ctx) = reclaim(ctx, S(ctx));
+	return 0;
+}
+
+CELL exec(CTX* ctx) {
+	CELL result = 0;
+	CELL t = S(ctx);
+	S(ctx) = NEXT(S(ctx));
+	LINK(t, 0);
+
+	switch (TYPE(t)) {
+		case ATOM: if (PUSH(ctx, CAR(t)) == 0) result = ERR_STACK_OVERFLOW; break;
+		case LIST: result = execute(ctx, CAR(t)); break;
+		case PRIM: result = ((FUNC)CAR(t))(ctx); break;
+		case WORD: result = execute(ctx, XT(CAR(t))); break;
+	}
+
+	reclaim(ctx, t);
+	if (result < 0) { ERR(ctx, result); } else { return result; }
+}
+
 // --------------------------------------------------------------- Throughly tested until here
 
-
-// IP PRIMITIVES
-
 CELL branch(CTX* ctx) {
-	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
-	if (TYPE(ctx->stack) != ATOM) { return ERR_ATOM_EXPECTED; }
-	CELL b = CAR(ctx->stack);
-	ctx->stack = reclaim(ctx, ctx->stack);
-	if (NEXT(NEXT(NEXT(ctx->ip))) != 0) {
-		if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
-		ctx->rstack = cons(ctx, NEXT(NEXT(NEXT(ctx->ip))), AS(ATOM, ctx->rstack));
-	}
-	if (b) {
-		ctx->ip = CAR(NEXT(ctx->ip));
-	} else {
-		ctx->ip = CAR(NEXT(NEXT(ctx->ip)));
-	}
-
-	return 1;
+	// TODO
 }
+
+//CELL branch(CTX* ctx) {
+//	CELL b = pop(ctx, &S(ctx));
+//	if (b) {
+//		swap(ctx);
+//	}
+//	drop(ctx);
+//	return exec(ctx);
+//}
+
+//CELL branch(CTX* ctx) {
+//	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
+//	if (TYPE(ctx->stack) != ATOM) { return ERR_ATOM_EXPECTED; }
+//	CELL b = CAR(ctx->stack);
+//	ctx->stack = reclaim(ctx, ctx->stack);
+//	if (NEXT(NEXT(NEXT(ctx->ip))) != 0) {
+//		if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
+//		ctx->rstack = cons(ctx, NEXT(NEXT(NEXT(ctx->ip))), AS(ATOM, ctx->rstack));
+//	}
+//	if (b) {
+//		ctx->ip = CAR(NEXT(ctx->ip));
+//	} else {
+//		ctx->ip = CAR(NEXT(NEXT(ctx->ip)));
+//	}
+//
+//	return 1;
+//}
 
 CELL jump(CTX* ctx) {
 	ctx->ip = CAR(NEXT(ctx->ip));
@@ -443,47 +486,37 @@ CELL zjump(CTX* ctx) {
 // STACK PRIMITIVES
 
 CELL duplicate(CTX* ctx) {
-	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
-	switch(TYPE(ctx->stack)) {
-		case ATOM:
-			if ((ctx->stack = cons(ctx, CAR(ctx->stack), AS(ATOM, ctx->stack))) == 0) {
-				return ERR_STACK_OVERFLOW;
-			}
-			break;
-		case LIST:
-			if ((ctx->stack = cons(ctx, clone(ctx, CAR(ctx->stack)), AS(LIST, ctx->stack))) == 0) {
-				return ERR_STACK_OVERFLOW;
-			}
-			break;
-		case PRIM:
-			if ((ctx->stack = cons(ctx, CAR(ctx->stack), AS(PRIM, ctx->stack))) == 0) {
-				return ERR_STACK_OVERFLOW;
-			}
-			break;
-		case WORD:
-			if ((ctx->stack = cons(ctx, CAR(ctx->stack), AS(WORD, ctx->stack))) == 0) {
-				return ERR_STACK_OVERFLOW;
-			}
-			break;
-	}
-
+	PUSH(ctx, CAR(S(ctx)));
 	return 0;
 }
 
-CELL swap(CTX* ctx) {
-	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
-	CELL t = NEXT(ctx->stack);
-	CDR(ctx->stack) = AS(TYPE(ctx->stack), NEXT(NEXT(ctx->stack)));
-	CDR(t) = AS(TYPE(t), ctx->stack);
-	ctx->stack = t;
-
-	return 0;
-}
-
-CELL drop(CTX* ctx) {
-	ctx->stack = reclaim(ctx, ctx->stack);
-	return 0;
-}
+//CELL duplicate(CTX* ctx) {
+//	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
+//	switch(TYPE(ctx->stack)) {
+//		case ATOM:
+//			if ((ctx->stack = cons(ctx, CAR(ctx->stack), AS(ATOM, ctx->stack))) == 0) {
+//				return ERR_STACK_OVERFLOW;
+//			}
+//			break;
+//		case LIST:
+//			if ((ctx->stack = cons(ctx, clone(ctx, CAR(ctx->stack)), AS(LIST, ctx->stack))) == 0) {
+//				return ERR_STACK_OVERFLOW;
+//			}
+//			break;
+//		case PRIM:
+//			if ((ctx->stack = cons(ctx, CAR(ctx->stack), AS(PRIM, ctx->stack))) == 0) {
+//				return ERR_STACK_OVERFLOW;
+//			}
+//			break;
+//		case WORD:
+//			if ((ctx->stack = cons(ctx, CAR(ctx->stack), AS(WORD, ctx->stack))) == 0) {
+//				return ERR_STACK_OVERFLOW;
+//			}
+//			break;
+//	}
+//
+//	return 0;
+//}
 
 CELL over(CTX* ctx) {
 	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
@@ -511,22 +544,36 @@ CELL rot(CTX* ctx) {
 // ARITHMETIC PRIMITIVES
 
 CELL add(CTX* ctx) {
-	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
-	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
-	CAR(NEXT(ctx->stack)) = CAR(NEXT(ctx->stack)) + CAR(ctx->stack);
-	ctx->stack = reclaim(ctx, ctx->stack);
-
+	CELL a = pop(ctx, &S(ctx));
+	CELL b = pop(ctx, &S(ctx));
+	PUSH(ctx, b + a);
 	return 0;
 }
 
 CELL sub(CTX* ctx) {
-	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
-	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
-	CAR(NEXT(ctx->stack)) = CAR(NEXT(ctx->stack)) - CAR(ctx->stack);
-	ctx->stack = reclaim(ctx, ctx->stack);
-
+	CELL a = pop(ctx, &S(ctx));
+	CELL b = pop(ctx, &S(ctx));
+	PUSH(ctx, b - a);
 	return 0;
 }
+
+//CELL add(CTX* ctx) {
+//	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
+//	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
+//	CAR(NEXT(ctx->stack)) = CAR(NEXT(ctx->stack)) + CAR(ctx->stack);
+//	ctx->stack = reclaim(ctx, ctx->stack);
+//
+//	return 0;
+//}
+//
+//CELL sub(CTX* ctx) {
+//	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
+//	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
+//	CAR(NEXT(ctx->stack)) = CAR(NEXT(ctx->stack)) - CAR(ctx->stack);
+//	ctx->stack = reclaim(ctx, ctx->stack);
+//
+//	return 0;
+//}
 
 CELL mul(CTX* ctx) {
 	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
@@ -558,13 +605,20 @@ CELL mod(CTX* ctx) {
 // COMPARISON PRIMITIVES
 
 CELL gt(CTX* ctx) {
-	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
-	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
-	CAR(NEXT(ctx->stack)) = CAR(NEXT(ctx->stack)) > CAR(ctx->stack);
-	ctx->stack = reclaim(ctx, ctx->stack);
-
+	CELL a = pop(ctx, &S(ctx));
+	CELL b = pop(ctx, &S(ctx));
+	PUSH(ctx, b > a);
 	return 0;
 }
+
+//CELL gt(CTX* ctx) {
+//	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
+//	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
+//	CAR(NEXT(ctx->stack)) = CAR(NEXT(ctx->stack)) > CAR(ctx->stack);
+//	ctx->stack = reclaim(ctx, ctx->stack);
+//
+//	return 0;
+//}
 
 CELL lt(CTX* ctx) {
 	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }

@@ -15,9 +15,48 @@ char *strlwr(char *str)
   return str;
 }
 
+CELL fib(CTX* ctx) {
+	CELL result;
+	//R(ctx) = cons(ctx, (CELL)&fib, AS(PRIM, R(ctx)));
+	//duplicate(ctx);
+	//PUSH(ctx, 1, &S(ctx));
+	//gt(ctx);
+	//CELL b = pop(ctx, &S(ctx));
+	if (CAR(S(ctx)) > 1) {
+		//PUSH(ctx, 1, &S(ctx));
+		//sub(ctx);
+		//duplicate(ctx);
+		//PUSH(ctx, 1, &S(ctx));
+		//sub(ctx);
+		CAR(S(ctx)) = CAR(S(ctx)) - 1;
+		if ((S(ctx) = cons(ctx, CAR(S(ctx)) - 1, S(ctx))) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
+		if ((result = fib(ctx)) != 0) { ERR(ctx, result); }
+		//swap(ctx);
+		CELL t = CAR(S(ctx));
+		CAR(S(ctx)) = CAR(NEXT(S(ctx)));
+		CAR(NEXT(S(ctx))) = t;
+		if ((result = fib(ctx)) != 0) { ERR(ctx, result); }
+		//add(ctx);
+		CAR(NEXT(S(ctx))) = CAR(NEXT(S(ctx))) + CAR(S(ctx));
+		if ((S(ctx) = reclaim(ctx, S(ctx))) == 0) { ERR(ctx, ERR_STACK_UNDERFLOW); }
+	}
+	//R(ctx) = reclaim(ctx, R(ctx));
+	return 0;
+}
+
 void main(int argc, char *argv[]) {
-	CELL size = 4096;
-	BYTE block[size];
+	//CELL size = 2048;
+	//BYTE block[size];
+	//CTX* ctx = init(block, size);
+
+	//PUSH(ctx, 36, &S(ctx));
+	//CELL result = fib(ctx);
+
+	//if (result != 0) {
+	//	printf("ERROR: %ld\n", result);
+	//} else {
+	//	printf("%ld\n", CAR(S(ctx)));
+	//}
 
 //	CTX* ctx = bootstrap(init(block, size));
 //
