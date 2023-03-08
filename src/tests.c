@@ -140,8 +140,8 @@ void test_CTX_block_initialization() {
 	TEST_ASSERT_EQUAL_INT(ctx->pile, ctx->stack);
 	TEST_ASSERT_EQUAL_INT(TOP(ctx) - 2*sizeof(CELL), ctx->free);
 
+	TEST_ASSERT_EQUAL_INT(0, ctx->cfstack);
 	TEST_ASSERT_EQUAL_INT(0, ctx->latest);
-	TEST_ASSERT_EQUAL_INT(0, ctx->rstack);
 	TEST_ASSERT_EQUAL_INT(0, ctx->state);
 	TEST_ASSERT_EQUAL_PTR(0, ctx->tib);
 	TEST_ASSERT_EQUAL_INT(0, ctx->token);
@@ -354,13 +354,13 @@ void test_STACK_pop() {
 	PUSH(ctx, 11);
 	PUSH(ctx, 7);
 
-	CELL v = pop(ctx, &S(ctx));
+	CELL v = pop(ctx);
 
 	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
 	TEST_ASSERT_EQUAL_INT(7, v);
 	TEST_ASSERT_EQUAL_INT(11, CAR(S(ctx)));
 
-	v = pop(ctx, &S(ctx));
+	v = pop(ctx);
 
 	TEST_ASSERT_EQUAL_INT(0, length(S(ctx)));
 	TEST_ASSERT_EQUAL_INT(11, v);
@@ -427,8 +427,8 @@ void test_INNER_execute_list_2() {
 }
 
 CELL test_add_t(CTX* ctx) {
-	CELL a = pop(ctx, &S(ctx));
-	CELL b = pop(ctx, &S(ctx));
+	CELL a = pop(ctx);
+	CELL b = pop(ctx);
 	PUSH(ctx, b + a);
 
 	return 0;
@@ -436,7 +436,7 @@ CELL test_add_t(CTX* ctx) {
 
 
 CELL test_dup_t(CTX* ctx) {
-	CELL v = pop(ctx, &S(ctx));
+	CELL v = pop(ctx);
 	PUSH(ctx, v);
 	PUSH(ctx, v);
 
@@ -730,6 +730,9 @@ void test_MEM_grow() {
 	BYTE block[size];
 	CTX* ctx = init(block, size);
 
+	// Ensure that RESERVED is 0 before the test
+	ctx->here = (BYTE*)ALIGN(ctx->here, 2*sizeof(CELL));
+
 	grow(ctx);
 
 	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 1, FREE(ctx));
@@ -745,6 +748,9 @@ void test_MEM_shrink() {
 	CELL size = 4096;
 	BYTE block[size];
 	CTX* ctx = init(block, size);
+
+	// Ensure that RESERVED is 0 before the test
+	ctx->here = (BYTE*)ALIGN(ctx->here, 2*sizeof(CELL));
 
 	grow(ctx);
 	grow(ctx);
@@ -838,6 +844,63 @@ void test_MEM_allot() {
 	TEST_ASSERT_EQUAL_INT(free_nodes(ctx), FREE(ctx));
 }
 
+void test_PRIMITIVES_zjump() {
+	CELL size = 1024;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	CELL dest = cons(ctx, 7, AS(ATOM, 0));
+
+	CELL code = 
+		cons(ctx, 1, AS(ATOM,
+		cons(ctx, 0, AS(PRIM,
+		cons(ctx, dest, AS(ATOM, 0))))));
+
+	execute(ctx, code);
+
+	TEST_ASSERT_EQUAL_INT(0, length(S(ctx)));
+
+	code =
+		cons(ctx, 0, AS(ATOM,
+		cons(ctx, 0, AS(PRIM,
+		cons(ctx, dest, AS(ATOM, 0))))));
+
+	execute(ctx, code);
+
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(7, CAR(S(ctx)));
+}
+
+void test_PRIMITIVES_jump() {
+	CELL size = 1024;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	CELL dest = cons(ctx, 7, AS(ATOM, 0));
+
+	CELL code = 
+		cons(ctx, 1, AS(PRIM,
+		cons(ctx, dest, AS(ATOM, 0))));
+
+	execute(ctx, code);
+
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(7, CAR(S(ctx)));
+}
+
+void test_PRIMITIVES_ahead() {
+	CELL size = 1024;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	CELL code = cons(ctx, 2, AS(PRIM, 0));
+
+	execute(ctx, code);
+
+	TEST_ASSERT_EQUAL_INT(1, length(ctx->cfstack));
+	TEST_ASSERT_EQUAL_INT(code, CAR(ctx->cfstack));
+}
+
 void test_PRIMITIVES_postpone() {
 	CELL size = 1024;
 	BYTE block[size];
@@ -876,8 +939,8 @@ void test_PRIMITIVES_parse() {
 	evaluate(ctx, "39 parse just a string that ends on a single quote'");
 
 	TEST_ASSERT_EQUAL_INT(2, length(S(ctx)));
-	CELL l = pop(ctx, &S(ctx));
-	CELL a = pop(ctx, &S(ctx));
+	CELL l = pop(ctx);
+	CELL a = pop(ctx);
 	TEST_ASSERT_EQUAL_MEMORY(" just a string that ends on a single quote", a, l);
 }
 
@@ -895,15 +958,15 @@ void test_PRIMITIVES_parse_name() {
 	evaluate(ctx, "parse-name");
 
 	TEST_ASSERT_EQUAL_INT(2, length(S(ctx)));
-	CELL l = pop(ctx, &S(ctx));
-	CELL a = pop(ctx, &S(ctx));
+	CELL l = pop(ctx);
+	CELL a = pop(ctx);
 	TEST_ASSERT_EQUAL_INT(0, l);	
 
 	evaluate(ctx, "parse-name    my-name  ");
 
 	TEST_ASSERT_EQUAL_INT(2, length(S(ctx)));
-	l = pop(ctx, &S(ctx));
-	a = pop(ctx, &S(ctx));
+	l = pop(ctx);
+	a = pop(ctx);
 	TEST_ASSERT_EQUAL_MEMORY("my-name", a, l);
 }
 
@@ -990,7 +1053,7 @@ void test_PRIMITIVES_stack_to_list() {
 	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(NEXT(S(ctx)))));
 	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 5, FREE(ctx));
 
-	pop(ctx, &S(ctx));
+	pop(ctx);
 
 	stack_to_list(ctx);
 
@@ -2873,14 +2936,12 @@ int main() {
 	RUN_TEST(test_STACK_pop);
 
 	// INNER INTERPRETER
-	//RUN_TEST(test_INNER_execute_step_atom);
 	RUN_TEST(test_INNER_execute_atom);
 	RUN_TEST(test_INNER_execute_list);
 	RUN_TEST(test_INNER_execute_list_2);
 	RUN_TEST(test_INNER_execute_primitive);
 	RUN_TEST(test_INNER_execute_word);
 	RUN_TEST(test_INNER_execute_words);
-	//RUN_TEST(test_INNER_execute_step_words);
 
 	// PARSING
 	RUN_TEST(test_PARSING_parse_token);
@@ -2899,6 +2960,9 @@ int main() {
 	RUN_TEST(test_MEM_allot);
 
 	// PRIMITIVES
+	RUN_TEST(test_PRIMITIVES_zjump);
+	RUN_TEST(test_PRIMITIVES_jump);
+	RUN_TEST(test_PRIMITIVES_ahead);
 	RUN_TEST(test_PRIMITIVES_postpone);
 	RUN_TEST(test_PRIMITIVES_parse);
 	RUN_TEST(test_PRIMITIVES_parse_name);

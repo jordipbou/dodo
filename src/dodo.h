@@ -33,7 +33,7 @@ enum Words { CMP_PRIMITIVE, CMP_COLON_DEF, IMM_PRIMITIVE, IMM_COLON_DEF };
 typedef struct {
 	BYTE *tib, *here;
 	CELL there, size; 
-	CELL free, pile, stack, rstack, latest;
+	CELL free, pile, stack, cfstack, latest;
 	CELL ip, state, token, in, base;
 } CTX;
 
@@ -62,7 +62,7 @@ CTX* init(BYTE* block, CELL size) {
 		CDR(pair) = pair == ctx->there ? 0 : pair - 2*sizeof(CELL);
 	}
 
-	ctx->rstack = ctx->latest = 0;
+	ctx->cfstack = ctx->latest = 0;
 	ctx->state = ctx->token = ctx->in = 0;
 	ctx->tib = 0;
 	ctx->base = 10;
@@ -124,10 +124,10 @@ CELL length(CELL pair) {
 #define PUSH(ctx, v)				(S(ctx) = cons(ctx, (CELL)v, AS(ATOM, S(ctx))))
 #define PUSHL(ctx, v)				(S(ctx) = cons(ctx, (CELL)v, AS(LIST, S(ctx))))
 
-CELL pop(CTX* ctx, CELL* stack) {
-	if (stack == 0 || *stack == 0) { return 0; /* ERROR */ }
-	CELL v = CAR(*stack);
-	*stack = reclaim(ctx, *stack);
+CELL pop(CTX* ctx) {
+	if (S(ctx) == 0) { return 0; /* ERROR */ }
+	CELL v = CAR(S(ctx));
+	S(ctx) = reclaim(ctx, S(ctx));
 	return v;
 }
 
@@ -164,7 +164,7 @@ CELL error(CTX* ctx, CELL err) {
 	if (S(ctx) == 0) { \
 		ERR(ctx, ERR_STACK_UNDERFLOW); \
 	} else { \
-		v = pop(ctx, &S(ctx)); \
+		v = pop(ctx); \
 	}
 
 typedef CELL (*FUNC)(CTX*);
@@ -189,8 +189,22 @@ CELL execute(CTX* ctx, CELL xlist) {
 				break;
 			case PRIM:
 				switch (CAR(p)) {
-					case 0: /* ZJUMP */ break;
-					case 1: /* JUMP */ break;
+					case 0: /* ZJUMP */
+						if (pop(ctx) == 0) {
+							p = CAR(NEXT(p));
+						} else {
+							p = NEXT(NEXT(p));
+						}
+						break;
+					case 1: /* JUMP */
+						p = CAR(NEXT(p));
+						break;
+					case 2:	/* AHEAD */
+						if ((ctx->cfstack = cons(ctx, p, AS(ATOM, ctx->cfstack))) == 0) {
+							ERR(ctx, ERR_STACK_OVERFLOW);
+						}
+						p = NEXT(p);
+						break;
 					default:
 						EXECUTE_PRIMITIVE(ctx, CAR(p));
 						p = NEXT(p);
@@ -401,8 +415,8 @@ CELL rbrace(CTX* ctx) {
 }
 
 CELL swap(CTX* ctx) {
-	CELL a = pop(ctx, &S(ctx));
-	CELL b = pop(ctx, &S(ctx));
+	CELL a = pop(ctx);
+	CELL b = pop(ctx);
 	PUSH(ctx, a);
 	PUSH(ctx, b);
 	return 0;
@@ -437,7 +451,7 @@ CELL branch(CTX* ctx) {
 }
 
 //CELL branch(CTX* ctx) {
-//	CELL b = pop(ctx, &S(ctx));
+//	CELL b = pop(ctx);
 //	if (b) {
 //		swap(ctx);
 //	}
@@ -544,15 +558,15 @@ CELL rot(CTX* ctx) {
 // ARITHMETIC PRIMITIVES
 
 CELL add(CTX* ctx) {
-	CELL a = pop(ctx, &S(ctx));
-	CELL b = pop(ctx, &S(ctx));
+	CELL a = pop(ctx);
+	CELL b = pop(ctx);
 	PUSH(ctx, b + a);
 	return 0;
 }
 
 CELL sub(CTX* ctx) {
-	CELL a = pop(ctx, &S(ctx));
-	CELL b = pop(ctx, &S(ctx));
+	CELL a = pop(ctx);
+	CELL b = pop(ctx);
 	PUSH(ctx, b - a);
 	return 0;
 }
@@ -605,8 +619,8 @@ CELL mod(CTX* ctx) {
 // COMPARISON PRIMITIVES
 
 CELL gt(CTX* ctx) {
-	CELL a = pop(ctx, &S(ctx));
-	CELL b = pop(ctx, &S(ctx));
+	CELL a = pop(ctx);
+	CELL b = pop(ctx);
 	PUSH(ctx, b > a);
 	return 0;
 }
