@@ -415,15 +415,23 @@ CELL rbrace(CTX* ctx) {
 }
 
 CELL swap(CTX* ctx) {
-	CELL a = pop(ctx);
-	CELL b = pop(ctx);
-	PUSH(ctx, a);
-	PUSH(ctx, b);
+	CELL t = S(ctx);
+	S(ctx) = NEXT(S(ctx));
+	LINK(t, NEXT(S(ctx)));
+	LINK(S(ctx), t);
 	return 0;
 }
 
 CELL drop(CTX* ctx) {
 	S(ctx) = reclaim(ctx, S(ctx));
+	return 0;
+}
+
+CELL rot(CTX* ctx) {
+	CELL t = NEXT(NEXT(S(ctx)));
+	LINK(NEXT(S(ctx)), NEXT(t));
+	LINK(t, S(ctx));
+	S(ctx) = t;
 	return 0;
 }
 
@@ -444,20 +452,17 @@ CELL exec(CTX* ctx) {
 	if (result < 0) { ERR(ctx, result); } else { return result; }
 }
 
-// --------------------------------------------------------------- Throughly tested until here
-
 CELL branch(CTX* ctx) {
-	// TODO
+	rot(ctx);
+	CELL b = pop(ctx);
+	if (!b) {
+		swap(ctx);
+	}
+	drop(ctx);
+	return exec(ctx);
 }
 
-//CELL branch(CTX* ctx) {
-//	CELL b = pop(ctx);
-//	if (b) {
-//		swap(ctx);
-//	}
-//	drop(ctx);
-//	return exec(ctx);
-//}
+// --------------------------------------------------------------- Throughly tested until here
 
 //CELL branch(CTX* ctx) {
 //	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
@@ -543,17 +548,17 @@ CELL over(CTX* ctx) {
 	return 0;
 }
 
-CELL rot(CTX* ctx) {
-	if (ctx->stack == 0 || NEXT(ctx->stack) == 0 || NEXT(NEXT(ctx->stack)) == 0) {
-		return ERR_STACK_UNDERFLOW;
-	}
-	CELL t = ctx->stack;
-	ctx->stack = NEXT(NEXT(ctx->stack));
-	CDR(NEXT(t)) = AS(TYPE(NEXT(t)), NEXT(ctx->stack));
-	CDR(ctx->stack) = AS(TYPE(ctx->stack), t);
-
-	return 0;
-}
+//CELL rot(CTX* ctx) {
+//	if (ctx->stack == 0 || NEXT(ctx->stack) == 0 || NEXT(NEXT(ctx->stack)) == 0) {
+//		return ERR_STACK_UNDERFLOW;
+//	}
+//	CELL t = ctx->stack;
+//	ctx->stack = NEXT(NEXT(ctx->stack));
+//	CDR(NEXT(t)) = AS(TYPE(NEXT(t)), NEXT(ctx->stack));
+//	CDR(ctx->stack) = AS(TYPE(ctx->stack), t);
+//
+//	return 0;
+//}
 
 // ARITHMETIC PRIMITIVES
 

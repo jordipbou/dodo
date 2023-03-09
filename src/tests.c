@@ -1216,6 +1216,21 @@ void test_PRIMITIVES_drop() {
 	TEST_ASSERT_EQUAL_INT(0, length(S(ctx)));
 }
 
+void test_PRIMITIVES_rot() {
+	CELL size = 1024;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	S(ctx) = cons(ctx, 3, AS(ATOM, cons(ctx, 2, AS(ATOM, cons(ctx, 1, AS(ATOM, 0))))));
+
+	rot(ctx);
+
+	TEST_ASSERT_EQUAL_INT(3, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(1, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(3, CAR(NEXT(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(2, CAR(NEXT(NEXT(S(ctx)))));
+}
+
 void test_PRIMITIVES_exec_atom() {
 	CELL size = 1024;
 	BYTE block[size];
@@ -1345,81 +1360,86 @@ void test_PRIMITIVES_exec_word2() {
 	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 2, FREE(ctx));
 }
 
-//// IP PRIMITIVEs
-//
-//void test_IP_branch() {
-//	CELL size = 512;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//
-//	CELL xt = 
-//		cons(ctx, 1, AS(ATOM,
-//		cons(ctx, (CELL)&branch, AS(PRIM,
-//		cons(ctx, cons(ctx, 7, AS(ATOM, 0)), AS(LIST, 
-//		cons(ctx, cons(ctx, 11, AS(ATOM, 0)), AS(LIST,
-//		cons(ctx, 13, AS(ATOM, 0))))))))));
-//
-//	execute(ctx, xt);
-//
-//	TEST_ASSERT_EQUAL_INT(2, length(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(13, CAR(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(ctx->stack)));
-//
-//	ctx->stack = 0;
-//
-//	xt = 
-//		cons(ctx, 0, AS(ATOM,
-//		cons(ctx, (CELL)&branch, AS(PRIM,
-//		cons(ctx, cons(ctx, 7, AS(ATOM, 0)), AS(LIST, 
-//		cons(ctx, cons(ctx, 11, AS(ATOM, 0)), AS(LIST, 0))))))));
-//
-//	execute(ctx, xt);
-//
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(11, CAR(ctx->stack));
-//
-//}
-//
-//void test_IP_jump() {
-//	CELL size = 512;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//
-//	CELL dest = cons(ctx, 7, AS(ATOM, 0));
-//	CELL src = cons(ctx, (CELL)&jump, AS(PRIM, cons(ctx, dest, AS(ATOM, 0))));
-//
-//	execute(ctx, src);
-//
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(7, CAR(ctx->stack));
-//}
-//
-//void test_IP_zjump() {
-//	CELL size = 512;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//
-//	CELL dest = cons(ctx, 7, AS(ATOM, 0));
-//	CELL src = 
-//		cons(ctx, (CELL)&zjump, AS(PRIM, 
-//		cons(ctx, dest, AS(ATOM, 
-//		cons(ctx, 13, AS(ATOM, 0))))));
-//
-//	ctx->stack = cons(ctx, 1, AS(ATOM, 0));
-//
-//	execute(ctx, src);
-//
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(13, CAR(ctx->stack));
-//
-//	ctx->stack = cons(ctx, 0, AS(ATOM, 0));
-//
-//	execute(ctx, src);
-//
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(7, CAR(ctx->stack));
-//}
-//
+void dump_list(CTX* ctx, CELL pair, CELL dir) { //, C order) {
+	if (pair) {
+		if (!dir) dump_list(ctx, NEXT(pair), dir);
+		switch (TYPE(pair)) {
+			case ATOM: printf("#%ld ", CAR(pair)); break;
+			case LIST: printf("{ "); dump_list(ctx, CAR(pair), 1); printf("} "); break;
+			case PRIM: 
+				//word = find_prim(x, A(pair));
+				//if (word) {
+				//	printf("P:%s ", (B*)(NFA(word)));
+				//} else {
+				//	printf("PRIM_NOT_FOUND ");
+				//}
+				printf("P:%ld ", CAR(pair));
+				break;
+			case WORD: printf("W:%s ", NFA(CAR(pair))); break;
+		}
+		if (dir) dump_list(ctx, NEXT(pair), 1);
+		if (!dir) printf("\n");
+	}
+}
+
+CELL dump_stack(CTX* ctx) {
+	printf("\n");
+	dump_list(ctx, S(ctx), 0);
+
+	return 0;
+}
+
+void test_PRIMITIVES_branch() {
+	CELL size = 1024;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	S(ctx) = 
+		cons(ctx, cons(ctx, 11, AS(ATOM, 0)), AS(LIST,
+		cons(ctx, cons(ctx, 7, AS(ATOM, 0)), AS(LIST,
+		cons(ctx, 1, AS(ATOM, 0))))));
+
+	branch(ctx);
+
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(7, CAR(S(ctx)));
+
+	S(ctx) = 
+		cons(ctx, cons(ctx, 11, AS(ATOM, 0)), AS(LIST,
+		cons(ctx, cons(ctx, 7, AS(ATOM, 0)), AS(LIST,
+		cons(ctx, 0, AS(ATOM, 0))))));
+
+	branch(ctx);
+
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(11, CAR(S(ctx)));
+}
+
+void test_PRIMITIVES_branch2() {
+	CELL size = 1024;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	CELL code = 
+		cons(ctx,	cons(ctx, 7, AS(ATOM, 0)), AS(LIST,
+		cons(ctx, cons(ctx, 11, AS(ATOM, 0)), AS(LIST,
+		cons(ctx, (CELL)&branch, AS(PRIM, 0))))));
+
+	S(ctx) = cons(ctx, 1, AS(ATOM, 0));
+
+	execute(ctx, code);
+
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(7, CAR(S(ctx)));
+
+	S(ctx) = cons(ctx, 0, AS(ATOM, 0));
+
+	execute(ctx, code);
+
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(11, CAR(S(ctx)));
+}
+
 //// STACK PRIMITIVES
 //
 //void test_STACK_duplicate_atom() {
@@ -2978,18 +2998,15 @@ int main() {
 	RUN_TEST(test_PRIMITIVES_braces);
 	RUN_TEST(test_PRIMITIVES_swap);
 	RUN_TEST(test_PRIMITIVES_drop);
+	RUN_TEST(test_PRIMITIVES_rot);
 	RUN_TEST(test_PRIMITIVES_exec_atom);
 	RUN_TEST(test_PRIMITIVES_exec_list);
 	RUN_TEST(test_PRIMITIVES_exec_primitive);
 	RUN_TEST(test_PRIMITIVES_exec_primitive2);
 	RUN_TEST(test_PRIMITIVES_exec_word);
 	RUN_TEST(test_PRIMITIVES_exec_word2);
-
-
-	//// IP PRIMITIVES
-	//RUN_TEST(test_IP_branch);
-	//RUN_TEST(test_IP_jump);
-	//RUN_TEST(test_IP_zjump);
+	RUN_TEST(test_PRIMITIVES_branch);
+	RUN_TEST(test_PRIMITIVES_branch2);
 
 	//// STACK PRIMITIVES
 	//RUN_TEST(test_STACK_duplicate_atom);
