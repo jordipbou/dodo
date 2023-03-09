@@ -511,20 +511,6 @@ CELL branch(CTX* ctx) {
 
 // --------------------------------------------------------------- Throughly tested until here
 
-// STACK PRIMITIVES
-
-//CELL rot(CTX* ctx) {
-//	if (ctx->stack == 0 || NEXT(ctx->stack) == 0 || NEXT(NEXT(ctx->stack)) == 0) {
-//		return ERR_STACK_UNDERFLOW;
-//	}
-//	CELL t = ctx->stack;
-//	ctx->stack = NEXT(NEXT(ctx->stack));
-//	CDR(NEXT(t)) = AS(TYPE(NEXT(t)), NEXT(ctx->stack));
-//	CDR(ctx->stack) = AS(TYPE(ctx->stack), t);
-//
-//	return 0;
-//}
-
 // ARITHMETIC PRIMITIVES
 
 CELL add(CTX* ctx) {
@@ -541,48 +527,24 @@ CELL sub(CTX* ctx) {
 	return 0;
 }
 
-//CELL add(CTX* ctx) {
-//	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
-//	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
-//	CAR(NEXT(ctx->stack)) = CAR(NEXT(ctx->stack)) + CAR(ctx->stack);
-//	ctx->stack = reclaim(ctx, ctx->stack);
-//
-//	return 0;
-//}
-//
-//CELL sub(CTX* ctx) {
-//	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
-//	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
-//	CAR(NEXT(ctx->stack)) = CAR(NEXT(ctx->stack)) - CAR(ctx->stack);
-//	ctx->stack = reclaim(ctx, ctx->stack);
-//
-//	return 0;
-//}
-
 CELL mul(CTX* ctx) {
-	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
-	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
-	CAR(NEXT(ctx->stack)) = CAR(NEXT(ctx->stack)) * CAR(ctx->stack);
-	ctx->stack = reclaim(ctx, ctx->stack);
-
+	CELL a = pop(ctx);
+	CELL b = pop(ctx);
+	PUSH(ctx, b * a);
 	return 0;
 }
 
 CELL division(CTX* ctx) {
-	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
-	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
-	CAR(NEXT(ctx->stack)) = CAR(NEXT(ctx->stack)) / CAR(ctx->stack);
-	ctx->stack = reclaim(ctx, ctx->stack);
-
+	CELL a = pop(ctx);
+	CELL b = pop(ctx);
+	PUSH(ctx, b / a);
 	return 0;
 }
 
 CELL mod(CTX* ctx) {
-	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
-	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
-	CAR(NEXT(ctx->stack)) = CAR(NEXT(ctx->stack)) % CAR(ctx->stack);
-	ctx->stack = reclaim(ctx, ctx->stack);
-
+	CELL a = pop(ctx);
+	CELL b = pop(ctx);
+	PUSH(ctx, b % a);
 	return 0;
 }
 
@@ -605,52 +567,113 @@ CELL gt(CTX* ctx) {
 //}
 
 CELL lt(CTX* ctx) {
-	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
-	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
-	CAR(NEXT(ctx->stack)) = CAR(NEXT(ctx->stack)) < CAR(ctx->stack);
-	ctx->stack = reclaim(ctx, ctx->stack);
-
+	CELL a = pop(ctx);
+	CELL b = pop(ctx);
+	PUSH(ctx, b < a);
 	return 0;
 }
 
 CELL eq(CTX* ctx) {
-	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
-	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
-	CAR(NEXT(ctx->stack)) = CAR(NEXT(ctx->stack)) == CAR(ctx->stack);
-	ctx->stack = reclaim(ctx, ctx->stack);
-
+	CELL a = pop(ctx);
+	CELL b = pop(ctx);
+	PUSH(ctx, b == a);
 	return 0;
 }
 
 // BIT PRIMITIVES
 
 CELL and(CTX* ctx) {
-	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
-	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
-	CAR(NEXT(ctx->stack)) = CAR(NEXT(ctx->stack)) & CAR(ctx->stack);
-	ctx->stack = reclaim(ctx, ctx->stack);
-
+	CELL a = pop(ctx);
+	CELL b = pop(ctx);
+	PUSH(ctx, b & a);
 	return 0;
 }
 
 CELL or(CTX* ctx) {
-	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
-	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
-	CAR(NEXT(ctx->stack)) = CAR(NEXT(ctx->stack)) | CAR(ctx->stack);
-	ctx->stack = reclaim(ctx, ctx->stack);
-
+	CELL a = pop(ctx);
+	CELL b = pop(ctx);
+	PUSH(ctx, b | a);
 	return 0;
 }
 
 CELL invert(CTX* ctx) {
-	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
-	if (TYPE(ctx->stack) != ATOM) { return ERR_ATOM_EXPECTED; }
-	CAR(ctx->stack) = ~CAR(ctx->stack);
-
+	CAR(S(ctx)) = ~CAR(S(ctx));
 	return 0;
 }
 
+#define ADD_PRIMITIVE(ctx, name, func, immediate) \
+	ctx->latest = cons(ctx, \
+		cons(ctx, (CELL)name, AS(ATOM, \
+		cons(ctx, (CELL)func, AS(PRIM, 0)))), \
+	AS(immediate, ctx->latest));
 
+CTX* bootstrap(CTX* ctx) {
+	ADD_PRIMITIVE(ctx, "+", &add, 0);
+	ADD_PRIMITIVE(ctx, "-", &sub, 0);
+	ADD_PRIMITIVE(ctx, "*", &mul, 0);
+	ADD_PRIMITIVE(ctx, "/", &division, 0);
+	ADD_PRIMITIVE(ctx, "mod", &mod, 0);
+
+	ADD_PRIMITIVE(ctx, ">", &gt, 0);
+	ADD_PRIMITIVE(ctx, "<", &lt, 0);
+	ADD_PRIMITIVE(ctx, "=", &eq, 0);
+
+	ADD_PRIMITIVE(ctx, "and", &and, 0);
+	ADD_PRIMITIVE(ctx, "or", &or, 0);
+	ADD_PRIMITIVE(ctx, "invert", &invert, 0);
+
+	ADD_PRIMITIVE(ctx, "dup", &duplicate, 0);
+	ADD_PRIMITIVE(ctx, "swap", &swap, 0);
+	ADD_PRIMITIVE(ctx, "drop", &drop, 0);
+	ADD_PRIMITIVE(ctx, "over", &over, 0);
+	ADD_PRIMITIVE(ctx, "rot", &rot, 0);
+
+	ADD_PRIMITIVE(ctx, "{", &lbrace, 2);
+	ADD_PRIMITIVE(ctx, "}", &rbrace, 2);
+
+	ADD_PRIMITIVE(ctx, "[", &lbracket, 2);
+	ADD_PRIMITIVE(ctx, "]", &rbracket, 2);
+
+	ADD_PRIMITIVE(ctx, "spush", &spush, 2);
+	ADD_PRIMITIVE(ctx, "s>l", &stack_to_list, 2);
+
+	//ADD_PRIMITIVE(ctx, "literal", &literal, 2);
+
+	ADD_PRIMITIVE(ctx, "i", &exec, 0);
+	//ADD_PRIMITIVE(ctx, "x", &exec, 0);
+
+	ADD_PRIMITIVE(ctx, "branch", &branch, 0);
+
+	ADD_PRIMITIVE(ctx, "grow", &grow, 0);
+
+	//ADD_PRIMITIVE(ctx, "s\"", &compile_str, 2);
+
+	//ADD_PRIMITIVE(ctx, "latest", &latest, 0);
+	//ADD_PRIMITIVE(ctx, "append", &append, 0);
+
+	ADD_PRIMITIVE(ctx, "parse", &parse, 0);
+	ADD_PRIMITIVE(ctx, "parse-name", &parse_name, 0);
+
+	//ADD_PRIMITIVE(ctx, ":", &colon, 2);
+	//ADD_PRIMITIVE(ctx, ";", &semicolon, 2);
+
+	//ADD_PRIMITIVE(ctx, "here", &here, 0);
+	ADD_PRIMITIVE(ctx, "allot", &allot, 0);
+
+	//ADD_PRIMITIVE(ctx, "!", &store, 0);
+	//ADD_PRIMITIVE(ctx, "@", &fetch, 0);
+	//ADD_PRIMITIVE(ctx, "b!", &bstore, 0);
+	//ADD_PRIMITIVE(ctx, "b@", &bfetch, 0);
+
+	//ADD_PRIMITIVE(ctx, "cell", &cell, 0);
+
+	//ADD_PRIMITIVE(ctx, "sliteral", &sliteral, 2);
+
+	ADD_PRIMITIVE(ctx, "postpone", &postpone, 2);
+	//ADD_PRIMITIVE(ctx, "p", &postpone, 2);
+
+	return ctx;
+}
 
 //CELL compile_str(CTX* ctx) {
 //	CELL str_start;
@@ -701,27 +724,6 @@ CELL invert(CTX* ctx) {
 //	}
 //
 //	return 0;
-//}
-//
-//CELL lbrace(CTX* ctx) {
-// ctx->state = 1;
-// ctx->cpile = cons(ctx, 0, AS(LIST, ctx->cpile));
-//
-// return 0;
-//}
-//
-//CELL rbrace(CTX* ctx) {
-//  CELL list = reverse(CAR(ctx->cpile), 0);
-//  CAR(ctx->cpile) = 0;
-//  ctx->cpile = reclaim(ctx, ctx->cpile);
-//  if (ctx->cpile == 0) {
-//		ctx->stack = cons(ctx, list, AS(LIST, ctx->stack));
-//		ctx->state = 0;
-//  } else {
-//		CAR(ctx->cpile) = cons(ctx, list, AS(LIST, CAR(ctx->cpile)));
-//  }
-//
-//  return 0;
 //}
 //
 //CELL find_prim(CTX* ctx, CELL xt) {
@@ -818,32 +820,6 @@ CELL invert(CTX* ctx) {
 //		printf("\n");
 //	}
 //	return 0;
-//}
-//
-//CELL exec(CTX* ctx) {
-//	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
-//	CELL xt = CAR(ctx->stack);
-//	CAR(ctx->stack) = 0;
-//	ctx->stack = reclaim(ctx, ctx->stack);
-//	if (NEXT(ctx->ip) != 0) {
-//		if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
-//		ctx->rstack = cons(ctx, NEXT(ctx->ip), AS(ATOM, ctx->rstack));
-//	}
-//	ctx->ip = xt;
-//
-//	return 1;
-//}
-//
-//CELL exec_x(CTX* ctx) {
-//	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
-//	CELL xt = CAR(ctx->stack);
-//	if (NEXT(ctx->ip) != 0) {
-//		if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
-//		ctx->rstack = cons(ctx, NEXT(ctx->ip), AS(ATOM, ctx->rstack));
-//	}
-//	ctx->ip = xt;
-//
-//	return 1;
 //}
 //
 //CELL type(CTX* ctx) {

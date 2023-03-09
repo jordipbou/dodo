@@ -44,9 +44,38 @@ CELL fib(CTX* ctx) {
 	return 0;
 }
 
+void dump_list(CTX* ctx, CELL pair, CELL dir) { //, C order) {
+	if (pair) {
+		if (!dir) dump_list(ctx, NEXT(pair), dir);
+		switch (TYPE(pair)) {
+			case ATOM: printf("#%ld ", CAR(pair)); break;
+			case LIST: printf("{ "); dump_list(ctx, CAR(pair), 1); printf("} "); break;
+			case PRIM: 
+				//word = find_prim(x, A(pair));
+				//if (word) {
+				//	printf("P:%s ", (B*)(NFA(word)));
+				//} else {
+				//	printf("PRIM_NOT_FOUND ");
+				//}
+				printf("P:%ld ", CAR(pair));
+				break;
+			case WORD: printf("W:%s ", NFA(CAR(pair))); break;
+		}
+		if (dir) dump_list(ctx, NEXT(pair), 1);
+		if (!dir) printf("\n");
+	}
+}
+
+CELL dump_stack(CTX* ctx) {
+	printf("\n");
+	dump_list(ctx, S(ctx), 0);
+
+	return 0;
+}
+
 void main(int argc, char *argv[]) {
-	//CELL size = 2048;
-	//BYTE block[size];
+	CELL size = 2048;
+	BYTE block[size];
 	//CTX* ctx = init(block, size);
 
 	//PUSH(ctx, 36, &S(ctx));
@@ -58,6 +87,20 @@ void main(int argc, char *argv[]) {
 	//	printf("%ld\n", CAR(S(ctx)));
 	//}
 
+	CTX* ctx = bootstrap(init(block, size));
+
+	ADD_PRIMITIVE(ctx, ".s", &dump_stack, 0);
+
+	BYTE buf[255];
+	CELL result;
+	do {
+		fgets(buf, 255, stdin);
+		result = evaluate(ctx, buf);
+		if (result != 0) {
+			printf("ERROR: %ld\n", result);
+			return;
+		}
+	} while(1);
 //	CTX* ctx = bootstrap(init(block, size));
 //
 //	FILE *fptr;

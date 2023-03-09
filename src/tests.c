@@ -1496,35 +1496,6 @@ void test_PRIMITIVES_exec_word2() {
 	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 2, FREE(ctx));
 }
 
-void dump_list(CTX* ctx, CELL pair, CELL dir) { //, C order) {
-	if (pair) {
-		if (!dir) dump_list(ctx, NEXT(pair), dir);
-		switch (TYPE(pair)) {
-			case ATOM: printf("#%ld ", CAR(pair)); break;
-			case LIST: printf("{ "); dump_list(ctx, CAR(pair), 1); printf("} "); break;
-			case PRIM: 
-				//word = find_prim(x, A(pair));
-				//if (word) {
-				//	printf("P:%s ", (B*)(NFA(word)));
-				//} else {
-				//	printf("PRIM_NOT_FOUND ");
-				//}
-				printf("P:%ld ", CAR(pair));
-				break;
-			case WORD: printf("W:%s ", NFA(CAR(pair))); break;
-		}
-		if (dir) dump_list(ctx, NEXT(pair), 1);
-		if (!dir) printf("\n");
-	}
-}
-
-CELL dump_stack(CTX* ctx) {
-	printf("\n");
-	dump_list(ctx, S(ctx), 0);
-
-	return 0;
-}
-
 void test_PRIMITIVES_branch() {
 	CELL size = 1024;
 	BYTE block[size];
