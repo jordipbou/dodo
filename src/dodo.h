@@ -455,6 +455,33 @@ CELL rot(CTX* ctx) {
 	return 0;
 }
 
+CELL over(CTX* ctx) {
+	if (S(ctx) == 0 || NEXT(S(ctx)) == 0) { ERR(ctx, ERR_STACK_UNDERFLOW); }
+	switch(TYPE(NEXT(S(ctx)))) {
+		case ATOM: 
+			if (PUSH(ctx, CAR(NEXT(S(ctx)))) == 0) { 
+				ERR(ctx, ERR_STACK_OVERFLOW); 
+			} 
+			break;
+		case LIST: 
+			if (PUSHL(ctx, clone(ctx, CAR(NEXT(S(ctx))))) == 0) { 
+				ERR( ctx, ERR_STACK_OVERFLOW); 
+			} 
+			break;
+		case PRIM: 
+			if ((S(ctx) = cons(ctx, CAR(S(ctx)), AS(PRIM, S(ctx)))) == 0) {
+				ERR(ctx, ERR_STACK_OVERFLOW);
+			}
+			break;
+		case WORD:
+			if ((S(ctx) = cons(ctx, CAR(S(ctx)), AS(WORD, S(ctx)))) == 0) {
+				ERR(ctx, ERR_STACK_OVERFLOW);
+			}
+			break;
+	}
+	return 0;
+}
+
 CELL exec(CTX* ctx) {
 	CELL result = 0;
 	CELL t = S(ctx);
@@ -485,17 +512,6 @@ CELL branch(CTX* ctx) {
 // --------------------------------------------------------------- Throughly tested until here
 
 // STACK PRIMITIVES
-
-CELL over(CTX* ctx) {
-	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
-	if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
-	if (TYPE(NEXT(ctx->stack)) == ATOM) {
-		ctx->stack = cons(ctx, CAR(NEXT(ctx->stack)), AS(ATOM, ctx->stack));
-	} else if (TYPE(NEXT(ctx->stack)) == LIST) {
-		ctx->stack = cons(ctx, clone(ctx, CAR(NEXT(ctx->stack))), AS(LIST, ctx->stack));
-	}
-	return 0;
-}
 
 //CELL rot(CTX* ctx) {
 //	if (ctx->stack == 0 || NEXT(ctx->stack) == 0 || NEXT(NEXT(ctx->stack)) == 0) {

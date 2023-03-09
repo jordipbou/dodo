@@ -1333,6 +1333,40 @@ void test_PRIMITIVES_rot() {
 	TEST_ASSERT_EQUAL_INT(2, CAR(NEXT(NEXT(S(ctx)))));
 }
 
+void test_PRIMITIVES_over() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	S(ctx) = cons(ctx, 7, AS(ATOM, cons(ctx, 11, AS(ATOM, 0))));
+
+	over(ctx);
+
+	TEST_ASSERT_EQUAL_INT(3, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(11, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(NEXT(S(ctx)))));
+
+	S(ctx) = 
+		cons(ctx, 7, AS(ATOM, 
+		cons(ctx, 
+			cons(ctx, 11, AS(ATOM,
+			cons(ctx, 13, AS(ATOM, 0)))),
+		AS(LIST, 0))));
+
+	over(ctx);
+
+	TEST_ASSERT_EQUAL_INT(3, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(LIST, TYPE(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(2, length(CAR(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(11, CAR(CAR(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(13, CAR(NEXT(CAR(S(ctx)))));
+	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(S(ctx))));
+	TEST_ASSERT_NOT_EQUAL_INT(NEXT(NEXT(S(ctx))), S(ctx));
+	TEST_ASSERT_NOT_EQUAL_INT(CAR(NEXT(NEXT(S(ctx)))), CAR(S(ctx)));
+	TEST_ASSERT_NOT_EQUAL_INT(NEXT(CAR(NEXT(NEXT(S(ctx))))), NEXT(CAR(S(ctx))));
+}
+
 void test_PRIMITIVES_exec_atom() {
 	CELL size = 1024;
 	BYTE block[size];
@@ -1607,40 +1641,6 @@ void test_PRIMITIVES_branch2() {
 //
 //	TEST_ASSERT_EQUAL_INT(0, length(ctx->stack));
 //	TEST_ASSERT_EQUAL_INT(free_nodes(ctx), FREE(ctx));
-//}
-//
-//void test_STACK_over() {
-//	CELL size = 512;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//
-//	ctx->stack = cons(ctx, 7, AS(ATOM, cons(ctx, 11, AS(ATOM, 0))));
-//
-//	over(ctx);
-//
-//	TEST_ASSERT_EQUAL_INT(3, length(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(11, CAR(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(ctx->stack)));
-//	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(NEXT(ctx->stack))));
-//
-//	ctx->stack = 
-//		cons(ctx, 7, AS(ATOM, 
-//		cons(ctx, 
-//			cons(ctx, 11, AS(ATOM,
-//			cons(ctx, 13, AS(ATOM, 0)))),
-//		AS(LIST, 0))));
-//
-//	over(ctx);
-//
-//	TEST_ASSERT_EQUAL_INT(3, length(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(LIST, TYPE(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(2, length(CAR(ctx->stack)));
-//	TEST_ASSERT_EQUAL_INT(11, CAR(CAR(ctx->stack)));
-//	TEST_ASSERT_EQUAL_INT(13, CAR(NEXT(CAR(ctx->stack))));
-//	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(ctx->stack)));
-//	TEST_ASSERT_NOT_EQUAL_INT(NEXT(NEXT(ctx->stack)), ctx->stack);
-//	TEST_ASSERT_NOT_EQUAL_INT(CAR(NEXT(NEXT(ctx->stack))), CAR(ctx->stack));
-//	TEST_ASSERT_NOT_EQUAL_INT(NEXT(CAR(NEXT(NEXT(ctx->stack)))), NEXT(CAR(ctx->stack)));
 //}
 //
 //void test_STACK_rot() {
@@ -3003,6 +3003,7 @@ int main() {
 	RUN_TEST(test_PRIMITIVES_swap);
 	RUN_TEST(test_PRIMITIVES_drop);
 	RUN_TEST(test_PRIMITIVES_rot);
+	RUN_TEST(test_PRIMITIVES_over);
 	RUN_TEST(test_PRIMITIVES_exec_atom);
 	RUN_TEST(test_PRIMITIVES_exec_list);
 	RUN_TEST(test_PRIMITIVES_exec_primitive);
