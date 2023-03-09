@@ -414,6 +414,26 @@ CELL rbrace(CTX* ctx) {
 	return 0;
 }
 
+CELL duplicate(CTX* ctx) {
+	if (S(ctx) == 0) { ERR(ctx, ERR_STACK_UNDERFLOW); }
+	switch(TYPE(S(ctx))) {
+		case ATOM: if (PUSH(ctx, CAR(S(ctx))) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); } break;
+		case LIST: if (PUSHL(ctx, clone(ctx, CAR(S(ctx)))) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); } break;
+		case PRIM:
+			if ((S(ctx) = cons(ctx, CAR(S(ctx)), AS(PRIM, S(ctx)))) == 0) {
+				ERR(ctx, ERR_STACK_OVERFLOW);
+			}
+			break;
+		case WORD:
+			if ((S(ctx) = cons(ctx, CAR(S(ctx)), AS(WORD, S(ctx)))) == 0) {
+				ERR(ctx, ERR_STACK_OVERFLOW);
+			}
+			break;
+	}
+
+	return 0;
+}
+
 CELL swap(CTX* ctx) {
 	CELL t = S(ctx);
 	S(ctx) = NEXT(S(ctx));
@@ -464,78 +484,7 @@ CELL branch(CTX* ctx) {
 
 // --------------------------------------------------------------- Throughly tested until here
 
-//CELL branch(CTX* ctx) {
-//	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
-//	if (TYPE(ctx->stack) != ATOM) { return ERR_ATOM_EXPECTED; }
-//	CELL b = CAR(ctx->stack);
-//	ctx->stack = reclaim(ctx, ctx->stack);
-//	if (NEXT(NEXT(NEXT(ctx->ip))) != 0) {
-//		if (ctx->free == ctx->there) { return ERR_STACK_OVERFLOW; }
-//		ctx->rstack = cons(ctx, NEXT(NEXT(NEXT(ctx->ip))), AS(ATOM, ctx->rstack));
-//	}
-//	if (b) {
-//		ctx->ip = CAR(NEXT(ctx->ip));
-//	} else {
-//		ctx->ip = CAR(NEXT(NEXT(ctx->ip)));
-//	}
-//
-//	return 1;
-//}
-
-CELL jump(CTX* ctx) {
-	ctx->ip = CAR(NEXT(ctx->ip));
-
-	return 1;
-}
-
-CELL zjump(CTX* ctx) {
-	if (ctx->stack == 0) { return ERR_STACK_OVERFLOW; }
-	if (TYPE(ctx->stack) != ATOM) { return ERR_ATOM_EXPECTED; }
-	CELL b = CAR(ctx->stack);
-	ctx->stack = reclaim(ctx, ctx->stack);
-	if (b) {
-		ctx->ip = NEXT(NEXT(ctx->ip));
-	} else {
-		ctx->ip = CAR(NEXT(ctx->ip));
-	}
-
-	return 1;
-}
-
 // STACK PRIMITIVES
-
-CELL duplicate(CTX* ctx) {
-	PUSH(ctx, CAR(S(ctx)));
-	return 0;
-}
-
-//CELL duplicate(CTX* ctx) {
-//	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
-//	switch(TYPE(ctx->stack)) {
-//		case ATOM:
-//			if ((ctx->stack = cons(ctx, CAR(ctx->stack), AS(ATOM, ctx->stack))) == 0) {
-//				return ERR_STACK_OVERFLOW;
-//			}
-//			break;
-//		case LIST:
-//			if ((ctx->stack = cons(ctx, clone(ctx, CAR(ctx->stack)), AS(LIST, ctx->stack))) == 0) {
-//				return ERR_STACK_OVERFLOW;
-//			}
-//			break;
-//		case PRIM:
-//			if ((ctx->stack = cons(ctx, CAR(ctx->stack), AS(PRIM, ctx->stack))) == 0) {
-//				return ERR_STACK_OVERFLOW;
-//			}
-//			break;
-//		case WORD:
-//			if ((ctx->stack = cons(ctx, CAR(ctx->stack), AS(WORD, ctx->stack))) == 0) {
-//				return ERR_STACK_OVERFLOW;
-//			}
-//			break;
-//	}
-//
-//	return 0;
-//}
 
 CELL over(CTX* ctx) {
 	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }

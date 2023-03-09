@@ -1173,6 +1173,108 @@ void test_PRIMITIVES_braces() {
 	TEST_ASSERT_EQUAL_INT(3, CAR(NEXT(NEXT(CAR(S(ctx))))));
 }
 
+void test_PRIMITIVES_duplicate_atom() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	S(ctx) = cons(ctx, 7, AS(ATOM, S(ctx)));
+
+	duplicate(ctx);
+
+	TEST_ASSERT_EQUAL_INT(2, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 2, FREE(ctx));
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(NEXT(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(7, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(S(ctx))));
+
+	S(ctx) = cons(ctx, 11, AS(ATOM, S(ctx)));
+
+	duplicate(ctx);
+
+	TEST_ASSERT_EQUAL_INT(4, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 4, FREE(ctx));
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(NEXT(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(11, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(NEXT(NEXT(S(ctx)))));
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(NEXT(NEXT(NEXT(S(ctx))))));
+	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(NEXT(S(ctx)))));
+	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(NEXT(NEXT(S(ctx))))));
+}
+
+void test_PRIMITIVES_duplicate_list() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	S(ctx) = 
+		cons(ctx, 
+			cons(ctx, 17, AS(ATOM,
+			cons(ctx, 13, AS(ATOM,
+			cons(ctx, 
+				cons(ctx, 11, AS(ATOM,
+				cons(ctx, 7, AS(ATOM, 0)))),
+				AS(LIST, 0)))))),
+			AS(LIST, S(ctx)));
+
+	// (17, 13, (11, 7))
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 6, FREE(ctx));
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(LIST, TYPE(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(3, length(CAR(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(CAR(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(17, CAR(CAR(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(NEXT(CAR(S(ctx)))));
+	TEST_ASSERT_EQUAL_INT(13, CAR(NEXT(CAR(S(ctx)))));
+	TEST_ASSERT_EQUAL_INT(LIST, TYPE(NEXT(NEXT(CAR(S(ctx))))));
+	TEST_ASSERT_EQUAL_INT(2, length(CAR(NEXT(NEXT(CAR(S(ctx)))))));
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(CAR(NEXT(NEXT(CAR(S(ctx)))))));
+	TEST_ASSERT_EQUAL_INT(11, CAR(CAR(NEXT(NEXT(CAR(S(ctx)))))));
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(NEXT(CAR(NEXT(NEXT(CAR(S(ctx))))))));
+	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(CAR(NEXT(NEXT(CAR(S(ctx))))))));
+
+	duplicate(ctx);
+
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 12, FREE(ctx));
+	TEST_ASSERT_EQUAL_INT(2, length(S(ctx)));
+
+	TEST_ASSERT_EQUAL_INT(LIST, TYPE(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(3, length(CAR(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(CAR(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(17, CAR(CAR(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(NEXT(CAR(S(ctx)))));
+	TEST_ASSERT_EQUAL_INT(13, CAR(NEXT(CAR(S(ctx)))));
+	TEST_ASSERT_EQUAL_INT(LIST, TYPE(NEXT(NEXT(CAR(S(ctx))))));
+	TEST_ASSERT_EQUAL_INT(2, length(CAR(NEXT(NEXT(CAR(S(ctx)))))));
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(CAR(NEXT(NEXT(CAR(S(ctx)))))));
+	TEST_ASSERT_EQUAL_INT(11, CAR(CAR(NEXT(NEXT(CAR(S(ctx)))))));
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(NEXT(CAR(NEXT(NEXT(CAR(S(ctx))))))));
+	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(CAR(NEXT(NEXT(CAR(S(ctx))))))));
+
+	TEST_ASSERT_EQUAL_INT(LIST, TYPE(NEXT(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(3, length(CAR(NEXT(S(ctx)))));
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(CAR(NEXT(S(ctx)))));
+	TEST_ASSERT_EQUAL_INT(17, CAR(CAR(NEXT(S(ctx)))));
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(NEXT(CAR(NEXT(S(ctx))))));
+	TEST_ASSERT_EQUAL_INT(13, CAR(NEXT(CAR(NEXT(S(ctx))))));
+	TEST_ASSERT_EQUAL_INT(LIST, TYPE(NEXT(NEXT(CAR(NEXT(S(ctx)))))));
+	TEST_ASSERT_EQUAL_INT(2, length(CAR(NEXT(NEXT(CAR(NEXT(S(ctx))))))));
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(CAR(NEXT(NEXT(CAR(NEXT(S(ctx))))))));
+	TEST_ASSERT_EQUAL_INT(11, CAR(CAR(NEXT(NEXT(CAR(NEXT(S(ctx))))))));
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(NEXT(CAR(NEXT(NEXT(CAR(NEXT(S(ctx)))))))));
+	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(CAR(NEXT(NEXT(CAR(NEXT(S(ctx)))))))));
+
+	TEST_ASSERT_NOT_EQUAL_INT(S(ctx), NEXT(S(ctx)));
+	TEST_ASSERT_NOT_EQUAL_INT(CAR(S(ctx)), CAR(NEXT(S(ctx))));
+	TEST_ASSERT_NOT_EQUAL_INT(NEXT(CAR(S(ctx))), NEXT(CAR(NEXT(S(ctx)))));
+	TEST_ASSERT_NOT_EQUAL_INT(NEXT(NEXT(CAR(S(ctx)))), NEXT(NEXT(CAR(NEXT(S(ctx))))));
+	TEST_ASSERT_NOT_EQUAL_INT(CAR(NEXT(NEXT(CAR(S(ctx))))), CAR(NEXT(NEXT(CAR(NEXT(S(ctx)))))));
+	TEST_ASSERT_NOT_EQUAL_INT(NEXT(CAR(NEXT(NEXT(CAR(S(ctx)))))), NEXT(CAR(NEXT(NEXT(CAR(NEXT(S(ctx))))))));
+}
+
 void test_PRIMITIVES_swap() {
 	CELL size = 1024;
 	BYTE block[size];
@@ -1441,106 +1543,6 @@ void test_PRIMITIVES_branch2() {
 }
 
 //// STACK PRIMITIVES
-//
-//void test_STACK_duplicate_atom() {
-//	CELL size = 512;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//
-//	ctx->stack = cons(ctx, 7, AS(ATOM, ctx->stack));
-//	duplicate(ctx);
-//
-//	TEST_ASSERT_EQUAL_INT(2, length(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 2, FREE(ctx));
-//	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(NEXT(ctx->stack)));
-//	TEST_ASSERT_EQUAL_INT(7, CAR(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(ctx->stack)));
-//
-//	ctx->stack = cons(ctx, 11, AS(ATOM, ctx->stack));
-//	duplicate(ctx);
-//
-//	TEST_ASSERT_EQUAL_INT(4, length(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 4, FREE(ctx));
-//	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(NEXT(ctx->stack)));
-//	TEST_ASSERT_EQUAL_INT(11, CAR(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(ctx->stack)));
-//	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(NEXT(NEXT(ctx->stack))));
-//	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(NEXT(NEXT(NEXT(ctx->stack)))));
-//	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(NEXT(ctx->stack))));
-//	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(NEXT(NEXT(ctx->stack)))));
-//}
-//
-//void test_STACK_duplicate_list() {
-//	CELL size = 512;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//
-//	ctx->stack = 
-//		cons(ctx, 
-//			cons(ctx, 17, AS(ATOM,
-//			cons(ctx, 13, AS(ATOM,
-//			cons(ctx, 
-//				cons(ctx, 11, AS(ATOM,
-//				cons(ctx, 7, AS(ATOM, 0)))),
-//				AS(LIST, 0)))))),
-//			AS(LIST, ctx->stack));
-//
-//	// (17, 13, (11, 7))
-//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 6, FREE(ctx));
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(LIST, TYPE(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(3, length(CAR(ctx->stack)));
-//	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(CAR(ctx->stack)));
-//	TEST_ASSERT_EQUAL_INT(17, CAR(CAR(ctx->stack)));
-//	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(NEXT(CAR(ctx->stack))));
-//	TEST_ASSERT_EQUAL_INT(13, CAR(NEXT(CAR(ctx->stack))));
-//	TEST_ASSERT_EQUAL_INT(LIST, TYPE(NEXT(NEXT(CAR(ctx->stack)))));
-//	TEST_ASSERT_EQUAL_INT(2, length(CAR(NEXT(NEXT(CAR(ctx->stack))))));
-//	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(CAR(NEXT(NEXT(CAR(ctx->stack))))));
-//	TEST_ASSERT_EQUAL_INT(11, CAR(CAR(NEXT(NEXT(CAR(ctx->stack))))));
-//	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(NEXT(CAR(NEXT(NEXT(CAR(ctx->stack)))))));
-//	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(CAR(NEXT(NEXT(CAR(ctx->stack)))))));
-//
-//	duplicate(ctx);
-//
-//	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 12, FREE(ctx));
-//	TEST_ASSERT_EQUAL_INT(2, length(ctx->stack));
-//
-//	TEST_ASSERT_EQUAL_INT(LIST, TYPE(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(3, length(CAR(ctx->stack)));
-//	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(CAR(ctx->stack)));
-//	TEST_ASSERT_EQUAL_INT(17, CAR(CAR(ctx->stack)));
-//	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(NEXT(CAR(ctx->stack))));
-//	TEST_ASSERT_EQUAL_INT(13, CAR(NEXT(CAR(ctx->stack))));
-//	TEST_ASSERT_EQUAL_INT(LIST, TYPE(NEXT(NEXT(CAR(ctx->stack)))));
-//	TEST_ASSERT_EQUAL_INT(2, length(CAR(NEXT(NEXT(CAR(ctx->stack))))));
-//	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(CAR(NEXT(NEXT(CAR(ctx->stack))))));
-//	TEST_ASSERT_EQUAL_INT(11, CAR(CAR(NEXT(NEXT(CAR(ctx->stack))))));
-//	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(NEXT(CAR(NEXT(NEXT(CAR(ctx->stack)))))));
-//	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(CAR(NEXT(NEXT(CAR(ctx->stack)))))));
-//
-//	TEST_ASSERT_EQUAL_INT(LIST, TYPE(NEXT(ctx->stack)));
-//	TEST_ASSERT_EQUAL_INT(3, length(CAR(NEXT(ctx->stack))));
-//	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(CAR(NEXT(ctx->stack))));
-//	TEST_ASSERT_EQUAL_INT(17, CAR(CAR(NEXT(ctx->stack))));
-//	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(NEXT(CAR(NEXT(ctx->stack)))));
-//	TEST_ASSERT_EQUAL_INT(13, CAR(NEXT(CAR(NEXT(ctx->stack)))));
-//	TEST_ASSERT_EQUAL_INT(LIST, TYPE(NEXT(NEXT(CAR(NEXT(ctx->stack))))));
-//	TEST_ASSERT_EQUAL_INT(2, length(CAR(NEXT(NEXT(CAR(NEXT(ctx->stack)))))));
-//	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(CAR(NEXT(NEXT(CAR(NEXT(ctx->stack)))))));
-//	TEST_ASSERT_EQUAL_INT(11, CAR(CAR(NEXT(NEXT(CAR(NEXT(ctx->stack)))))));
-//	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(NEXT(CAR(NEXT(NEXT(CAR(NEXT(ctx->stack))))))));
-//	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(CAR(NEXT(NEXT(CAR(NEXT(ctx->stack))))))));
-//
-//	TEST_ASSERT_NOT_EQUAL_INT(ctx->stack, NEXT(ctx->stack));
-//	TEST_ASSERT_NOT_EQUAL_INT(CAR(ctx->stack), CAR(NEXT(ctx->stack)));
-//	TEST_ASSERT_NOT_EQUAL_INT(NEXT(CAR(ctx->stack)), NEXT(CAR(NEXT(ctx->stack))));
-//	TEST_ASSERT_NOT_EQUAL_INT(NEXT(NEXT(CAR(ctx->stack))), NEXT(NEXT(CAR(NEXT(ctx->stack)))));
-//	TEST_ASSERT_NOT_EQUAL_INT(CAR(NEXT(NEXT(CAR(ctx->stack)))), CAR(NEXT(NEXT(CAR(NEXT(ctx->stack))))));
-//	TEST_ASSERT_NOT_EQUAL_INT(NEXT(CAR(NEXT(NEXT(CAR(ctx->stack))))), NEXT(CAR(NEXT(NEXT(CAR(NEXT(ctx->stack)))))));
-//}
 //
 //void test_STACK_swap_1() {
 //	CELL size = 512;
@@ -2996,6 +2998,8 @@ int main() {
 	RUN_TEST(test_PRIMITIVES_reverse_stack);
 	RUN_TEST(test_PRIMITIVES_reverse_stack_2);
 	RUN_TEST(test_PRIMITIVES_braces);
+	RUN_TEST(test_PRIMITIVES_duplicate_atom);
+	RUN_TEST(test_PRIMITIVES_duplicate_list);
 	RUN_TEST(test_PRIMITIVES_swap);
 	RUN_TEST(test_PRIMITIVES_drop);
 	RUN_TEST(test_PRIMITIVES_rot);
@@ -3009,8 +3013,6 @@ int main() {
 	RUN_TEST(test_PRIMITIVES_branch2);
 
 	//// STACK PRIMITIVES
-	//RUN_TEST(test_STACK_duplicate_atom);
-	//RUN_TEST(test_STACK_duplicate_list);
 	//RUN_TEST(test_STACK_swap_1);
 	//RUN_TEST(test_STACK_swap_2);
 	//RUN_TEST(test_STACK_drop);
