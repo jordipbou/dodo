@@ -499,6 +499,19 @@ CELL exec(CTX* ctx) {
 	if (result < 0) { ERR(ctx, result); } else { return result; }
 }
 
+CELL exec_x(CTX* ctx) {
+	CELL result = 0;
+
+	switch (TYPE(S(ctx))) {
+		case ATOM: if (PUSH(ctx, CAR(S(ctx))) == 0) result = ERR_STACK_OVERFLOW; break;
+		case LIST: result = execute(ctx, CAR(S(ctx))); break;
+		case PRIM: result = ((FUNC)CAR(S(ctx)))(ctx); break;
+		case WORD: result = execute(ctx, XT(CAR(S(ctx)))); break;
+	}
+
+	if (result < 0) { ERR(ctx, result); } else { return result; }
+}
+
 CELL branch(CTX* ctx) {
 	rot(ctx);
 	CELL b = pop(ctx);
@@ -637,8 +650,6 @@ CTX* bootstrap(CTX* ctx) {
 	ADD_PRIMITIVE(ctx, "spush", &spush, 2);
 	ADD_PRIMITIVE(ctx, "s>l", &stack_to_list, 2);
 
-	//ADD_PRIMITIVE(ctx, "literal", &literal, 2);
-
 	ADD_PRIMITIVE(ctx, "i", &exec, 0);
 	//ADD_PRIMITIVE(ctx, "x", &exec, 0);
 
@@ -666,8 +677,6 @@ CTX* bootstrap(CTX* ctx) {
 	//ADD_PRIMITIVE(ctx, "b@", &bfetch, 0);
 
 	//ADD_PRIMITIVE(ctx, "cell", &cell, 0);
-
-	//ADD_PRIMITIVE(ctx, "sliteral", &sliteral, 2);
 
 	ADD_PRIMITIVE(ctx, "postpone", &postpone, 2);
 	//ADD_PRIMITIVE(ctx, "p", &postpone, 2);
@@ -796,15 +805,6 @@ CTX* bootstrap(CTX* ctx) {
 //	return 0;
 //}
 //
-//CELL literal(CTX* ctx) {
-//	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
-//	if (TYPE(ctx->stack) != ATOM) { return ERR_ATOM_EXPECTED; }
-//	CELL x = CAR(ctx->stack);
-//	ctx->stack = reclaim(ctx, ctx->stack);
-//	CAR(ctx->cpile) = cons(ctx, x, AS(ATOM, CAR(ctx->cpile)));
-//	return 0;
-//}
-//
 //CELL see(CTX* ctx) {
 //	// TODO
 //	parse_token(ctx);
@@ -828,27 +828,6 @@ CTX* bootstrap(CTX* ctx) {
 //	BYTE* s = (BYTE*)CAR(NEXT(ctx->stack));
 //	ctx->stack = reclaim(ctx, reclaim(ctx, ctx->stack));
 //	printf("%.*s", (int)l, s);
-//	return 0;
-//}
-//
-//CELL sliteral(CTX* ctx) {
-//	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
-//	CELL l = CAR(ctx->stack);
-//	BYTE* s = (BYTE*)CAR(NEXT(ctx->stack));
-//	ctx->stack = reclaim(ctx, reclaim(ctx, ctx->stack));
-//	BYTE* str = ctx->here;
-//	ctx->stack = cons(ctx, sizeof(CELL) + l + 1, AS(ATOM, ctx->stack));
-//	if (allot(ctx) != 0) { return ERR_NOT_ENOUGH_MEMORY; }
-//	*((CELL*)str) = l;
-//	str += sizeof(CELL);
-//	for (CELL i = 0; i < l; i++) { str[i] = s[i]; }
-//	str[l] = 0;
-//	if (ctx->state) {
-//		CAR(ctx->cpile) = cons(ctx, (CELL)str, AS(ATOM, CAR(ctx->cpile)));
-//	} else {
-//		ctx->stack = cons(ctx, (CELL)str, AS(ATOM, ctx->stack));
-//	}
-//	//ctx->stack = cons(ctx, l, AS(ATOM, ctx->stack));
 //	return 0;
 //}
 //

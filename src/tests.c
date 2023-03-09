@@ -1496,6 +1496,141 @@ void test_PRIMITIVES_exec_word2() {
 	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 2, FREE(ctx));
 }
 
+void test_PRIMITIVES_exec_x_atom() {
+	CELL size = 1024;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	S(ctx) = cons(ctx, 5, AS(ATOM, 0));
+
+	exec_x(ctx);
+
+	TEST_ASSERT_EQUAL_INT(2, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(5, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(5, CAR(NEXT(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 2, FREE(ctx));
+}
+
+void test_PRIMITIVES_exec_x_list() {
+	CELL size = 1024;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	CELL list =
+		cons(ctx, 7, AS(ATOM,
+		cons(ctx, 11, AS(ATOM,
+		cons(ctx, (CELL)&add, AS(PRIM, 0))))));
+
+	S(ctx) = cons(ctx, list, AS(LIST, 0));
+
+	exec_x(ctx);
+
+	TEST_ASSERT_EQUAL_INT(2, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(18, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(list, CAR(NEXT(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 5, FREE(ctx));
+}
+
+void test_PRIMITIVES_exec_x_primitive() {
+	CELL size = 1024;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	S(ctx) =
+		cons(ctx, (CELL)&swap, AS(PRIM,
+		cons(ctx, 7, AS(ATOM,
+		cons(ctx, 11, AS(ATOM, 0))))));
+
+	exec_x(ctx);
+
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 3, FREE(ctx));
+	TEST_ASSERT_EQUAL_INT(3, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(7, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT((CELL)&swap, CAR(NEXT(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(NEXT(S(ctx)))));
+}
+
+void test_PRIMITIVES_exec_x_primitive2() {
+	CELL size = 1024;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	CELL code =
+		cons(ctx, (CELL)exec_x, AS(PRIM,
+		cons(ctx, 13, AS(ATOM, 0))));
+
+	S(ctx) =
+		cons(ctx, (CELL)&swap, AS(PRIM,
+		cons(ctx, 7, AS(ATOM,
+		cons(ctx, 11, AS(ATOM, 0))))));
+
+	execute(ctx, code);
+
+	reclaim(ctx, reclaim(ctx, code));
+
+	TEST_ASSERT_EQUAL_INT(4, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(13, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(S(ctx))));
+	TEST_ASSERT_EQUAL_INT((CELL)&swap, CAR(NEXT(NEXT(S(ctx)))));
+	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(NEXT(NEXT(S(ctx))))));
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 4, FREE(ctx));
+}
+
+void test_PRIMITIVES_exec_x_word() {
+	CELL size = 1024;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	CELL __double__ =
+		cons(ctx,
+			cons(ctx, (CELL)"double", AS(ATOM,
+			cons(ctx, (CELL)&duplicate, AS(PRIM,
+			cons(ctx, (CELL)&add, AS(PRIM, 0)))))),
+		AS(LIST, 0));
+
+	S(ctx) = 
+		cons(ctx, (CELL)__double__, AS(WORD,
+		cons(ctx, 5, AS(ATOM, 0))));
+
+	exec_x(ctx);
+
+	TEST_ASSERT_EQUAL_INT(2, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(__double__ + __double__, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(5, CAR(NEXT(S(ctx))));
+}
+
+void test_PRIMITIVES_exec_x_word2() {
+	CELL size = 1024;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	CELL __double__ =
+		cons(ctx,
+			cons(ctx, (CELL)"double", AS(ATOM,
+			cons(ctx, (CELL)&duplicate, AS(PRIM,
+			cons(ctx, (CELL)&add, AS(PRIM, 0)))))),
+		AS(LIST, 0));
+
+	CELL code =
+		cons(ctx, (CELL)exec_x, AS(PRIM,
+		cons(ctx, 7, AS(ATOM, 0))));
+
+	S(ctx) = 
+		cons(ctx, (CELL)__double__, AS(WORD,
+		cons(ctx, 5, AS(ATOM, 0))));
+
+	execute(ctx, code);
+
+	reclaim(ctx, __double__);
+	reclaim(ctx, reclaim(ctx, code));
+
+	TEST_ASSERT_EQUAL_INT(3, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(7, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(__double__ + __double__, CAR(NEXT(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(5, CAR(NEXT(NEXT(S(ctx)))));
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 3, FREE(ctx));
+}
+
 void test_PRIMITIVES_branch() {
 	CELL size = 1024;
 	BYTE block[size];
@@ -2981,6 +3116,12 @@ int main() {
 	RUN_TEST(test_PRIMITIVES_exec_primitive2);
 	RUN_TEST(test_PRIMITIVES_exec_word);
 	RUN_TEST(test_PRIMITIVES_exec_word2);
+	RUN_TEST(test_PRIMITIVES_exec_x_atom);
+	RUN_TEST(test_PRIMITIVES_exec_x_list);
+	RUN_TEST(test_PRIMITIVES_exec_x_primitive);
+	RUN_TEST(test_PRIMITIVES_exec_x_primitive2);
+	RUN_TEST(test_PRIMITIVES_exec_x_word);
+	RUN_TEST(test_PRIMITIVES_exec_x_word2);
 	RUN_TEST(test_PRIMITIVES_branch);
 	RUN_TEST(test_PRIMITIVES_branch2);
 
