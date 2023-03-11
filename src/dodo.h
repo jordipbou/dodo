@@ -36,7 +36,7 @@ enum Words { CMP_PRIMITIVE, CMP_COLON_DEF, IMM_PRIMITIVE, IMM_COLON_DEF };
 typedef struct {
 	BYTE *tib, *here;
 	CELL there, size; 
-	CELL free, pile, cpile, cfstack, latest;
+	CELL free, pile, cpile, cfstack, xstack, latest;
 	CELL ip, state, token, in, base;
 } CTX;
 
@@ -65,7 +65,7 @@ CTX* init(BYTE* block, CELL size) {
 		CDR(pair) = pair == ctx->there ? 0 : pair - 2*sizeof(CELL);
 	}
 
-	ctx->cpile = ctx->cfstack = ctx->latest = 0;
+	ctx->xstack = ctx->cpile = ctx->cfstack = ctx->latest = 0;
 	ctx->state = ctx->token = ctx->in = 0;
 	ctx->tib = 0;
 	ctx->base = 10;
@@ -162,7 +162,11 @@ CELL error(CTX* ctx, CELL err) {
 	return err;
 }
 
-#define ERR(ctx, err)		{ CELL __err__ = error(ctx, err); if (__err__) { return __err__; } }
+#define INFO(msg) \
+    fprintf(stderr, "info: %s:%d: ", __FILE__, __LINE__); \
+    fprintf(stderr, "%s", msg);
+
+#define ERR(ctx, err)		{ INFO(""); CELL __err__ = error(ctx, err); if (__err__) { return __err__; } }
 
 #define ERR_POP(ctx, v) \
 	if (S(ctx) == 0) { \
@@ -264,8 +268,7 @@ CELL compile_number(CTX* ctx, CELL number) {
 	if (ctx->cpile == 0) {
 		if (cpush(ctx) != 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
 	}
-	if ((C(ctx) = cons(ctx, number, AS(ATOM, C(ctx)))) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
-	return 0;
+	return C(ctx) = cons(ctx, number, AS(ATOM, C(ctx)));
 }
 
 
@@ -571,44 +574,15 @@ CELL branch(CTX* ctx) {
 	return exec(ctx);
 }
 
-// --------------------------------------------------------------- Throughly tested until here
-
 // ARITHMETIC PRIMITIVES
 
-CELL add(CTX* ctx) {
-	CELL a = pop(ctx);
-	CELL b = pop(ctx);
-	PUSH(ctx, b + a);
-	return 0;
-}
+CELL add(CTX* ctx) { CELL a, b;	ERR_POP(ctx, a); ERR_POP(ctx, b);	return PUSH(ctx, b + a); }
+CELL sub(CTX* ctx) { CELL a, b;	ERR_POP(ctx, a); ERR_POP(ctx, b);	return PUSH(ctx, b - a); }
+CELL mul(CTX* ctx) { CELL a, b;	ERR_POP(ctx, a); ERR_POP(ctx, b);	return PUSH(ctx, b * a); }
+CELL division(CTX* ctx) { CELL a, b;	ERR_POP(ctx, a); ERR_POP(ctx, b);	return PUSH(ctx, b / a); }
+CELL mod(CTX* ctx) { CELL a, b;	ERR_POP(ctx, a); ERR_POP(ctx, b);	return PUSH(ctx, b % a); }
 
-CELL sub(CTX* ctx) {
-	CELL a = pop(ctx);
-	CELL b = pop(ctx);
-	PUSH(ctx, b - a);
-	return 0;
-}
-
-CELL mul(CTX* ctx) {
-	CELL a = pop(ctx);
-	CELL b = pop(ctx);
-	PUSH(ctx, b * a);
-	return 0;
-}
-
-CELL division(CTX* ctx) {
-	CELL a = pop(ctx);
-	CELL b = pop(ctx);
-	PUSH(ctx, b / a);
-	return 0;
-}
-
-CELL mod(CTX* ctx) {
-	CELL a = pop(ctx);
-	CELL b = pop(ctx);
-	PUSH(ctx, b % a);
-	return 0;
-}
+// --------------------------------------------------------------- Throughly tested until here
 
 // COMPARISON PRIMITIVES
 
@@ -670,6 +644,25 @@ CELL literal(CTX* ctx) {
 	return 0;
 }
 
+CELL fetch(CTX* ctx) {
+	CELL addr;
+	ERR_POP(ctx, addr);
+	return S(ctx) = cons(ctx, *((CELL*)addr), AS(ATOM, S(ctx)));
+}
+
+CELL store(CTX* ctx) {
+	CELL addr, x;
+	ERR_POP(ctx, x);
+	ERR_POP(ctx, addr);
+	*((CELL*)addr) = x;
+
+	return 0;
+}
+
+CELL here(CTX* ctx) {
+	return S(ctx) = cons(ctx, ctx->here, AS(ATOM, S(ctx)));
+}
+
 #define ADD_PRIMITIVE(ctx, name, func, immediate) \
 	ctx->latest = cons(ctx, \
 		cons(ctx, (CELL)name, AS(ATOM, \
@@ -724,11 +717,11 @@ CTX* bootstrap(CTX* ctx) {
 	//ADD_PRIMITIVE(ctx, ":", &colon, 2);
 	//ADD_PRIMITIVE(ctx, ";", &semicolon, 2);
 
-	//ADD_PRIMITIVE(ctx, "here", &here, 0);
+	ADD_PRIMITIVE(ctx, "here", &here, 0);
 	ADD_PRIMITIVE(ctx, "allot", &allot, 0);
 
-	//ADD_PRIMITIVE(ctx, "!", &store, 0);
-	//ADD_PRIMITIVE(ctx, "@", &fetch, 0);
+	ADD_PRIMITIVE(ctx, "!", &store, 0);
+	ADD_PRIMITIVE(ctx, "@", &fetch, 0);
 	//ADD_PRIMITIVE(ctx, "b!", &bstore, 0);
 	//ADD_PRIMITIVE(ctx, "b@", &bfetch, 0);
 
@@ -843,25 +836,6 @@ CTX* bootstrap(CTX* ctx) {
 //}
 //
 //// PRIMITIVES
-//
-//CELL fetch(CTX* ctx) {
-//	if (ctx->stack == 0) { return ERR_STACK_UNDERFLOW; }
-//	if (TYPE(ctx->stack) != ATOM) { return ERR_ATOM_EXPECTED; }
-//	CAR(ctx->stack) = *((CELL*)(CAR(ctx->stack)));
-//
-//	return 0;
-//}
-//
-//CELL store(CTX* ctx) {
-//	if (ctx->stack == 0 || NEXT(ctx->stack) == 0) { return ERR_STACK_UNDERFLOW; }
-//	if (TYPE(ctx->stack) != ATOM || TYPE(NEXT(ctx->stack)) != ATOM) { return ERR_ATOM_EXPECTED; }
-//	CELL addr = CAR(ctx->stack);
-//	CELL x = CAR(NEXT(ctx->stack));
-//	ctx->stack = reclaim(ctx, reclaim(ctx, ctx->stack));
-//	*((CELL*)addr) = x;
-//
-//	return 0;
-//}
 //
 //CELL see(CTX* ctx) {
 //	// TODO

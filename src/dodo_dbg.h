@@ -139,9 +139,7 @@ CELL dbg_evaluate(CTX* ctx, BYTE* str) {
 			if (number == 0 && endptr == (char*)(TK(ctx))) {
 				ERR(ctx, ERR_UNDEFINED_WORD);
 			} else if (ctx->state) {
-				printf("COMPILING: %ld\n", number);
-				//if (PUSH(ctx, number) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
-				if ((C(ctx) = cons(ctx, number, AS(ATOM, C(ctx)))) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
+				if (compile_number(ctx, word) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
 			} else {
 				if (PUSH(ctx, number) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
 			}
