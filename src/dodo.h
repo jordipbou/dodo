@@ -1,3 +1,6 @@
+#ifndef __DODO__
+#define __DODO__
+
 #include<inttypes.h>
 #include<string.h>
 #include<stdio.h>
@@ -33,11 +36,12 @@ enum Words { CMP_PRIMITIVE, CMP_COLON_DEF, IMM_PRIMITIVE, IMM_COLON_DEF };
 typedef struct {
 	BYTE *tib, *here;
 	CELL there, size; 
-	CELL free, pile, stack, cfstack, latest;
+	CELL free, pile, cpile, cfstack, latest;
 	CELL ip, state, token, in, base;
 } CTX;
 
-#define S(ctx)									CAR(ctx->stack)
+#define S(ctx)									CAR(ctx->pile)
+#define C(ctx)									CAR(ctx->cpile)
 
 #define FREE(ctx)						(length(ctx->free) - 1)		// Don't count ctx->there
 #define ALIGN(addr, bound)	((((CELL)addr) + (bound - 1)) & ~(bound - 1))
@@ -54,15 +58,14 @@ CTX* init(BYTE* block, CELL size) {
 	ctx->pile = TOP(ctx);
 	CAR(ctx->pile) = 0;
 	CDR(ctx->pile) = AS(LIST, 0);
-	ctx->stack = ctx->pile;
-	ctx->free = TOP(ctx) - 2*sizeof(CELL);
+	ctx->free = ctx->pile - 2*sizeof(CELL);
 
 	for (CELL pair = ctx->there; pair <= ctx->free; pair += 2*sizeof(CELL)) {
 		CAR(pair) = pair == ctx->free ? 0 : pair + 2*sizeof(CELL);
 		CDR(pair) = pair == ctx->there ? 0 : pair - 2*sizeof(CELL);
 	}
 
-	ctx->cfstack = ctx->latest = 0;
+	ctx->cpile = ctx->cfstack = ctx->latest = 0;
 	ctx->state = ctx->token = ctx->in = 0;
 	ctx->tib = 0;
 	ctx->base = 10;
@@ -121,6 +124,7 @@ CELL length(CELL pair) {
 	return c; 
 }
 
+// TODO: Add error management directly to PUSH? Or remove PUSH.
 #define PUSH(ctx, v)				(S(ctx) = cons(ctx, (CELL)v, AS(ATOM, S(ctx))))
 #define PUSHL(ctx, v)				(S(ctx) = cons(ctx, (CELL)v, AS(LIST, S(ctx))))
 
@@ -240,13 +244,30 @@ CELL find_token(CTX* ctx) {
 	return w;
 }
 
+CELL cpush(CTX* ctx) {
+	if ((ctx->cpile = cons(ctx, 0, AS(LIST, ctx->cpile))) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
+	return 0;
+}
+
 CELL compile_word(CTX* ctx, CELL word) {
+	if (ctx->cpile == 0) {
+		if (cpush(ctx) != 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
+	}
 	if (TYPE(word) == ATOM || TYPE(word) == PRIM) {
-		return (S(ctx) = cons(ctx, CAR(XT(word)), AS(PRIM, S(ctx))));
+		return (C(ctx) = cons(ctx, CAR(XT(word)), AS(PRIM, C(ctx))));
 	} else {
-		return (S(ctx) = cons(ctx, word, AS(WORD, S(ctx))));
+		return (C(ctx) = cons(ctx, word, AS(WORD, C(ctx))));
 	}
 }
+
+CELL compile_number(CTX* ctx, CELL number) {
+	if (ctx->cpile == 0) {
+		if (cpush(ctx) != 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
+	}
+	if ((C(ctx) = cons(ctx, number, AS(ATOM, C(ctx)))) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
+	return 0;
+}
+
 
 CELL evaluate(CTX* ctx, BYTE* str) { 
 	CELL word, result; 
@@ -265,12 +286,16 @@ CELL evaluate(CTX* ctx, BYTE* str) {
 			intmax_t number = strtoimax(TK(ctx), &endptr, 10);
 			if (number == 0 && endptr == (char*)(TK(ctx))) {
 				ERR(ctx, ERR_UNDEFINED_WORD);
+			} else if (ctx->state) {
+				if (compile_number(ctx, number) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
 			} else {
 				if (PUSH(ctx, number) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
 			}
 		}
 	} while (1);
 }
+
+// TODO: Up to here + some primitives is enough to create complex programs?
 
 CELL grow(CTX* ctx) { 
 	if (CAR(ctx->there) == (ctx->there + 2*sizeof(CELL))) { 
@@ -347,9 +372,10 @@ CELL parse_name(CTX* ctx) {
 	return 0; 
 }
 
+// TODO: Start working here for piles/stacks
+
 CELL spush(CTX* ctx) {
 	if ((ctx->pile = cons(ctx, 0, AS(LIST, ctx->pile))) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
-	ctx->stack = ctx->pile;
 	return 0;
 }
 
@@ -359,16 +385,16 @@ CELL clear(CTX* ctx) {
 
 CELL sdrop(CTX* ctx) {
 	if (NEXT(ctx->pile) == 0) { return clear(ctx); }
-	ctx->stack = ctx->pile = reclaim(ctx, ctx->pile);
+	ctx->pile = reclaim(ctx, ctx->pile);
 	return 0;
 }
 
 CELL stack_to_list(CTX* ctx) {
 	if (NEXT(ctx->pile) == 0) {
-		ctx->stack = ctx->pile = cons(ctx, ctx->pile, AS(LIST, 0));
+		ctx->pile = cons(ctx, ctx->pile, AS(LIST, 0));
 	} else {
 		CELL t = ctx->pile;
-		ctx->stack = ctx->pile = NEXT(ctx->pile);
+		ctx->pile = NEXT(ctx->pile);
 		LINK(t, CAR(ctx->pile));
 		CAR(ctx->pile) = t;
 	}
@@ -382,7 +408,7 @@ CELL list_to_stack(CTX* ctx) {
 		CELL t = S(ctx);
 		S(ctx) = NEXT(S(ctx));
 		LINK(t, ctx->pile);
-		ctx->stack = ctx->pile = t;
+		ctx->pile = t;
 	}
 }
 
@@ -392,6 +418,9 @@ CELL lbracket(CTX* ctx) {
 }
 
 CELL rbracket(CTX* ctx) {
+	if (ctx->cpile == 0) {
+		if ((ctx->cpile = cons(ctx, 0, AS(LIST, 0))) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
+	}
 	ctx->state = 1;
 	return 0;
 }
@@ -401,16 +430,36 @@ CELL reverse_stack(CTX* ctx) {
 	return 0;
 }
 
+CELL reverse_cstack(CTX* ctx) {
+	C(ctx) = reverse(C(ctx), 0);
+	return 0;
+}
+
+CELL cstack_to_list(CTX* ctx) {
+	if (NEXT(ctx->cpile) == 0) {
+		LINK(ctx->cpile, S(ctx));
+		S(ctx) = ctx->cpile;
+		ctx->cpile = 0;
+		lbracket(ctx);
+	} else {
+		CELL t = ctx->cpile;
+		ctx->cpile = NEXT(ctx->cpile);
+		LINK(t, CAR(ctx->cpile));
+		CAR(ctx->cpile) = t;
+	}
+	return 0;
+}
+
 CELL lbrace(CTX* ctx) {
-	spush(ctx);
+	cpush(ctx);
 	rbracket(ctx);
 	return 0;
 }
 
 CELL rbrace(CTX* ctx) {
-	lbracket(ctx);
-	reverse_stack(ctx);
-	stack_to_list(ctx);
+	//lbracket(ctx);
+	reverse_cstack(ctx);
+	cstack_to_list(ctx);
 	return 0;
 }
 
@@ -614,6 +663,13 @@ CELL invert(CTX* ctx) {
 	return 0;
 }
 
+CELL literal(CTX* ctx) {
+	// TODO: Different types!!
+	CELL t = pop(ctx);
+	C(ctx)  = cons(ctx, t, AS(ATOM, C(ctx)));
+	return 0;
+}
+
 #define ADD_PRIMITIVE(ctx, name, func, immediate) \
 	ctx->latest = cons(ctx, \
 		cons(ctx, (CELL)name, AS(ATOM, \
@@ -651,7 +707,7 @@ CTX* bootstrap(CTX* ctx) {
 	ADD_PRIMITIVE(ctx, "s>l", &stack_to_list, 2);
 
 	ADD_PRIMITIVE(ctx, "i", &exec, 0);
-	//ADD_PRIMITIVE(ctx, "x", &exec, 0);
+	ADD_PRIMITIVE(ctx, "x", &exec_x, 0);
 
 	ADD_PRIMITIVE(ctx, "branch", &branch, 0);
 
@@ -680,6 +736,8 @@ CTX* bootstrap(CTX* ctx) {
 
 	ADD_PRIMITIVE(ctx, "postpone", &postpone, 2);
 	//ADD_PRIMITIVE(ctx, "p", &postpone, 2);
+
+	ADD_PRIMITIVE(ctx, "literal", &literal, 2);
 
 	return ctx;
 }
@@ -1119,3 +1177,5 @@ CTX* bootstrap(CTX* ctx) {
 //
 //	return ctx;
 //}
+
+#endif

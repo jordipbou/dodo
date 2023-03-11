@@ -137,9 +137,9 @@ void test_CTX_block_initialization() {
 	TEST_ASSERT_EQUAL_INT(ALIGN(ctx->here, 2*sizeof(CELL)), ctx->there);
 	TEST_ASSERT_EQUAL_INT(ALIGN(((BYTE*)ctx) + size - 2*sizeof(CELL) - 1, 2*sizeof(CELL)), TOP(ctx));
 	TEST_ASSERT_EQUAL_INT(TOP(ctx), ctx->pile);
-	TEST_ASSERT_EQUAL_INT(ctx->pile, ctx->stack);
 	TEST_ASSERT_EQUAL_INT(TOP(ctx) - 2*sizeof(CELL), ctx->free);
 
+	TEST_ASSERT_EQUAL_INT(0, ctx->cpile);
 	TEST_ASSERT_EQUAL_INT(0, ctx->cfstack);
 	TEST_ASSERT_EQUAL_INT(0, ctx->latest);
 	TEST_ASSERT_EQUAL_INT(0, ctx->state);
@@ -668,27 +668,29 @@ void test_COMPILATION_compile_word() {
 
 	CELL compilation = compile_word(ctx, word1);
 
-	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
-	TEST_ASSERT_EQUAL_INT(PRIM, TYPE(S(ctx)));
-	TEST_ASSERT_EQUAL_INT(0, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(0, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(1, length(C(ctx)));
+	TEST_ASSERT_EQUAL_INT(PRIM, TYPE(C(ctx)));
+	TEST_ASSERT_EQUAL_INT(0, CAR(C(ctx)));
 
 	compilation = compile_word(ctx, word1_imm);
 
-	TEST_ASSERT_EQUAL_INT(2, length(S(ctx)));
-	TEST_ASSERT_EQUAL_INT(PRIM, TYPE(S(ctx)));
-	TEST_ASSERT_EQUAL_INT(0, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(0, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(2, length(C(ctx)));
+	TEST_ASSERT_EQUAL_INT(PRIM, TYPE(C(ctx)));
+	TEST_ASSERT_EQUAL_INT(0, CAR(C(ctx)));
 
 	compilation = compile_word(ctx, word2);
 
-	TEST_ASSERT_EQUAL_INT(3, length(S(ctx)));
-	TEST_ASSERT_EQUAL_INT(WORD, TYPE(S(ctx)));
-	TEST_ASSERT_EQUAL_INT(word2, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(3, length(C(ctx)));
+	TEST_ASSERT_EQUAL_INT(WORD, TYPE(C(ctx)));
+	TEST_ASSERT_EQUAL_INT(word2, CAR(C(ctx)));
 
 	compilation = compile_word(ctx, word2_imm);
 
-	TEST_ASSERT_EQUAL_INT(4, length(S(ctx)));
-	TEST_ASSERT_EQUAL_INT(WORD, TYPE(S(ctx)));
-	TEST_ASSERT_EQUAL_INT(word2_imm, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(4, length(C(ctx)));
+	TEST_ASSERT_EQUAL_INT(WORD, TYPE(C(ctx)));
+	TEST_ASSERT_EQUAL_INT(word2_imm, CAR(C(ctx)));
 }
 
 void test_OUTER_evaluate_numbers() {
@@ -920,9 +922,9 @@ void test_PRIMITIVES_postpone() {
 
 	evaluate(ctx, "postpone imm-word");
 
-	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
-	TEST_ASSERT_EQUAL_INT(PRIM, TYPE(S(ctx)));
-	TEST_ASSERT_EQUAL_INT(7, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(1, length(C(ctx)));
+	TEST_ASSERT_EQUAL_INT(PRIM, TYPE(C(ctx)));
+	TEST_ASSERT_EQUAL_INT(7, CAR(C(ctx)));
 }
 
 void test_PRIMITIVES_parse() {
@@ -1158,13 +1160,14 @@ void test_PRIMITIVES_braces() {
 
 	lbrace(ctx);
 
-	PUSH(ctx, 1);
-	PUSH(ctx, 2);
-	PUSH(ctx, 3);
+	compile_number(ctx, 1);
+	compile_number(ctx, 2);
+	compile_number(ctx, 3);
 
 	rbrace(ctx);
 
 	TEST_ASSERT_EQUAL_INT(1, length(ctx->pile));
+	TEST_ASSERT_EQUAL_INT(0, ctx->cpile);
 	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
 	TEST_ASSERT_EQUAL_INT(LIST, TYPE(S(ctx)));
 	TEST_ASSERT_EQUAL_INT(3, length(CAR(S(ctx))));

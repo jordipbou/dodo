@@ -2,6 +2,7 @@
 #include<stdio.h>
 #include<ctype.h>
 #include"dodo.h"
+#include"dodo_dbg.h"
 
 char *strlwr(char *str)
 {
@@ -44,37 +45,8 @@ CELL fib(CTX* ctx) {
 	return 0;
 }
 
-void dump_list(CTX* ctx, CELL pair, CELL dir) { //, C order) {
-	if (pair) {
-		if (!dir) dump_list(ctx, NEXT(pair), dir);
-		switch (TYPE(pair)) {
-			case ATOM: printf("#%ld ", CAR(pair)); break;
-			case LIST: printf("{ "); dump_list(ctx, CAR(pair), 1); printf("} "); break;
-			case PRIM: 
-				//word = find_prim(x, A(pair));
-				//if (word) {
-				//	printf("P:%s ", (B*)(NFA(word)));
-				//} else {
-				//	printf("PRIM_NOT_FOUND ");
-				//}
-				printf("P:%ld ", CAR(pair));
-				break;
-			case WORD: printf("W:%s ", NFA(CAR(pair))); break;
-		}
-		if (dir) dump_list(ctx, NEXT(pair), 1);
-		if (!dir) printf("\n");
-	}
-}
-
-CELL dump_stack(CTX* ctx) {
-	printf("\n");
-	dump_list(ctx, S(ctx), 0);
-
-	return 0;
-}
-
 void main(int argc, char *argv[]) {
-	CELL size = 2048;
+	CELL size = 16384;
 	BYTE block[size];
 	//CTX* ctx = init(block, size);
 
@@ -90,17 +62,31 @@ void main(int argc, char *argv[]) {
 	CTX* ctx = bootstrap(init(block, size));
 
 	ADD_PRIMITIVE(ctx, ".s", &dump_stack, 0);
+	//ADD_PRIMITIVE(ctx, "x", &dbg_exec_x, 0);
 
+	FILE *fptr;
 	BYTE buf[255];
 	CELL result;
-	do {
-		fgets(buf, 255, stdin);
-		result = evaluate(ctx, buf);
-		if (result != 0) {
-			printf("ERROR: %ld\n", result);
-			return;
+	if (argc == 2) {
+		fptr = fopen(argv[1], "r");
+		while (fgets(buf, 255, fptr)) {
+			//result = dbg_evaluate(ctx, strlwr(buf));
+			result = evaluate(ctx, strlwr(buf));
+			if (result != 0) {
+					printf("ERROR: %ld\n", result);
+					return;
+			}
 		}
-	} while(1);
+	} else {
+		do {
+			fgets(buf, 255, stdin);
+			result = dbg_evaluate(ctx, buf);
+			if (result != 0) {
+				printf("ERROR: %ld\n", result);
+				return;
+			}
+		} while(1);
+	}
 //	CTX* ctx = bootstrap(init(block, size));
 //
 //	FILE *fptr;

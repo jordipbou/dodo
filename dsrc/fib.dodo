@@ -1,9 +1,9 @@
 36 
 { 
 	swap dup 1 > 
-	branch 
-		{ 1 - dup 1 - rot x rot rot x rot + } 
-		{ } 
+	{ 1 - dup 1 - rot x rot rot x rot + } 
+	{ } 
+	branch
 } x
 swap drop
 .s
