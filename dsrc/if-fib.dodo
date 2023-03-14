@@ -1,0 +1,9 @@
+36 
+{ 
+	swap dup 1 > 
+	if 
+		1 - dup 1 - rot x rot rot x rot +
+	then
+} x
+swap drop
+.s

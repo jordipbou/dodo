@@ -1,419 +1,242 @@
-// TODO: Try to make everything smaller
-// TODO: Add tests for basic primitives
-// TODO: Add introspection facilities (from basic primitives)
-// TODO: Add errors based on Common Lisp conditions/restarts system
+#ifndef __CORE__
+#define __CORE__
 
-#include<inttypes.h>
-#include<string.h>
-#include<ctype.h>
-
-#include<stdio.h>
-
-typedef int8_t			B;
-typedef intptr_t		C;
-typedef struct { 
-	B* here, * ib;
-	C t, f, p, s, o;
-	C dict, size, state;
-	C tk, in;
-} X;
-typedef C (*FUNC)(X*);
-
-enum Types { ATOM, LIST, PRIM, WORD };
-enum Prims { BRANCH, JUMP, ZJUMP };
-
-#define A(pair)								(*((C*)pair))
-#define D(pair)								(*(((C*)pair) + 1))
-#define N(pair)								(D(pair) & -4)
-#define T(pair)								(D(pair) & 3)
-#define LST(p)								(T(p) == LIST)
-
-#define AS(type, cell)				((cell & -4) | type)
-
-#define NFA(word)							((B*)A(A(word)))
-#define XT(word)							(N(A(word)))
-
-#define S(x)									(A(x->s))
-#define RSX										(S(x) = rcl(x, S(x)))
-#define O(x)									(A(x->o))
-
-#define TC(x)									(*(x->ib + x->in))
-#define TK(x)									(x->ib + x->tk)
-#define TL(x)									(x->in - x->tk)
-#define PRS(x, cond)					while (TC(x) && cond) { x->in++; }
-
-#define FREE(x)								(lth(x->f) - 1)
-#define ALIGN(addr, bound)		((((C)addr) + (bound - 1)) & ~(bound - 1))
-#define RESERVED(x)						((x->t) - ((C)x->here))
-
-#define BOTTOM(x)							(((B*)x) + sizeof(X))
-#define TOP(x)								(ALIGN(((B*)x) + x->size - (2*sizeof(C)) - 1, (2*sizeof(C))))
-
-#define ERR_SOF								-1		// Stack overflow
-#define ERR_SUF								-2		// Stack underflow
-#define ERR_UW								-3		// Undefined word
-#define ERR_AE								-4		// Atom expected
-#define ERR_NEM								-5		// Not enough memory
-#define ERR_ZLN								-6		// Zero length name
-
-#define ERR(x, cond, err)		if (cond) { return err; }
-#define ERR_OF(x, cond)			ERR(x, cond, ERR_SOF)
-#define ERR_UF(x, cond)			ERR(x, cond, ERR_SUF)
-#define OF(x)								(x->f == x->t)
-#define OF1(x)							ERR_OF(x, OF(x))
-#define UF1(x)							ERR_UF(x, S(x) == 0)
-#define UF2(x)							ERR_UF(x, S(x) == 0 || N(S(x)) == 0)
-#define UF3(x)							ERR_UF(x, S(x) == 0 || N(S(x)) == 0 || N(N(S(x))) == 0)
-#define AE1(x)							ERR(x, T(S(x)) != ATOM, ERR_AE)
-#define AE2(x)							ERR(x, T(S(x)) != ATOM || T(N(S(x))) != ATOM, ERR_AE)
-
-X* init(B* block, C size) {
-	if (size < sizeof(C) + 3*(2*sizeof(C))) return 0;
-	X* x = (X*)block;	
-	x->size = size;
-	x->here = BOTTOM(x);
-	x->t = ALIGN(BOTTOM(x), 2*sizeof(C));
-	x->o = x->s = x->p = TOP(x);
-	D(x->p) = A(x->p) = 0;
-	x->f = TOP(x) - 2*sizeof(C);
-
-	for (C pair = x->t; pair <= x->f; pair += 2*sizeof(C)) {
-		A(pair) = pair == x->f ? 0 : pair + 2*sizeof(C);
-		D(pair) = pair == x->t ? 0 : pair - 2*sizeof(C);
-	}
-
-	x->dict = x->state = 0;
-
-	return x;
-}
-
-C cns(X* x, C a, C d) { C p; return OF(x) ? 0 : (p = x->f, x->f = D(x->f), A(p) = a, D(p) = d, p); }
-C cln(X* x, C p) { return !p ? 0 : cns(x, LST(p) ? cln(x, A(p)) : A(p), AS(T(p), cln(x, N(p)))); }
-#define RL(x, p)	if (LST(p)) { while (A(p) != 0) { A(p) = rcl(x, A(p)); } }
-C rcl(X* x, C p) { C t; RL(x, p); return !p ? 0 : (t = N(p), D(p) = x->f, A(p) = 0, x->f = p, t); }
-C rvs(C p, C l) { C t; return p ? t = N(p), D(p) = AS(T(p), l), rvs(t, p) : l; }
-C lth(C p) { C c = 0; while (p) { c++; p = N(p); } return c; }
-
-#define POP(x, v)		C v = A(S(x)); A(S(x)) = 0; /* <- Not reclaim lists now */ S(x) = rcl(x, S(x));
-#define PUSH(x, v)	S(x) = cns(x, (C)v, AS(ATOM, S(x)));
-
-#define CALL(x, i, n)		((n) ? (execute(x, i), (n)) : (i))
-C execute(X* x, C xlist) {
-	C r, p = xlist;
-	while (p) {
-		switch (T(p)) {
-			case ATOM: ERR_OF(x, (S(x) = cns(x, A(p), AS(ATOM, S(x)))) == 0); p = N(p); break;
-			case LIST: ERR_OF(x, (S(x) = cns(x, cln(x, A(p)), AS(LIST, S(x)))) == 0); p = N(p); break;
-			case PRIM:
-				switch (A(p)) {
-					case BRANCH: r = A(S(x)); RSX;	p = CALL(x, r ? A(N(p)) : A(N(N(p))), N(N(N(p)))); break;
-					case JUMP: break;
-					case ZJUMP: break;
-					default: ERR(x, (r = ((FUNC)A(p))(x)) < 0, r); p = N(p); break;
-				};
-				break;
-			case WORD: p = CALL(x, XT(A(p)), N(p)); break;
-		}
-	} 
-}
-
-C prs_tk(X* x) { PRS(x, isspace(TC(x))); x->tk = x->in; PRS(x, !isspace(TC(x))); return TL(x); }
-#define NAME_AS_TOKEN(w)	(strlen(NFA(w)) == TL(x) && strncmp(NFA(w), TK(x), TL(x)) == 0)
-C fnd_tk(X* x) { C w = x->dict; while (w && !(NAME_AS_TOKEN(w))) { w = N(w); } return w; }
-
-// OUTER INTERPRETER
-
-C compile_word(X* x, C w) {
-	if (T(w) == ATOM || T(w) == PRIM) {
-		return (S(x) = cns(x, A(XT(w)), AS(PRIM, S(x))));
-	} else {
-		return (S(x) = cns(x, w, AS(WORD, S(x))));
-	}
-}
-
-C evaluate(X* x, B* str) { 
-	C word, result; 
-	char *endptr;
-	x->ib = str; 
-	x->tk = x->in = 0;
-	do {
-		if (prs_tk(x) == 0) { return 0; }
-		if ((word = fnd_tk(x)) != 0) {
-			if (!x->state || (T(word) == PRIM || T(word) == WORD)) {
-				ERR(x, (result = execute(x, XT(word))) != 0, result);
-			} else {
-				ERR_OF(x, compile_word(x, word) == 0);
-			}
-		} else {
-			intmax_t number = strtoimax(TK(x), &endptr, 10);
-			if (number == 0 && endptr == (char*)(TK(x))) {
-				return ERR_UW;
-			} else {
-				OF1(x); S(x) = cns(x, number, AS(ATOM, S(x)));
-			}
-		}
-	} while (1);
-}
-
-C grow(X* x) { 
-	if (A(x->t) == (x->t + 2*sizeof(C))) { 
-		x->t += 2*sizeof(C);
-		D(x->t) = 0;
-		return 0;
-	} else {
-		return ERR_NEM;
-	}
-}
-
-C shrink(X* x) {
-	// TODO
-}
-
-C allot(X* x) {
-	POP(x, b);
-	if (b == 0) {
-		return 0;
-	} else if (b > 0) { 
-		while (RESERVED(x) < b) { ERR(x, grow(x) != 0, ERR_NEM); }
-		x->here += b;
-	} else if (b < 0) {
-		// TODO
-	}
-}
-
-C postpone(X* x) { 
-	C w;
-	ERR(x, prs_tk(x) == 0, ERR_ZLN);
-	ERR(x, (w = fnd_tk(x)) == 0, ERR_UW);
-	return compile_word(x, w) == 0 ? ERR_SOF : 0;
-}
-
-C parse(X* x) { 
-	POP(x, c); 
-	x->tk = x->in; 
-	PUSH(x, TK(x)); 
-	PRS(x, TC(x) != c); 
-	if (TC(x) != 0) x->in++; 
-	PUSH(x, TL(x)); 
-	return 0; 
-}
-
-C parse_name(X* x) { 
-	prs_tk(x); 
-	PUSH(x, TK(x)); 
-	PUSH(x, TL(x)); 
-	return 0; 
-}
-
-C add(X* x) { UF2(x); AE2(x); A(N(S(x))) = A(N(S(x))) + A(S(x)); RSX; return 0; }
-C sub(X* x) { UF2(x); AE2(x); A(N(S(x))) = A(N(S(x))) - A(S(x)); RSX; return 0; }
-C mul(X* x) { UF2(x); AE2(x); A(N(S(x))) = A(N(S(x))) * A(S(x)); RSX; return 0; }
-C division(X* x) { UF2(x); AE2(x); A(N(S(x))) = A(N(S(x))) / A(S(x)); RSX; return 0; }
-C mod(X* x) { UF2(x); AE2(x); A(N(S(x))) = A(N(S(x))) % A(S(x)); RSX; return 0; }
-
-C gt(X* x) { UF2(x); AE2(x); A(N(S(x))) = A(N(S(x))) > A(S(x)); RSX; return 0; }
-C lt(X* x) { UF2(x); AE2(x); A(N(S(x))) = A(N(S(x))) < A(S(x)); RSX; return 0; }
-C eq(X* x) { UF2(x); AE2(x); A(N(S(x))) = A(N(S(x))) == A(S(x)); RSX; return 0; }
-
-C and(X* x) { UF2(x); AE2(x); A(N(S(x))) = A(N(S(x))) & A(S(x)); RSX; return 0; }
-C or(X* x) { UF2(x); AE2(x); A(N(S(x))) = A(N(S(x))) | A(S(x)); RSX; return 0; }
-C invert(X* x) { UF1(x); AE1(x); A(S(x)) = ~A(S(x)); return 0; }
-
-C duplicate(X* x) {
-	UF1(x);
-	ERR_OF(x, (S(x) = cns(x, T(S(x)) == LIST ? cln(x, A(S(x))) : A(S(x)), AS(T(S(x)), S(x)))) == 0);
-	return 0;
-}
-C swap(X* x) {
-	UF2(x);
-	C t = N(S(x)); D(S(x)) = AS(T(S(x)), N(N(S(x)))); D(t) = AS(T(t), S(x)); S(x) = t; 
-	return 0;
-}
-C drop(X* x) { RSX; return 0; }
-C over(X* x) { POP(x, a); POP(x, b); PUSH(x, b); PUSH(x, a); PUSH(x, b); return 0; }
-	//UF2(x); OF1(x);
-	//S(x) = cns(x, T(N(S(x))) == LIST ? cln(x, A(N(S(x)))) : A(N(S(x))), AS(LIST, S(x)));
-	//return 0;
+//#include<inttypes.h>
+//#include<string.h>
+//#include<stdio.h>
+//#include<ctype.h>
+//
+//#ifdef _WIN32
+//	#include<conio.h>
+//#else
+//	#include<unistd.h>
+//	#include<termios.h>
+//#endif
+//
+//typedef int8_t			BYTE;
+//typedef intptr_t		CELL;
+//
+//#define CAR(pair)								(*((CELL*)pair))
+//#define CDR(pair)								(*(((CELL*)pair) + 1))
+//#define NEXT(pair)							(CDR(pair) & -4)
+//#define TYPE(pair)							(CDR(pair) & 3)
+//
+//enum Types { ATOM, LIST, PRIM, WORD };
+//
+//#define AS(type, ref)						((ref & -4) | type)
+//#define LINK(pair, next)				(CDR(pair) = AS(TYPE(pair), next))
+//
+//enum Words { CMP_PRIMITIVE, CMP_COLON_DEF, IMM_PRIMITIVE, IMM_COLON_DEF };
+//
+//enum Prims { ZJUMP, JUMP, ORIG, DEST, ORIG_DEST, RECURSE };
+//
+//#define NFA(word)								((BYTE*)CAR(CAR(word)))
+//#define XT(word)								(NEXT(CAR(word)))
+//#define PRIMITIVE(word)					((TYPE(word) & 1) == 0)
+//#define IMMEDIATE(word)					((TYPE(word) & 2) == 2)
+//
+//typedef struct {
+//	BYTE *tib, *here;
+//	CELL there, size; 
+//	CELL free, pile, cpile, xstack, latest;
+//	CELL state, token, in, base;
+//} CTX;
+//
+//#define S(ctx)									CAR(ctx->pile)
+//#define C(ctx)									CAR(ctx->cpile)
+//
+//#define FREE(ctx)						(length(ctx->free) - 1)		// Don't count ctx->there
+//#define ALIGN(addr, bound)	((((CELL)addr) + (bound - 1)) & ~(bound - 1))
+//
+//#define BOTTOM(ctx)			(((BYTE*)ctx) + sizeof(CTX))
+//#define TOP(ctx)				(ALIGN(((BYTE*)ctx) + ctx->size - (2*sizeof(CELL)) - 1, (2*sizeof(CELL))))
+//
+//CTX* init(BYTE* block, CELL size) {
+//	if (size < (sizeof(CTX) + 2*2*sizeof(CELL))) return 0;
+//	CTX* ctx = (CTX*)block;	
+//	ctx->size = size;
+//	ctx->here = BOTTOM(ctx);
+//	ctx->there = ALIGN(BOTTOM(ctx), 2*sizeof(CELL));
+//	ctx->pile = TOP(ctx);
+//	CAR(ctx->pile) = 0;
+//	CDR(ctx->pile) = AS(LIST, 0);
+//	ctx->free = ctx->pile - 2*sizeof(CELL);
+//
+//	for (CELL pair = ctx->there; pair <= ctx->free; pair += 2*sizeof(CELL)) {
+//		CAR(pair) = pair == ctx->free ? 0 : pair + 2*sizeof(CELL);
+//		CDR(pair) = pair == ctx->there ? 0 : pair - 2*sizeof(CELL);
+//	}
+//
+//	ctx->xstack = ctx->cpile = ctx->latest = 0;
+//	ctx->state = ctx->token = ctx->in = 0;
+//	ctx->tib = 0;
+//	ctx->base = 10;
+//
+//	return ctx;
 //}
-C rot(X* x) { 
-	UF3(x); 
-	C t = S(x); S(x) = N(N(S(x))); D(N(t)) = AS(T(N(t)), N(S(x))); D(S(x)) = AS(T(S(x)), t); return 0;
-}
+//
+//CELL cons(CTX* ctx, CELL car, CELL cdr) {
+//	if (ctx->free == ctx->there) return 0;
+//	CELL pair = ctx->free;
+//	ctx->free = CDR(ctx->free);
+//	CAR(pair) = car;
+//	CDR(pair) = cdr;
+//	return pair;
+//}
+//
+//CELL reclaim(CTX* ctx, CELL pair) {
+//	if (!pair) return 0;
+//	if (TYPE(pair) == LIST) { 
+//		while (CAR(pair) != 0) { 
+//			CAR(pair) = reclaim(ctx, CAR(pair)); 
+//		} 
+//	}
+//	CELL tail = NEXT(pair);
+//	CDR(pair) = ctx->free;
+//	CAR(pair) = 0;
+//	ctx->free = pair;
+//	return tail;
+//}
+//
+//#define ERR_STACK_OVERFLOW			-1
+//#define ERR_RSTACK_OVERFLOW			-2
+//#define ERR_STACK_UNDERFLOW			-3
+//#define ERR_RSTACK_UNDERFLOW		-4
+//#define ERR_UNDEFINED_WORD			-5
+//#define ERR_NOT_ENOUGH_MEMORY		-6
+//#define ERR_NOT_ENOUGH_RESERVED	-7
+//#define ERR_ZERO_LENGTH_NAME		-8
+//#define ERR_ATOM_EXPECTED				-9
+//#define ERR_LIST_EXPECTED				-10
+//#define ERR_END_OF_XLIST				-11
+//#define ERR_EXIT								-12
+//
+//CELL error(CTX* ctx, CELL err) {
+//	// TODO
+//	/* Lookup on exception stack for a correct handler for current error */
+//	/* The debugger must be installed on the exception stack for it to work */
+//	/* If a handler its found then execute it and return its return value */
+//	/* If none its found, just return the error */
+//	// TODO
+//	/* The error function should have the ability to not just modify the context */
+//	/* but of returning a compleletely new context to work on. For example, in the case */
+//	/* of a memory error, a new context with a bigger buffer could be created, cloning */
+//	/* the current context on it and returning it as the new context. */
+//	return err;
+//}
+//
+//#define INFO(msg) \
+//    fprintf(stderr, "info: %s:%d: ", __FILE__, __LINE__); \
+//    fprintf(stderr, "%s", msg);
+//
+//#define ERR(ctx, err)		{ INFO(""); CELL __err__ = error(ctx, err); if (__err__) { return __err__; } }
+//
+//#define ERR_POP(ctx, v) \
+//	if (S(ctx) == 0) { \
+//		ERR(ctx, ERR_STACK_UNDERFLOW); \
+//	} else { \
+//		v = pop(ctx); \
+//	}
+//
+//typedef CELL (*FUNC)(CTX*);
+//
+//#define EXECUTE_PRIMITIVE(ctx, primitive) { \
+//	CELL result = ((FUNC)primitive)(ctx); \
+//	if (result < 0) { ERR(ctx, result); } \
+//}
+//
+//CELL execute(CTX* ctx, CELL xlist) {
+//	CELL result;
+//	CELL p = xlist;
+//	while (p) {
+//		switch (TYPE(p)) {
+//			case ATOM:
+//				if ((S(ctx) = cons(ctx, CAR(p), AS(ATOM, S(ctx)))) == 0) { 
+//					ERR(ctx, ERR_STACK_OVERFLOW); 
+//				}
+//				p = NEXT(p);
+//				break;
+//			case LIST:
+//				if ((S(ctx) = cons(ctx, clone(ctx, CAR(p)), AS(LIST, S(ctx)))) == 0) { 
+//					ERR(ctx, ERR_STACK_OVERFLOW); 
+//				}
+//				p = NEXT(p);
+//				break;
+//			case PRIM:
+//				switch (CAR(p)) {
+//					case ZJUMP: /* ZJUMP */
+//						if (pop(ctx) == 0) {
+//							p = CAR(NEXT(p));
+//						} else {
+//							p = NEXT(NEXT(p));
+//						}
+//						break;
+//					case JUMP: /* JUMP */
+//						p = CAR(NEXT(p));
+//						break;
+//					default:
+//						EXECUTE_PRIMITIVE(ctx, CAR(p));
+//						p = NEXT(p);
+//						break;
+//				}
+//				break;
+//			case WORD:
+//				if (NEXT(p)) { 
+//					execute(ctx, XT(CAR(p))); p = NEXT(p); 
+//				} else { 
+//					p = XT(CAR(p));
+//				}
+//				break;
+//		}
+//	}
+//}
+//
+//#define TC(ctx)									(*(ctx->tib + ctx->in))
+//#define TK(ctx)									(ctx->tib + ctx->token)
+//#define TL(ctx)									(ctx->in - ctx->token)
+//
+//CELL parse_token(CTX* ctx) {
+//	ctx->token = ctx->in;	while (TC(ctx) != 0 && isspace(TC(ctx))) { ctx->in++;	}
+//	ctx->token = ctx->in;	while (TC(ctx) != 0 && !isspace(TC(ctx))) { ctx->in++; }
+//	return ctx->in - ctx->token;
+//}
+//
+//CELL find_token(CTX* ctx) {
+//	CELL w = ctx->latest;
+//	while (w && !(strlen(NFA(w)) == TL(ctx) && strncmp(NFA(w), TK(ctx), TL(ctx)) == 0)) {
+//		w = NEXT(w);
+//	}
+//	return w;
+//}
+//
+//CELL evaluate(CTX* ctx, BYTE* str) { 
+//	CELL word, result; 
+//	char *endptr;
+//	ctx->tib = str; 
+//	ctx->token = ctx->in = 0;
+//	do {
+//		if (parse_token(ctx) == 0) { return 0; }
+//		if ((word = find_token(ctx)) != 0) {
+//			if (!ctx->state || IMMEDIATE(word)) {
+//				if ((result = execute(ctx, XT(word))) != 0) { ERR(ctx, result); }
+//			} else {
+//				if (compile_word(ctx, word) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
+//			}
+//		} else {
+//			intmax_t number = strtoimax(TK(ctx), &endptr, 10);
+//			if (number == 0 && endptr == (char*)(TK(ctx))) {
+//				ERR(ctx, ERR_UNDEFINED_WORD);
+//			} else if (ctx->state) {
+//				if (compile_number(ctx, number) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
+//			} else {
+//				if (PUSH(ctx, number) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
+//			}
+//		}
+//	} while (1);
+//}
+//
+//CTX* bootstrap(CTX* ctx) {
+//	return ctx;
+//}
 
-C spush(X* x) { x->p = cns(x, 0, AS(LIST, x->p)); x->s = x->p; return 0; }
-C stack_to_list(X* x) {
-	if (!N(x->p)) { return 0; } // Current stack can be pushed to itself as list ?
-	A(x->p) = rvs(A(x->p), 0);
-	C t = N(x->p);
-	D(x->p) = AS(LIST, A(N(x->p)));
-	A(t) = x->p;
-	x->p = t;
-	x->s = x->p;
-	return 0;
-}
-C lbracket(X* x) { x->s = x->o; x->state = 0; return 0; }
-C rbracket(X* x) { if (!x->state) { x->o = x->s; }; x->s = x->p; x->state = 1; return 0; }
-C lbrace(X* x) { rbracket(x); spush(x); return 0; }
-C rbrace(X* x) { lbracket(x); stack_to_list(x); return 0; }
-C interpret(X* x) { 
-	UF1(x); 
-	// TODO: Expects a list?
-	C t = S(x); S(x) = N(S(x)); D(t) = AS(LIST, 0);
-	C r = execute(x, A(t)); 
-	rcl(x, t); 
-	return r; 
-}
-C exec(X* x) { UF1(x); /* TODO: Expects a list? */ return execute(x, A(S(x))); }
-
-C compile_str(X* x) {
-	x->tk = ++x->in;
-	while (*(x->ib + x->in) != 0 && *(x->ib + x->in) != '"') { x->in++; }
-	B* here = x->here;
-	while (RESERVED(x) < (TL(x) + 1)) { ERR(x, grow(x) != 0, ERR_NEM); }
-	for (C i = 0; i < TL(x); i++) { 
-		here[i] = *(x->ib + x->tk + i); 
-	}
-	here[TL(x)] = 0;
-	S(x) = cns(x, (C)here, AS(ATOM, S(x)));
-	S(x) = cns(x, TL(x), AS(ATOM, S(x)));
-	x->here += TL(x) + 1;
-	x->in++;
-	return 0;
-}
-
-C literal(X* x) { 
-	// TODO: Must check underflow on O(x) !!!
-	C t = O(x); O(x) = N(O(x)); D(t) = AS(T(t), S(x)); S(x) = t; return 0; 
-}
-
-C sliteral(X* x) {
-	duplicate(x);
-	B* here = x->here;
-	allot(x);
-	PUSH(x, 1);
-	allot(x);
-	POP(x, l);
-	POP(x, a);
-	strncpy(here, a, l);
-	here[l] = 0;
-	PUSH(x, here);
-	PUSH(x, l);
-	return 0;
-}
-
-C append(X* x) {
-	UF2(x);
-	if (T(N(S(x))) == LIST) {
-		C t = N(S(x));
-		D(S(x)) = AS(T(S(x)), A(N(S(x))));
-		A(t) = S(x);
-		S(x) = t;
-	} else if (T(N(S(x))) == ATOM) {
-		C* d = (C*)A(N(S(x)));
-		C t = N(S(x));
-		D(S(x)) = AS(T(S(x)), *d);
-		*d = S(x);
-		S(x) = rcl(x, t);
-	}
-	return 0;
-}
-
-C latest(X* x) { S(x) = cns(x, (C)&x->dict, AS(ATOM, S(x))); return 0; }
-C here(X* x) { PUSH(x, x->here); return 0; }
-
-C colon(X* x) {
-	latest(x);
-	parse_name(x);
-	sliteral(x);
-	drop(x);
-	lbrace(x);
-	literal(x);
-	return 0;
-}
-
-C semicolon(X* x) {
-	rbrace(x);
-	append(x);
-	return 0;
-}
-
-C store(X* x) { POP(x, a); POP(x, v); *((C*)a) = (C)v; return 0; }
-C fetch(X* x) { POP(x, a); PUSH(x, *((C*)a)); return 0; }
-C bstore(X* x) { POP(x, a); POP(x, v); *((B*)a) = (B)v; return 0; }
-C bfetch(X* x) { POP(x, a); PUSH(x, *((B*)a)); return 0; }
-
-C cell(X* x) { PUSH(x, sizeof(C)); return 0; }
-
-#define ADD_PRIMITIVE(x, name, func, immediate) \
-	x->dict = cns(x, \
-		cns(x, (C)name, AS(ATOM, \
-		cns(x, (C)func, AS(PRIM, 0)))), \
-	AS(immediate, x->dict));
-
-X* bootstrap(X* x) {
-	ADD_PRIMITIVE(x, "+", &add, 0);
-	ADD_PRIMITIVE(x, "-", &sub, 0);
-	ADD_PRIMITIVE(x, "*", &mul, 0);
-	ADD_PRIMITIVE(x, "/", &division, 0);
-	ADD_PRIMITIVE(x, "mod", &mod, 0);
-
-	ADD_PRIMITIVE(x, ">", &gt, 0);
-	ADD_PRIMITIVE(x, "<", &lt, 0);
-	ADD_PRIMITIVE(x, "=", &eq, 0);
-
-	ADD_PRIMITIVE(x, "and", &and, 0);
-	ADD_PRIMITIVE(x, "or", &or, 0);
-	ADD_PRIMITIVE(x, "invert", &invert, 0);
-
-	ADD_PRIMITIVE(x, "dup", &duplicate, 0);
-	ADD_PRIMITIVE(x, "swap", &swap, 0);
-	ADD_PRIMITIVE(x, "drop", &drop, 0);
-	ADD_PRIMITIVE(x, "over", &over, 0);
-	ADD_PRIMITIVE(x, "rot", &rot, 0);
-
-	ADD_PRIMITIVE(x, "{", &lbrace, 2);
-	ADD_PRIMITIVE(x, "}", &rbrace, 2);
-
-	ADD_PRIMITIVE(x, "[", &lbracket, 2);
-	ADD_PRIMITIVE(x, "]", &rbracket, 2);
-
-	ADD_PRIMITIVE(x, "spush", &spush, 2);
-	ADD_PRIMITIVE(x, "s>l", &stack_to_list, 2);
-
-	ADD_PRIMITIVE(x, "literal", &literal, 2);
-
-	ADD_PRIMITIVE(x, "i", &interpret, 0);
-	ADD_PRIMITIVE(x, "x", &exec, 0);
-
-	ADD_PRIMITIVE(x, "branch", 0, 0);
-
-	ADD_PRIMITIVE(x, "grow", &grow, 0);
-
-	ADD_PRIMITIVE(x, "s\"", &compile_str, 2);
-
-	ADD_PRIMITIVE(x, "latest", &latest, 0);
-	ADD_PRIMITIVE(x, "append", &append, 0);
-
-	ADD_PRIMITIVE(x, "parse", &parse, 0);
-	ADD_PRIMITIVE(x, "parse-name", &parse_name, 0);
-
-	ADD_PRIMITIVE(x, ":", &colon, 2);
-	ADD_PRIMITIVE(x, ";", &semicolon, 2);
-
-	ADD_PRIMITIVE(x, "here", &here, 0);
-	ADD_PRIMITIVE(x, "allot", &allot, 0);
-
-	ADD_PRIMITIVE(x, "!", &store, 0);
-	ADD_PRIMITIVE(x, "@", &fetch, 0);
-	ADD_PRIMITIVE(x, "b!", &bstore, 0);
-	ADD_PRIMITIVE(x, "b@", &bfetch, 0);
-
-	ADD_PRIMITIVE(x, "cell", &cell, 0);
-
-	ADD_PRIMITIVE(x, "sliteral", &sliteral, 2);
-
-	ADD_PRIMITIVE(x, "postpone", &postpone, 2);
-	ADD_PRIMITIVE(x, "p", &postpone, 2);
-
-	return x;
-}
+#endif

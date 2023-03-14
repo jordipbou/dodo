@@ -62,7 +62,15 @@ void main(int argc, char *argv[]) {
 	CTX* ctx = bootstrap(init(block, size));
 
 	ADD_PRIMITIVE(ctx, ".s", &dump_stack, 0);
-	//ADD_PRIMITIVE(ctx, "x", &dbg_exec_x, 0);
+	ADD_PRIMITIVE(ctx, "words", &words, 0);
+	ADD_PRIMITIVE(ctx, "see", &see, 0);
+	ADD_PRIMITIVE(ctx, "nfa", &nfa, 0);
+	ADD_PRIMITIVE(ctx, "xt", &xt, 0);
+	ADD_PRIMITIVE(ctx, "pair", &pair, 0);
+	ADD_PRIMITIVE(ctx, "next", &next, 0);
+	ADD_PRIMITIVE(ctx, "sp@", &sp_fetch, 0);
+
+//ADD_PRIMITIVE(ctx, "x", &dbg_exec_x, 0);
 
 	FILE *fptr;
 	BYTE buf[255];

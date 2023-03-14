@@ -14,6 +14,7 @@ CELL find_primitive(CTX* ctx, CELL f) {
 void dump_list(CTX* ctx, CELL pair, CELL dir) {
 	if (pair) {
 		if (!dir) dump_list(ctx, NEXT(pair), dir);
+		printf("[%ld] ", pair);
 		switch (TYPE(pair)) {
 			case ATOM: printf("#%ld ", CAR(pair)); break;
 			case LIST: printf("{ "); dump_list(ctx, CAR(pair), 1); printf("} "); break;
@@ -25,7 +26,8 @@ void dump_list(CTX* ctx, CELL pair, CELL dir) {
 					printf("PRIM_NOT_FOUND ");
 				}
 			} break;
-			case WORD: printf("W:%s ", NFA(CAR(pair))); break;
+			case WORD: break;
+				//printf("W:%s (%ld) ", NFA(CAR(pair)), CAR(pair)); break;
 		}
 		if (dir) dump_list(ctx, NEXT(pair), 1);
 		if (!dir) printf("\n");
@@ -44,33 +46,29 @@ CELL dbg_execute(CTX* ctx, CELL xlist) {
 	CELL p = xlist;
 	while (p) {
 		switch (TYPE(p)) {
-			case ATOM:
-				if (PUSH(ctx, CAR(p)) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
-				p = NEXT(p);
-				break;
-			case LIST:
-				if (PUSHL(ctx, clone(ctx, CAR(p))) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
-				p = NEXT(p);
+			case ATOM: ERR_PUSH(ctx, CAR(p)); break;
+			case LIST: ERR_PUSHL(ctx, clone(ctx, CAR(p))); break;
 				break;
 			case PRIM:
 				switch (CAR(p)) {
-					case 0: /* ZJUMP */
+					case ZJUMP: /* ZJUMP */
 						if (pop(ctx) == 0) {
 							p = CAR(NEXT(p));
 						} else {
 							p = NEXT(NEXT(p));
 						}
 						break;
-					case 1: /* JUMP */
+					case JUMP: /* JUMP */
 						p = CAR(NEXT(p));
 						break;
-					case 2:	/* AHEAD */
-						if ((ctx->cfstack = cons(ctx, p, AS(ATOM, ctx->cfstack))) == 0) {
-							ERR(ctx, ERR_STACK_OVERFLOW);
-						}
-						p = NEXT(p);
-						break;
 					default:
+						printf("Executing primitive: %ld\n", CAR(p));
+						CELL prim = find_primitive(ctx, CAR(p));
+						if (prim) {
+							printf("Primitive: %s\n", NFA(prim));
+						} else {
+							printf("NULL primitive!!!!!\n");
+						}
 						EXECUTE_PRIMITIVE(ctx, CAR(p));
 						p = NEXT(p);
 						break;
@@ -94,7 +92,8 @@ CELL dbg_exec_x(CTX* ctx) {
 	CELL result = 0;
 
 	switch (TYPE(S(ctx))) {
-		case ATOM: if (PUSH(ctx, CAR(S(ctx))) == 0) result = ERR_STACK_OVERFLOW; break;
+		// TODO: Atom should be executed as a primitive
+		case ATOM: ERR_PUSH(ctx, CAR(S(ctx))); break; 
 		case LIST: dump_list(ctx, CAR(S(ctx)), 1); result = execute(ctx, CAR(S(ctx))); break;
 		case PRIM: result = ((FUNC)CAR(S(ctx)))(ctx); break;
 		case WORD: result = dbg_execute(ctx, XT(CAR(S(ctx)))); break;
@@ -105,6 +104,7 @@ CELL dbg_exec_x(CTX* ctx) {
 
 void dump_context(CTX* ctx) {
 	printf("STATE: %ld\n", ctx->state);
+	printf("FREE NODES: %ld\n", FREE(ctx));
 	printf("STACK PILE:\n");
 	for (CELL s = ctx->pile; s; s = NEXT(s)) {
 		printf("[%ld] ", s); dump_list(ctx, s, 1); printf("\n");
@@ -112,7 +112,15 @@ void dump_context(CTX* ctx) {
 	printf("\n");
 	printf("COMPILING PILE:\n");
 	for (CELL s = ctx->cpile; s; s = NEXT(s)) {
-		printf("[%ld] ", s); dump_list(ctx, s, 1); printf("\n");
+		if (TYPE(s) == LIST) {
+			printf("List:   [%ld] ", CAR(s)); dump_list(ctx, CAR(s), 1); printf("\n");
+		} else if (TYPE(s) == WORD) {
+			printf("Header: [%ld] %s", CAR(s), NFA(s));
+			if (XT(s) != 0) {
+				printf(" "); dump_list(ctx, XT(s), 1);
+			}
+			printf("\n");
+		}
 	}
 	printf("\n");
 }
@@ -126,8 +134,12 @@ CELL dbg_evaluate(CTX* ctx, BYTE* str) {
 		if (parse_token(ctx) == 0) { return 0; }
 		printf("============================\n");
 		dump_context(ctx);
-		printf("TOKEN: %.*s\n\n", TL(ctx), TK(ctx));
+		printf("TOKEN: %.*s\n\n", (int)TL(ctx), TK(ctx));
 		if ((word = find_token(ctx)) != 0) {
+			if (strcmp(NFA(word), "fib") == 0) {
+				printf("Executing FIB: %ld XT: %ld \n", word, XT(word));
+				dump_list(ctx, XT(word), 1);
+			}
 			if (!ctx->state || IMMEDIATE(word)) {
 				if ((result = dbg_execute(ctx, XT(word))) != 0) { ERR(ctx, result); }
 			} else {
@@ -139,14 +151,73 @@ CELL dbg_evaluate(CTX* ctx, BYTE* str) {
 			if (number == 0 && endptr == (char*)(TK(ctx))) {
 				ERR(ctx, ERR_UNDEFINED_WORD);
 			} else if (ctx->state) {
-				if (compile_number(ctx, word) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
+				if (compile_number(ctx, number) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
 			} else {
-				if (PUSH(ctx, number) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
+				ERR_PUSH(ctx, number);
 			}
 		}
 		dump_context(ctx);
 		printf("----------------------------\n");
 	} while (1);
+}
+
+CELL words(CTX* ctx) {
+	CELL w = ctx->latest;
+	while (w) {
+		printf("([%ld] %s {%ld}) ", w, NFA(w), XT(w));
+		w = NEXT(w);
+	}
+}
+
+CELL sp_fetch(CTX* ctx) {
+	ERR_PUSH(ctx, S(ctx));
+	return 0;
+}
+
+CELL pair(CTX* ctx) {
+	CELL p; ERR_POP(ctx, p);
+	if (p) printf("[%ld] NEXT: %ld | TYPE: %ld | CAR: %ld\n", p, NEXT(p), TYPE(p), CAR(p));
+	else printf("Not a pair\n");
+	return 0;
+}
+
+CELL next(CTX* ctx) {
+	CELL p; ERR_POP(ctx, p);
+	ERR_PUSH(ctx, NEXT(p));
+	return 0;
+}
+
+CELL see(CTX* ctx) {
+	CELL result;
+	if ((result = parse_name(ctx)) != 0) { ERR(ctx, result); }
+	CELL w = ctx->latest;
+	while (w) {
+		if (strncmp((BYTE*)CAR(NEXT(S(ctx))), NFA(w), CAR(S(ctx))) == 0) {
+			printf("[%ld] %s ", w, NFA(w)); 
+			dump_list(ctx, XT(w), 1); 
+			printf("\n"); 
+			return 0;
+		} else {
+			w = NEXT(w);
+		}
+	}
+	drop(ctx);
+	drop(ctx);
+	return 0;
+}
+
+CELL nfa(CTX* ctx) {
+	CELL w; ERR_POP(ctx, w);
+	printf("NAME: %s\n", NFA(w));
+	return 0;
+}
+
+CELL xt(CTX* ctx) {
+	CELL w; ERR_POP(ctx, w);
+	printf("WORD: %ld\n", w);
+	printf("XT(w): %ld\n", XT(w));
+	//dump_list(ctx, XT(w), 1);
+	return 0;
 }
 
 #endif

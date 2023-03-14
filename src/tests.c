@@ -2,6 +2,9 @@
 #include "dodo.h"
 #include "unity.h"
 
+#define PUSH(ctx, v)		(S(ctx) = cons(ctx, (CELL)v, AS(ATOM, S(ctx))))
+#define PUSHL(ctx, l)		(S(ctx) = cons(ctx, l, AS(LIST, S(ctx))))
+
 void setUp() {}
 
 void tearDown() {}
@@ -71,7 +74,7 @@ void test_BASIC_words() {
 	CELL xt = (CELL)malloc(sizeof(CELL) * 2);
 
 	CAR(w) = nfa;
-	CDR(w) = AS(CMP_PRIMITIVE, 0);
+	CDR(w) = AS(NON_IMM_PRIM, 0);
 	CAR(nfa) = (CELL)"word-name";
 	CDR(nfa) = AS(ATOM, xt);
 	CAR(xt) = 7;
@@ -82,21 +85,21 @@ void test_BASIC_words() {
 	TEST_ASSERT_EQUAL_STRING("word-name", NFA(w));
 	TEST_ASSERT_EQUAL_INT(xt, XT(w));
 
-	CDR(w) = AS(IMM_PRIMITIVE, 0);
+	CDR(w) = AS(IMM_PRIM, 0);
 
 	TEST_ASSERT_EQUAL_INT(1, PRIMITIVE(w));
 	TEST_ASSERT_EQUAL_INT(1, IMMEDIATE(w));
 	TEST_ASSERT_EQUAL_STRING("word-name", NFA(w));
 	TEST_ASSERT_EQUAL_INT(xt, XT(w));
 
-	CDR(w) = AS(CMP_COLON_DEF, 0);
+	CDR(w) = AS(NON_IMM_COLON, 0);
 
 	TEST_ASSERT_EQUAL_INT(0, PRIMITIVE(w));
 	TEST_ASSERT_EQUAL_INT(0, IMMEDIATE(w));
 	TEST_ASSERT_EQUAL_STRING("word-name", NFA(w));
 	TEST_ASSERT_EQUAL_INT(xt, XT(w));
 
-	CDR(w) = AS(IMM_COLON_DEF, 0);
+	CDR(w) = AS(IMM_COLON, 0);
 
 	TEST_ASSERT_EQUAL_INT(0, PRIMITIVE(w));
 	TEST_ASSERT_EQUAL_INT(1, IMMEDIATE(w));
@@ -140,7 +143,6 @@ void test_CTX_block_initialization() {
 	TEST_ASSERT_EQUAL_INT(TOP(ctx) - 2*sizeof(CELL), ctx->free);
 
 	TEST_ASSERT_EQUAL_INT(0, ctx->cpile);
-	TEST_ASSERT_EQUAL_INT(0, ctx->cfstack);
 	TEST_ASSERT_EQUAL_INT(0, ctx->latest);
 	TEST_ASSERT_EQUAL_INT(0, ctx->state);
 	TEST_ASSERT_EQUAL_PTR(0, ctx->tib);
@@ -176,6 +178,130 @@ void test_LIST_cons() {
 	TEST_ASSERT_EQUAL_INT(0, p3);
 }
 
+void test_LIST_depth() {
+	CELL p1 = (CELL)malloc(2*sizeof(CELL));
+	CELL p2 = (CELL)malloc(2*sizeof(CELL));
+	CELL p3 = (CELL)malloc(2*sizeof(CELL));
+	CELL p4 = (CELL)malloc(2*sizeof(CELL));
+	CELL p5 = (CELL)malloc(2*sizeof(CELL));
+	CELL p6 = (CELL)malloc(2*sizeof(CELL));
+
+	TEST_ASSERT_EQUAL_INT(0, depth(0, 0));
+	TEST_ASSERT_EQUAL_INT(0, depth(0, 1));
+
+	CDR(p1) = AS(ATOM, 0);
+	
+	TEST_ASSERT_EQUAL_INT(1, depth(p1, 0));
+	TEST_ASSERT_EQUAL_INT(1, depth(p1, 1));
+
+	CDR(p1) = AS(PRIM, 0);
+
+	TEST_ASSERT_EQUAL_INT(1, depth(p1, 0));
+	TEST_ASSERT_EQUAL_INT(1, depth(p1, 1));
+
+	CDR(p1) = AS(WORD, 0);
+
+	TEST_ASSERT_EQUAL_INT(1, depth(p1, 0));
+	TEST_ASSERT_EQUAL_INT(1, depth(p1, 1));
+
+	CDR(p1) = AS(LIST, 0);
+	CAR(p1) = 0;
+
+	TEST_ASSERT_EQUAL_INT(1, depth(p1, 0));
+	TEST_ASSERT_EQUAL_INT(1, depth(p1, 1));
+
+	CDR(p1) = AS(LIST, p2);
+	CAR(p1) = p3;
+	CDR(p2) = AS(ATOM, 0);
+	CDR(p3) = AS(ATOM, p4);
+	CDR(p4) = AS(LIST, 0);
+	CAR(p4) = p5;
+	CDR(p5) = AS(ATOM, p6);
+	CDR(p6) = AS(PRIM, 0);
+
+	TEST_ASSERT_EQUAL_INT(6, depth(p1, 1));
+	TEST_ASSERT_EQUAL_INT(5, depth(p1, 0));
+}
+
+void test_LIST_disjoint() {
+	CELL p1 = (CELL)malloc(2*sizeof(CELL));
+	CELL p2 = (CELL)malloc(2*sizeof(CELL));
+	CELL p3 = (CELL)malloc(2*sizeof(CELL));
+	CELL p4 = (CELL)malloc(2*sizeof(CELL));
+	CELL p5 = (CELL)malloc(2*sizeof(CELL));
+	CELL p6 = (CELL)malloc(2*sizeof(CELL));
+	CELL r1 = (CELL)malloc(2*sizeof(CELL));
+	CELL r2 = (CELL)malloc(2*sizeof(CELL));
+	CELL r3 = (CELL)malloc(2*sizeof(CELL));
+	CELL r4 = (CELL)malloc(2*sizeof(CELL));
+	CELL r5 = (CELL)malloc(2*sizeof(CELL));
+	CELL r6 = (CELL)malloc(2*sizeof(CELL));
+
+	TEST_ASSERT_EQUAL_INT(0, disjoint(p1, p1, 0));
+	TEST_ASSERT_EQUAL_INT(0, disjoint(p1, p1, 1));
+	
+	CDR(p1) = AS(ATOM, 0);
+	CAR(p1) = 7;
+
+	CDR(p2) = AS(ATOM, 0);
+	CAR(p2) = 11;
+
+	CDR(p3) = AS(ATOM, 0);
+	CAR(p3) = 7;
+
+	CDR(p4) = AS(PRIM, 0);
+	CAR(p4) = 7;
+
+	TEST_ASSERT_EQUAL_INT(0, disjoint(p1, p2, 0));
+	TEST_ASSERT_EQUAL_INT(1, disjoint(p1, p3, 0));
+	TEST_ASSERT_EQUAL_INT(0, disjoint(p1, p4, 0));
+	TEST_ASSERT_EQUAL_INT(0, disjoint(p1, p2, 1));
+	TEST_ASSERT_EQUAL_INT(1, disjoint(p1, p3, 1));
+	TEST_ASSERT_EQUAL_INT(0, disjoint(p1, p4, 1));
+
+	CDR(p1) = AS(LIST, p2);
+	CAR(p1) = p3;
+	CDR(p2) = AS(ATOM, 0);
+	CAR(p2) = 7;
+	CDR(p3) = AS(ATOM, p4);
+	CAR(p3) = 11;
+	CDR(p4) = AS(LIST, 0);
+	CAR(p4) = p5;
+	CDR(p5) = AS(ATOM, p6);
+	CAR(p5) = 13;
+	CDR(p6) = AS(PRIM, 0);
+	CAR(p6) = 17;
+
+	CDR(r1) = AS(LIST, r2);
+	CAR(r1) = r3;
+	CDR(r2) = AS(ATOM, 0);
+	CAR(r2) = 7;
+	CDR(r3) = AS(ATOM, r4);
+	CAR(r3) = 11;
+	CDR(r4) = AS(LIST, 0);
+	CAR(r4) = r5;
+	CDR(r5) = AS(ATOM, r6);
+	CAR(r5) = 13;
+	CDR(r6) = AS(PRIM, 0);
+	CAR(r6) = 17;
+
+	TEST_ASSERT_EQUAL_INT(1, disjoint(p1, r1, 1));
+
+	CDR(r3) = AS(ATOM, p4);
+
+	TEST_ASSERT_EQUAL_INT(0, disjoint(p1, r1, 1));
+
+	CDR(r3) = AS(ATOM, r4);
+	CAR(r4) = p5;
+
+	TEST_ASSERT_EQUAL_INT(0, disjoint(p1, r1, 1));
+
+	CAR(r4) = r5;
+	CDR(r1) = AS(LIST, r2);
+
+	TEST_ASSERT_EQUAL_INT(1, disjoint(p1, r1, 0));
+}
+
 void test_LIST_clone() {
 	CELL size = 512;
 	BYTE block[size];
@@ -189,44 +315,13 @@ void test_LIST_clone() {
 			cons(ctx, 17, AS(ATOM, 0)))), AS(LIST,
 		cons(ctx, 19, AS(ATOM, 0))))))));
 
-	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 6, FREE(ctx));
-	TEST_ASSERT_EQUAL_INT(4, length(list));
-	TEST_ASSERT_EQUAL(ATOM, TYPE(list));
-	TEST_ASSERT_EQUAL_INT(7, CAR(list));
-	TEST_ASSERT_EQUAL(PRIM, TYPE(NEXT(list)));
-	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(list)));
-	TEST_ASSERT_EQUAL(LIST, TYPE(NEXT(NEXT(list))));
-	TEST_ASSERT_EQUAL_INT(2, length(NEXT(NEXT(list))));
-	TEST_ASSERT_EQUAL(ATOM, TYPE(CAR(NEXT(NEXT(list)))));
-	TEST_ASSERT_EQUAL_INT(13, CAR(CAR(NEXT(NEXT(list)))));
-	TEST_ASSERT_EQUAL(ATOM, TYPE(NEXT(CAR(NEXT(NEXT(list))))));
-	TEST_ASSERT_EQUAL_INT(17, CAR(NEXT(CAR(NEXT(NEXT(list))))));
-	TEST_ASSERT_EQUAL(ATOM, TYPE(NEXT(NEXT(NEXT(list)))));
-	TEST_ASSERT_EQUAL_INT(19, CAR(NEXT(NEXT(NEXT(list)))));
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - depth(list, 1), FREE(ctx));
 
 	CELL c = clone(ctx, list);
 
-	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - 12, FREE(ctx));
-	TEST_ASSERT_EQUAL_INT(4, length(c));
-	TEST_ASSERT_EQUAL(ATOM, TYPE(c));
-	TEST_ASSERT_EQUAL_INT(7, CAR(c));
-	TEST_ASSERT_EQUAL(PRIM, TYPE(NEXT(c)));
-	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(c)));
-	TEST_ASSERT_EQUAL(LIST, TYPE(NEXT(NEXT(c))));
-	TEST_ASSERT_EQUAL_INT(2, length(NEXT(NEXT(c))));
-	TEST_ASSERT_EQUAL(ATOM, TYPE(CAR(NEXT(NEXT(c)))));
-	TEST_ASSERT_EQUAL_INT(13, CAR(CAR(NEXT(NEXT(c)))));
-	TEST_ASSERT_EQUAL(ATOM, TYPE(NEXT(CAR(NEXT(NEXT(c))))));
-	TEST_ASSERT_EQUAL_INT(17, CAR(NEXT(CAR(NEXT(NEXT(c))))));
-	TEST_ASSERT_EQUAL(ATOM, TYPE(NEXT(NEXT(NEXT(c)))));
-	TEST_ASSERT_EQUAL_INT(19, CAR(NEXT(NEXT(NEXT(c)))));
-
-	TEST_ASSERT_NOT_EQUAL_INT(list, c);
-	TEST_ASSERT_NOT_EQUAL_INT(NEXT(list), NEXT(c));
-	TEST_ASSERT_NOT_EQUAL_INT(NEXT(NEXT(list)), NEXT(NEXT(c)));
-	TEST_ASSERT_NOT_EQUAL_INT(CAR(NEXT(NEXT(list))), CAR(NEXT(NEXT(c))));
-	TEST_ASSERT_NOT_EQUAL_INT(NEXT(CAR(NEXT(NEXT(list)))), NEXT(CAR(NEXT(NEXT(c)))));
-	TEST_ASSERT_NOT_EQUAL_INT(NEXT(NEXT(NEXT(list))), NEXT(NEXT(NEXT(c))));
+	TEST_ASSERT_EQUAL_INT(free_nodes(ctx) - (2*depth(list, 1)), FREE(ctx));
+	TEST_ASSERT_EQUAL_INT(depth(list, 1), depth(c, 1));
+	TEST_ASSERT_EQUAL_INT(1, disjoint(list, c, 1));
 }
 
 void test_LIST_reclaim() {
@@ -890,19 +985,6 @@ void test_PRIMITIVES_jump() {
 	TEST_ASSERT_EQUAL_INT(7, CAR(S(ctx)));
 }
 
-void test_PRIMITIVES_ahead() {
-	CELL size = 1024;
-	BYTE block[size];
-	CTX* ctx = init(block, size);
-
-	CELL code = cons(ctx, 2, AS(PRIM, 0));
-
-	execute(ctx, code);
-
-	TEST_ASSERT_EQUAL_INT(1, length(ctx->cfstack));
-	TEST_ASSERT_EQUAL_INT(code, CAR(ctx->cfstack));
-}
-
 void test_PRIMITIVES_postpone() {
 	CELL size = 1024;
 	BYTE block[size];
@@ -912,13 +994,13 @@ void test_PRIMITIVES_postpone() {
 		cons(ctx,
 			cons(ctx, (CELL)"imm-word", AS(ATOM,
 			cons(ctx, 7, AS(PRIM, 0)))),
-		AS(IMM_PRIMITIVE, 0));
+		AS(IMM_PRIM, 0));
 
 	ctx->latest =
 		cons(ctx,
 			cons(ctx, (CELL)"postpone", AS(ATOM,
 			cons(ctx, (CELL)&postpone, AS(PRIM, 0)))),
-		AS(IMM_PRIMITIVE, imm_word));
+		AS(IMM_PRIM, imm_word));
 
 	evaluate(ctx, "postpone imm-word");
 
@@ -936,7 +1018,7 @@ void test_PRIMITIVES_parse() {
 		cons(ctx,
 			cons(ctx, (CELL)"parse", AS(ATOM,
 			cons(ctx, (CELL)&parse, AS(PRIM, 0)))),
-		AS(CMP_PRIMITIVE, 0));
+		AS(NON_IMM_PRIM, 0));
 
 	evaluate(ctx, "39 parse just a string that ends on a single quote'");
 
@@ -955,7 +1037,7 @@ void test_PRIMITIVES_parse_name() {
 		cons(ctx,
 			cons(ctx, (CELL)"parse-name", AS(ATOM,
 			cons(ctx, (CELL)&parse_name, AS(PRIM, 0)))),
-		AS(CMP_PRIMITIVE, 0));
+		AS(NON_IMM_PRIM, 0));
 
 	evaluate(ctx, "parse-name");
 
@@ -1740,6 +1822,157 @@ void test_PRIMITIVES_ARITHMETIC_mod() {
 	TEST_ASSERT_EQUAL_INT(4, CAR(S(ctx)));
 }
 
+void test_PRIMITIVES_COMPARISON_gt() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	S(ctx) = cons(ctx, 7, AS(ATOM, cons(ctx, 13, AS(ATOM, 0))));
+	gt(ctx);
+	TEST_ASSERT_EQUAL_INT(1, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+
+	S(ctx) = cons(ctx, 13, AS(ATOM, cons(ctx, 7, AS(ATOM, 0))));
+	gt(ctx);
+	TEST_ASSERT_EQUAL_INT(0, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+
+	S(ctx) = cons(ctx, 7, AS(ATOM, cons(ctx, 7, AS(ATOM, 0))));
+	gt(ctx);
+	TEST_ASSERT_EQUAL_INT(0, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+}
+
+void test_PRIMITIVES_COMPARISON_lt() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	S(ctx) = cons(ctx, 7, AS(ATOM, cons(ctx, 13, AS(ATOM, 0))));
+	lt(ctx);
+	TEST_ASSERT_EQUAL_INT(0, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+
+	S(ctx) = cons(ctx, 13, AS(ATOM, cons(ctx, 7, AS(ATOM, 0))));
+	lt(ctx);
+	TEST_ASSERT_EQUAL_INT(1, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+
+	S(ctx) = cons(ctx, 7, AS(ATOM, cons(ctx, 7, AS(ATOM, 0))));
+	lt(ctx);
+	TEST_ASSERT_EQUAL_INT(0, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+}
+
+void test_PRIMITIVES_COMPARISON_eq() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	S(ctx) = cons(ctx, 7, AS(ATOM, cons(ctx, 13, AS(ATOM, 0))));
+	eq(ctx);
+	TEST_ASSERT_EQUAL_INT(0, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+
+	S(ctx) = cons(ctx, 13, AS(ATOM, cons(ctx, 7, AS(ATOM, 0))));
+	eq(ctx);
+	TEST_ASSERT_EQUAL_INT(0, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+
+	S(ctx) = cons(ctx, 7, AS(ATOM, cons(ctx, 7, AS(ATOM, 0))));
+	eq(ctx);
+	TEST_ASSERT_EQUAL_INT(1, CAR(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+}
+
+void test_PRIMITIVES_BIT_and() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	S(ctx) = cons(ctx, 11, AS(ATOM, cons(ctx, 7, AS(ATOM, 0))));
+	and(ctx);
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(3, CAR(S(ctx)));
+
+	S(ctx) = cons(ctx, 0, AS(ATOM, cons(ctx, 0, AS(ATOM, 0))));
+	and(ctx);
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(0, CAR(S(ctx)));
+
+	S(ctx) = cons(ctx, -1, AS(ATOM, cons(ctx, 0, AS(ATOM, 0))));
+	and(ctx);
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(0, CAR(S(ctx)));
+
+	S(ctx) = cons(ctx, 0, AS(ATOM, cons(ctx, -1, AS(ATOM, 0))));
+	and(ctx);
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(0, CAR(S(ctx)));
+
+	S(ctx) = cons(ctx, -1, AS(ATOM, cons(ctx, -1, AS(ATOM, 0))));	
+	and(ctx);
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(-1, CAR(S(ctx)));
+}
+
+void test_PRIMITIVES_BIT_or() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	S(ctx) = cons(ctx, 7, AS(ATOM, cons(ctx, 11, AS(ATOM, 0))));
+	or(ctx);
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(15, CAR(S(ctx)));
+
+	S(ctx) = cons(ctx, 0, AS(ATOM, cons(ctx, 0, AS(ATOM, 0))));
+	or(ctx);
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(0, CAR(S(ctx)));
+
+	S(ctx) = cons(ctx, -1, AS(ATOM, cons(ctx, 0, AS(ATOM, 0))));
+	or(ctx);
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(-1, CAR(S(ctx)));
+
+	S(ctx) = cons(ctx, 0, AS(ATOM, cons(ctx, -1, AS(ATOM, 0))));
+	or(ctx);
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(-1, CAR(S(ctx)));
+
+	S(ctx) = cons(ctx, -1, AS(ATOM, cons(ctx, -1, AS(ATOM, 0))));
+	or(ctx);
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(-1, CAR(S(ctx)));
+}
+
+void test_PRIMITIVES_BIT_invert() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	S(ctx) = cons(ctx, 7, AS(ATOM, 0));
+	invert(ctx);
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(-8, CAR(S(ctx)));
+
+	S(ctx) = cons(ctx, 0, AS(ATOM, 0));
+	invert(ctx);
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(-1, CAR(S(ctx)));
+
+	S(ctx) = cons(ctx, 1, AS(ATOM, 0));
+	invert(ctx);
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(-2, CAR(S(ctx)));
+
+	S(ctx) = cons(ctx, -1, AS(ATOM, 0));
+	invert(ctx);
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(0, CAR(S(ctx)));
+}
+
 //// STACK PRIMITIVES
 //
 //void test_STACK_swap_1() {
@@ -1826,158 +2059,7 @@ void test_PRIMITIVES_ARITHMETIC_mod() {
 //
 //// COMPARISON PRIMITIVES
 //
-//void test_COMPARISON_gt() {
-//	CELL size = 512;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//
-//	ctx->stack = cons(ctx, 7, AS(ATOM, cons(ctx, 13, AS(ATOM, 0))));
-//	gt(ctx);
-//	TEST_ASSERT_EQUAL_INT(1, CAR(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//
-//	ctx->stack = cons(ctx, 13, AS(ATOM, cons(ctx, 7, AS(ATOM, 0))));
-//	gt(ctx);
-//	TEST_ASSERT_EQUAL_INT(0, CAR(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//
-//	ctx->stack = cons(ctx, 7, AS(ATOM, cons(ctx, 7, AS(ATOM, 0))));
-//	gt(ctx);
-//	TEST_ASSERT_EQUAL_INT(0, CAR(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//}
-//
-//void test_COMPARISON_lt() {
-//	CELL size = 512;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//
-//	ctx->stack = cons(ctx, 7, AS(ATOM, cons(ctx, 13, AS(ATOM, 0))));
-//	lt(ctx);
-//	TEST_ASSERT_EQUAL_INT(0, CAR(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//
-//	ctx->stack = cons(ctx, 13, AS(ATOM, cons(ctx, 7, AS(ATOM, 0))));
-//	lt(ctx);
-//	TEST_ASSERT_EQUAL_INT(1, CAR(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//
-//	ctx->stack = cons(ctx, 7, AS(ATOM, cons(ctx, 7, AS(ATOM, 0))));
-//	lt(ctx);
-//	TEST_ASSERT_EQUAL_INT(0, CAR(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//}
-//
-//void test_COMPARISON_eq() {
-//	CELL size = 512;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//
-//	ctx->stack = cons(ctx, 7, AS(ATOM, cons(ctx, 13, AS(ATOM, 0))));
-//	eq(ctx);
-//	TEST_ASSERT_EQUAL_INT(0, CAR(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//
-//	ctx->stack = cons(ctx, 13, AS(ATOM, cons(ctx, 7, AS(ATOM, 0))));
-//	eq(ctx);
-//	TEST_ASSERT_EQUAL_INT(0, CAR(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//
-//	ctx->stack = cons(ctx, 7, AS(ATOM, cons(ctx, 7, AS(ATOM, 0))));
-//	eq(ctx);
-//	TEST_ASSERT_EQUAL_INT(1, CAR(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//}
-//
 //// BIT PRIMITIVES
-//
-//void test_BIT_and() {
-//	CELL size = 512;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//
-//	ctx->stack = cons(ctx, 11, AS(ATOM, cons(ctx, 7, AS(ATOM, 0))));
-//	and(ctx);
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(3, CAR(ctx->stack));
-//
-//	ctx->stack = cons(ctx, 0, AS(ATOM, cons(ctx, 0, AS(ATOM, 0))));
-//	and(ctx);
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(0, CAR(ctx->stack));
-//
-//	ctx->stack = cons(ctx, -1, AS(ATOM, cons(ctx, 0, AS(ATOM, 0))));
-//	and(ctx);
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(0, CAR(ctx->stack));
-//
-//	ctx->stack = cons(ctx, 0, AS(ATOM, cons(ctx, -1, AS(ATOM, 0))));
-//	and(ctx);
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(0, CAR(ctx->stack));
-//
-//	ctx->stack = cons(ctx, -1, AS(ATOM, cons(ctx, -1, AS(ATOM, 0))));	
-//	and(ctx);
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(-1, CAR(ctx->stack));
-//}
-//
-//void test_BIT_or() {
-//	CELL size = 512;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//
-//	ctx->stack = cons(ctx, 7, AS(ATOM, cons(ctx, 11, AS(ATOM, 0))));
-//	or(ctx);
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(15, CAR(ctx->stack));
-//
-//	ctx->stack = cons(ctx, 0, AS(ATOM, cons(ctx, 0, AS(ATOM, 0))));
-//	or(ctx);
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(0, CAR(ctx->stack));
-//
-//	ctx->stack = cons(ctx, -1, AS(ATOM, cons(ctx, 0, AS(ATOM, 0))));
-//	or(ctx);
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(-1, CAR(ctx->stack));
-//
-//	ctx->stack = cons(ctx, 0, AS(ATOM, cons(ctx, -1, AS(ATOM, 0))));
-//	or(ctx);
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(-1, CAR(ctx->stack));
-//
-//	ctx->stack = cons(ctx, -1, AS(ATOM, cons(ctx, -1, AS(ATOM, 0))));
-//	or(ctx);
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(-1, CAR(ctx->stack));
-//}
-//
-//void test_BIT_invert() {
-//	CELL size = 512;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//
-//	ctx->stack = cons(ctx, 7, AS(ATOM, 0));
-//	invert(ctx);
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(-8, CAR(ctx->stack));
-//
-//	ctx->stack = cons(ctx, 0, AS(ATOM, 0));
-//	invert(ctx);
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(-1, CAR(ctx->stack));
-//
-//	ctx->stack = cons(ctx, 1, AS(ATOM, 0));
-//	invert(ctx);
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(-2, CAR(ctx->stack));
-//
-//	ctx->stack = cons(ctx, -1, AS(ATOM, 0));
-//	invert(ctx);
-//	TEST_ASSERT_EQUAL_INT(1, length(ctx->stack));
-//	TEST_ASSERT_EQUAL_INT(0, CAR(ctx->stack));
-//}
 //
 //// PARSING
 //
@@ -3042,6 +3124,21 @@ void test_PRIMITIVES_ARITHMETIC_mod() {
 ////////////////		//printf("%ld\n", ctx->dictstack->value);
 ////////////////}
 //////////////
+
+void test_EVALUATE_braces() {
+	CELL size = 2048;
+	BYTE block[size];
+	CTX* ctx = bootstrap(init(block, size));
+
+	evaluate(ctx, "{ 3 4 }");
+
+	TEST_ASSERT_EQUAL_INT(1, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(LIST, TYPE(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(2, length(CAR(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(3, CAR(CAR(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(4, CAR(NEXT(CAR(S(ctx)))));
+}
+
 int main() {
 	UNITY_BEGIN();
 
@@ -3056,6 +3153,8 @@ int main() {
 
 	// LIST CREATION AND DESTRUCTION (AUTOMATIC MEMORY MANAGEMENT)
 	RUN_TEST(test_LIST_cons);
+	RUN_TEST(test_LIST_depth);
+	RUN_TEST(test_LIST_disjoint);
 	RUN_TEST(test_LIST_clone);
 	RUN_TEST(test_LIST_reclaim);
 	RUN_TEST(test_LIST_reclaim_list);
@@ -3093,7 +3192,6 @@ int main() {
 	// PRIMITIVES
 	RUN_TEST(test_PRIMITIVES_zjump);
 	RUN_TEST(test_PRIMITIVES_jump);
-	RUN_TEST(test_PRIMITIVES_ahead);
 	RUN_TEST(test_PRIMITIVES_postpone);
 	RUN_TEST(test_PRIMITIVES_parse);
 	RUN_TEST(test_PRIMITIVES_parse_name);
@@ -3132,6 +3230,14 @@ int main() {
 	RUN_TEST(test_PRIMITIVES_ARITHMETIC_mul);
 	RUN_TEST(test_PRIMITIVES_ARITHMETIC_division);
 	RUN_TEST(test_PRIMITIVES_ARITHMETIC_mod);
+	RUN_TEST(test_PRIMITIVES_COMPARISON_gt);
+	RUN_TEST(test_PRIMITIVES_COMPARISON_lt);
+	RUN_TEST(test_PRIMITIVES_COMPARISON_eq);
+	RUN_TEST(test_PRIMITIVES_BIT_and);
+	RUN_TEST(test_PRIMITIVES_BIT_or);
+	RUN_TEST(test_PRIMITIVES_BIT_invert);
+
+	RUN_TEST(test_EVALUATE_braces);
 
 
 	//// STACK PRIMITIVES
@@ -3143,15 +3249,7 @@ int main() {
 
 	//// ARITHMETIC PRIMITIVES
 	//// COMPARISON PRIMITIVES
-	//RUN_TEST(test_COMPARISON_gt);
-	//RUN_TEST(test_COMPARISON_lt);
-	//RUN_TEST(test_COMPARISON_eq);
-
 	//// BIT PRIMITIVES
-	//RUN_TEST(test_BIT_and);
-	//RUN_TEST(test_BIT_or);
-	//RUN_TEST(test_BIT_invert);
-
 	//// CONTIGUOUS MEMORY
 	//RUN_TEST(test_MEM_allot);
 	//RUN_TEST(test_MEM_compile_str);
@@ -3176,8 +3274,6 @@ int main() {
 //	RUN_TEST(test_cspush);
 //	RUN_TEST(test_cppop_2);
 //
-//	RUN_TEST(test_braces);
-//
 //	RUN_TEST(test_empty);
 //
 //	RUN_TEST(test_join_atom_atom_1);
@@ -3190,25 +3286,6 @@ int main() {
 //	RUN_TEST(test_join_list_atom_2);
 //	RUN_TEST(test_join_list_list_1);
 //	RUN_TEST(test_join_list_list_2);
-//
-//	RUN_TEST(test_quote_1);
-//	RUN_TEST(test_quote_2);
-//	RUN_TEST(test_quote_3);
-//	RUN_TEST(test_quote_4);
-//
-//	RUN_TEST(test_gt);
-//	RUN_TEST(test_lt);
-//	RUN_TEST(test_eq);
-//	RUN_TEST(test_neq);
-//
-//	RUN_TEST(test_not);
-//
-//	//RUN_TEST(test_clear_stack);
-//	//RUN_TEST(test_push_stack);
-//	//RUN_TEST(test_drop_stack);
-//
-//
-//	RUN_TEST(test_allot_str);
 //
 //	RUN_TEST(test_find);
 //	//RUN_TEST(test_to_number);
