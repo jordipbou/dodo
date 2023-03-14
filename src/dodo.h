@@ -1,3 +1,6 @@
+// TODO: CORRECT RECURSE
+// TODO: Make better visualization of PAIR [@] (NEXT|TYPE, VALUE)
+
 #ifndef __DODO__
 #define __DODO__
 
@@ -105,12 +108,16 @@ CELL cons(CTX* ctx, CELL car, CELL cdr) {
 	return pair;
 }
 
+// f indicates if depth of pair and its nexts items are required or only of pair
+// When calculating depth of item on top of the stack, we don't want depth of all the stack,
+// for example.
 CELL depth(CELL pair, CELL f) {
 	if (pair == 0) return 0;
 	if (TYPE(pair) == LIST) return 1 + depth(CAR(pair), 1) + (f ? depth(NEXT(pair), 1) : 0);
 	else return 1 + (f ? depth(NEXT(pair), 1) : 0);
 }
 
+// As in depth, f indicates if p1 next items must be followed.
 CELL disjoint(CELL p1, CELL p2, CELL f) {
 	if (p1 == 0) return 1;
 	if (p1 == p2) return 0;
@@ -133,6 +140,7 @@ CELL clone(CTX* ctx, CELL pair) {
 
 // CTX ctx{(f = free) >= 0}, CELL pair
 // CTX ctx{pair == 0 -> f , pair != 0 -> f + depth(pair, 0)}, NEXT(pair)
+// TODO: Ensure testing with depth !!
 CELL reclaim(CTX* ctx, CELL pair) {
 	if (!pair) return 0;
 	if (TYPE(pair) == LIST) { 
@@ -420,7 +428,7 @@ CELL postpone(CTX* ctx) {
 
 CELL parse(CTX* ctx) { 
 	CELL c; ERR_POP(ctx, c);
-	ctx->token = ctx->in;	
+	ctx->token = ++ctx->in;	
 	ERR_PUSH(ctx, TK(ctx));
 	while (TC(ctx) != 0 && TC(ctx) != c) { ctx->in++;	}
 	ERR_PUSH(ctx, TL(ctx));
@@ -512,17 +520,11 @@ CELL cstack_to_list(CTX* ctx) {
 			CAR(ctx->cpile) = t;
 		} else if (TYPE(NEXT(ctx->cpile)) == WORD) {
 			// Append it as if >BODY
-			printf("********* APPENDING TO PREVIOUS HEADER\n");
-			printf("Header: %ld\n", NEXT(ctx->cpile));
-			printf("Header name: %s\n", NFA(NEXT(ctx->cpile)));
-			printf("Header body: %ld\n", XT(NEXT(ctx->cpile)));
 			CELL t = ctx->cpile;
 			ctx->cpile = NEXT(ctx->cpile);
-			LINK(CAR(ctx->cpile), t);
-			printf("AFTER APPENDING **********************\n");
-			printf("Header: %ld\n", ctx->cpile);
-			printf("Header name: %s\n", NFA(ctx->cpile));
-			printf("Header body: %ld\n", XT(ctx->cpile));
+			LINK(CAR(ctx->cpile), CAR(t));
+			CAR(t) = 0;
+			reclaim(ctx, t);
 		}
 	}
 	return 0;
@@ -580,6 +582,7 @@ CELL resolve(CTX* ctx) {
 }
 
 CELL rbrace(CTX* ctx) {
+	if (ctx->cpile == 0 || TYPE(ctx->cpile) == WORD) return 0;
 	resolve(ctx);
 	reverse_cstack(ctx);
 	cstack_to_list(ctx);
@@ -796,19 +799,21 @@ CELL fetch(CTX* ctx) {
 
 CELL store(CTX* ctx) {
 	CELL addr, x;
-	ERR_POP(ctx, x);
 	ERR_POP(ctx, addr);
+	ERR_POP(ctx, x);
 	*((CELL*)addr) = x;
 
 	return 0;
 }
 
 CELL here(CTX* ctx) {
-	return S(ctx) = cons(ctx, (CELL)ctx->here, AS(ATOM, S(ctx)));
+	ERR_PUSH(ctx, ctx->here);
+	return 0;
 }
 
 CELL latest(CTX* ctx) {
-	return S(ctx) = cons(ctx, (CELL)&ctx->latest, AS(ATOM, S(ctx)));
+	ERR_PUSH(ctx, &ctx->latest);
+	return 0;
 }
 
 CELL append(CTX* ctx) {
@@ -826,15 +831,6 @@ CELL append(CTX* ctx) {
 	}
 
 	return 0;
-}
-
-CELL colon(CTX* ctx) {
-	CELL result;
-	if ((result = parse_name(ctx)) != 0) { ERR(ctx, result); }
-	drop(ctx);
-	lbrace(ctx);
-	literal(ctx);
-	// TODO
 }
 
 CELL orig(CTX* ctx) {
@@ -889,11 +885,21 @@ CELL header(CTX* ctx) {
 	return 0;
 }
 
+CELL colon(CTX* ctx) {
+	CELL result;
+	if ((result = header(ctx)) != 0) { ERR(ctx, result); }
+	if ((result = lbrace(ctx)) != 0) { ERR(ctx, result); }
+	return 0;
+}
+
 CELL semicolon(CTX* ctx) {
 	CELL result;
+	rbrace(ctx);
 	if ((result = cstack_to_list(ctx)) != 0) { ERR(ctx, result); }
 	latest(ctx);
 	swap(ctx);
+	// Modify to be a non immediate word by default
+	CDR(S(ctx)) = AS(NON_IMM_COLON, NEXT(S(ctx)));
 	append(ctx);
 }
 
@@ -915,7 +921,31 @@ CELL tick(CTX* ctx) {
 	CELL word;
 	if (parse_token(ctx) == 0) { ERR(ctx, ERR_ZERO_LENGTH_NAME); }
 	if ((word = find_token(ctx)) == 0) { ERR(ctx, ERR_UNDEFINED_WORD); }
-	return S(ctx) = cons(ctx, word, AS(WORD, S(ctx)));
+	if (PRIMITIVE(word)) {
+		return S(ctx) = cons(ctx, CAR(XT(word)), AS(PRIM, S(ctx)));
+	} else {
+		return S(ctx) = cons(ctx, word, AS(WORD, S(ctx)));
+	}
+}
+
+CELL immediate(CTX* ctx) {
+	switch(TYPE(ctx->latest)) {
+		case NON_IMM_PRIM: CDR(ctx->latest) = AS(IMM_PRIM, NEXT(ctx->latest)); break;
+		case NON_IMM_COLON: CDR(ctx->latest) = AS(IMM_COLON, NEXT(ctx->latest)); break;
+	}
+	return 0;
+}
+
+CELL cell(CTX* ctx) {
+	ERR_PUSH(ctx, sizeof(CELL));
+	return 0;
+}
+
+CELL emit(CTX* ctx) {
+	CELL k;
+	ERR_POP(ctx, k);
+	printf("%c", k);
+	return 0;
 }
 
 #define ADD_PRIMITIVE(ctx, name, func, immediate) \
@@ -972,6 +1002,7 @@ CTX* bootstrap(CTX* ctx) {
 
 	ADD_PRIMITIVE(ctx, ":", &colon, 2);
 	ADD_PRIMITIVE(ctx, ";", &semicolon, 2);
+	ADD_PRIMITIVE(ctx, "immediate", &immediate, 0);
 
 	ADD_PRIMITIVE(ctx, "here", &here, 0);
 	ADD_PRIMITIVE(ctx, "allot", &allot, 0);
@@ -981,7 +1012,7 @@ CTX* bootstrap(CTX* ctx) {
 	//ADD_PRIMITIVE(ctx, "b!", &bstore, 0);
 	//ADD_PRIMITIVE(ctx, "b@", &bfetch, 0);
 
-	//ADD_PRIMITIVE(ctx, "cell", &cell, 0);
+	ADD_PRIMITIVE(ctx, "cell", &cell, 0);
 
 	ADD_PRIMITIVE(ctx, "postpone", &postpone, 2);
 	//ADD_PRIMITIVE(ctx, "p", &postpone, 2);
@@ -1003,6 +1034,8 @@ CTX* bootstrap(CTX* ctx) {
 	ADD_PRIMITIVE(ctx, "then", &_then_, 2);
 
 	ADD_PRIMITIVE(ctx, "'", &tick, 0);
+
+	ADD_PRIMITIVE(ctx, "emit", &emit, 0);
 
 	return ctx;
 }

@@ -5,16 +5,24 @@
 
 CELL find_primitive(CTX* ctx, CELL f) {
 	CELL w = ctx->latest;
-	while (w && !(CAR(XT(w)) == f && NEXT(XT(w)) == 0)) {
-		w = NEXT(w);
+	while (w) { // && !(CAR(XT(w)) == f && NEXT(XT(w)) == 0)) {
+		if (XT(w) != 0 && CAR(XT(w)) == f && NEXT(XT(w)) == 0) {
+			return w;
+		} else {
+			w = NEXT(w);
+		}
 	}
 	return w;
+}
+
+void print_pair(CELL p) {
+	printf("[@%ld](%ld|%ld,%ld)", p, NEXT(p), TYPE(p), CAR(p));
 }
 
 void dump_list(CTX* ctx, CELL pair, CELL dir) {
 	if (pair) {
 		if (!dir) dump_list(ctx, NEXT(pair), dir);
-		printf("[%ld] ", pair);
+		printf("[@%ld] ", pair);
 		switch (TYPE(pair)) {
 			case ATOM: printf("#%ld ", CAR(pair)); break;
 			case LIST: printf("{ "); dump_list(ctx, CAR(pair), 1); printf("} "); break;
@@ -26,8 +34,7 @@ void dump_list(CTX* ctx, CELL pair, CELL dir) {
 					printf("PRIM_NOT_FOUND ");
 				}
 			} break;
-			case WORD: break;
-				//printf("W:%s (%ld) ", NFA(CAR(pair)), CAR(pair)); break;
+			case WORD: print_pair(pair); printf(":%s ", NFA(CAR(pair))); break;
 		}
 		if (dir) dump_list(ctx, NEXT(pair), 1);
 		if (!dir) printf("\n");
@@ -46,8 +53,8 @@ CELL dbg_execute(CTX* ctx, CELL xlist) {
 	CELL p = xlist;
 	while (p) {
 		switch (TYPE(p)) {
-			case ATOM: ERR_PUSH(ctx, CAR(p)); break;
-			case LIST: ERR_PUSHL(ctx, clone(ctx, CAR(p))); break;
+			case ATOM: ERR_PUSH(ctx, CAR(p)); p = NEXT(p); break;
+			case LIST: ERR_PUSHL(ctx, clone(ctx, CAR(p))); p = NEXT(p); break;
 				break;
 			case PRIM:
 				switch (CAR(p)) {
@@ -83,6 +90,7 @@ CELL dbg_execute(CTX* ctx, CELL xlist) {
 				break;
 		}
 	}
+	return 0;
 }
 
 CELL dbg_exec_x(CTX* ctx) {
@@ -115,7 +123,7 @@ void dump_context(CTX* ctx) {
 		if (TYPE(s) == LIST) {
 			printf("List:   [%ld] ", CAR(s)); dump_list(ctx, CAR(s), 1); printf("\n");
 		} else if (TYPE(s) == WORD) {
-			printf("Header: [%ld] %s", CAR(s), NFA(s));
+			printf("Header: [%ld] %s", s, NFA(s));
 			if (XT(s) != 0) {
 				printf(" "); dump_list(ctx, XT(s), 1);
 			}
@@ -136,10 +144,6 @@ CELL dbg_evaluate(CTX* ctx, BYTE* str) {
 		dump_context(ctx);
 		printf("TOKEN: %.*s\n\n", (int)TL(ctx), TK(ctx));
 		if ((word = find_token(ctx)) != 0) {
-			if (strcmp(NFA(word), "fib") == 0) {
-				printf("Executing FIB: %ld XT: %ld \n", word, XT(word));
-				dump_list(ctx, XT(word), 1);
-			}
 			if (!ctx->state || IMMEDIATE(word)) {
 				if ((result = dbg_execute(ctx, XT(word))) != 0) { ERR(ctx, result); }
 			} else {
@@ -183,7 +187,14 @@ CELL pair(CTX* ctx) {
 
 CELL next(CTX* ctx) {
 	CELL p; ERR_POP(ctx, p);
-	ERR_PUSH(ctx, NEXT(p));
+	ERR_PUSH(ctx, p == 0 ? 0 : NEXT(p));
+	return 0;
+}
+
+CELL carcdr(CTX* ctx) {
+	CELL p; ERR_POP(ctx, p);
+	ERR_PUSH(ctx, p ? CDR(p) : 0);
+	ERR_PUSH(ctx, p ? CAR(p) : 0);
 	return 0;
 }
 
@@ -207,16 +218,35 @@ CELL see(CTX* ctx) {
 }
 
 CELL nfa(CTX* ctx) {
-	CELL w; ERR_POP(ctx, w);
-	printf("NAME: %s\n", NFA(w));
+	CELL w, p;
+	switch (TYPE(S(ctx))) {
+		case ATOM:
+			ERR_POP(ctx, w);	
+			ERR_PUSH(ctx, NFA(w));
+			ERR_PUSH(ctx, strlen(NFA(w)));
+			break;
+		case LIST:
+			// TODO
+		case PRIM:
+			ERR_POP(ctx, p);
+			w = find_primitive(ctx, p);
+			if (w) {
+				ERR_PUSH(ctx, NFA(w));
+				ERR_PUSH(ctx, strlen(NFA(w)));
+			}
+			break;
+		case WORD:
+			ERR_POP(ctx, w);	
+			ERR_PUSH(ctx, NFA(w));
+			ERR_PUSH(ctx, strlen(NFA(w)));
+			break;
+	}
 	return 0;
 }
 
 CELL xt(CTX* ctx) {
 	CELL w; ERR_POP(ctx, w);
-	printf("WORD: %ld\n", w);
-	printf("XT(w): %ld\n", XT(w));
-	//dump_list(ctx, XT(w), 1);
+	ERR_PUSH(ctx, XT(w));
 	return 0;
 }
 

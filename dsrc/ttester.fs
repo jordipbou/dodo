@@ -1,11 +1,12 @@
 : \ 10 parse drop drop ;
+: create postpone : postpone [ here postpone ] postpone literal postpone ; ;
 : , here cell allot ! ;
-: create p : p [ here p ] p literal p ; ;
 : variable create 0 , ;
 variable base
 : decimal ;
 : cells cell * ;
 : execute i ;
+: environment? 0 ;
 
 \ This file contains the code for ttester, a utility for testing Forth words,
 \ as developed by several authors (see below), together with some explanations
