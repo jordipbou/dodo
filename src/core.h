@@ -1,242 +1,213 @@
 #ifndef __CORE__
 #define __CORE__
 
-//#include<inttypes.h>
-//#include<string.h>
-//#include<stdio.h>
-//#include<ctype.h>
-//
-//#ifdef _WIN32
-//	#include<conio.h>
-//#else
-//	#include<unistd.h>
-//	#include<termios.h>
-//#endif
-//
-//typedef int8_t			BYTE;
-//typedef intptr_t		CELL;
-//
-//#define CAR(pair)								(*((CELL*)pair))
-//#define CDR(pair)								(*(((CELL*)pair) + 1))
-//#define NEXT(pair)							(CDR(pair) & -4)
-//#define TYPE(pair)							(CDR(pair) & 3)
-//
-//enum Types { ATOM, LIST, PRIM, WORD };
-//
-//#define AS(type, ref)						((ref & -4) | type)
-//#define LINK(pair, next)				(CDR(pair) = AS(TYPE(pair), next))
-//
-//enum Words { CMP_PRIMITIVE, CMP_COLON_DEF, IMM_PRIMITIVE, IMM_COLON_DEF };
-//
-//enum Prims { ZJUMP, JUMP, ORIG, DEST, ORIG_DEST, RECURSE };
-//
-//#define NFA(word)								((BYTE*)CAR(CAR(word)))
-//#define XT(word)								(NEXT(CAR(word)))
-//#define PRIMITIVE(word)					((TYPE(word) & 1) == 0)
-//#define IMMEDIATE(word)					((TYPE(word) & 2) == 2)
-//
-//typedef struct {
-//	BYTE *tib, *here;
-//	CELL there, size; 
-//	CELL free, pile, cpile, xstack, latest;
-//	CELL state, token, in, base;
-//} CTX;
-//
-//#define S(ctx)									CAR(ctx->pile)
-//#define C(ctx)									CAR(ctx->cpile)
-//
-//#define FREE(ctx)						(length(ctx->free) - 1)		// Don't count ctx->there
-//#define ALIGN(addr, bound)	((((CELL)addr) + (bound - 1)) & ~(bound - 1))
-//
-//#define BOTTOM(ctx)			(((BYTE*)ctx) + sizeof(CTX))
-//#define TOP(ctx)				(ALIGN(((BYTE*)ctx) + ctx->size - (2*sizeof(CELL)) - 1, (2*sizeof(CELL))))
-//
-//CTX* init(BYTE* block, CELL size) {
-//	if (size < (sizeof(CTX) + 2*2*sizeof(CELL))) return 0;
-//	CTX* ctx = (CTX*)block;	
-//	ctx->size = size;
-//	ctx->here = BOTTOM(ctx);
-//	ctx->there = ALIGN(BOTTOM(ctx), 2*sizeof(CELL));
-//	ctx->pile = TOP(ctx);
-//	CAR(ctx->pile) = 0;
-//	CDR(ctx->pile) = AS(LIST, 0);
-//	ctx->free = ctx->pile - 2*sizeof(CELL);
-//
-//	for (CELL pair = ctx->there; pair <= ctx->free; pair += 2*sizeof(CELL)) {
-//		CAR(pair) = pair == ctx->free ? 0 : pair + 2*sizeof(CELL);
-//		CDR(pair) = pair == ctx->there ? 0 : pair - 2*sizeof(CELL);
-//	}
-//
-//	ctx->xstack = ctx->cpile = ctx->latest = 0;
-//	ctx->state = ctx->token = ctx->in = 0;
-//	ctx->tib = 0;
-//	ctx->base = 10;
-//
-//	return ctx;
-//}
-//
-//CELL cons(CTX* ctx, CELL car, CELL cdr) {
-//	if (ctx->free == ctx->there) return 0;
-//	CELL pair = ctx->free;
-//	ctx->free = CDR(ctx->free);
-//	CAR(pair) = car;
-//	CDR(pair) = cdr;
-//	return pair;
-//}
-//
-//CELL reclaim(CTX* ctx, CELL pair) {
-//	if (!pair) return 0;
-//	if (TYPE(pair) == LIST) { 
-//		while (CAR(pair) != 0) { 
-//			CAR(pair) = reclaim(ctx, CAR(pair)); 
-//		} 
-//	}
-//	CELL tail = NEXT(pair);
-//	CDR(pair) = ctx->free;
-//	CAR(pair) = 0;
-//	ctx->free = pair;
-//	return tail;
-//}
-//
-//#define ERR_STACK_OVERFLOW			-1
-//#define ERR_RSTACK_OVERFLOW			-2
-//#define ERR_STACK_UNDERFLOW			-3
-//#define ERR_RSTACK_UNDERFLOW		-4
-//#define ERR_UNDEFINED_WORD			-5
-//#define ERR_NOT_ENOUGH_MEMORY		-6
-//#define ERR_NOT_ENOUGH_RESERVED	-7
-//#define ERR_ZERO_LENGTH_NAME		-8
-//#define ERR_ATOM_EXPECTED				-9
-//#define ERR_LIST_EXPECTED				-10
-//#define ERR_END_OF_XLIST				-11
-//#define ERR_EXIT								-12
-//
-//CELL error(CTX* ctx, CELL err) {
-//	// TODO
-//	/* Lookup on exception stack for a correct handler for current error */
-//	/* The debugger must be installed on the exception stack for it to work */
-//	/* If a handler its found then execute it and return its return value */
-//	/* If none its found, just return the error */
-//	// TODO
-//	/* The error function should have the ability to not just modify the context */
-//	/* but of returning a compleletely new context to work on. For example, in the case */
-//	/* of a memory error, a new context with a bigger buffer could be created, cloning */
-//	/* the current context on it and returning it as the new context. */
-//	return err;
-//}
-//
-//#define INFO(msg) \
-//    fprintf(stderr, "info: %s:%d: ", __FILE__, __LINE__); \
-//    fprintf(stderr, "%s", msg);
-//
-//#define ERR(ctx, err)		{ INFO(""); CELL __err__ = error(ctx, err); if (__err__) { return __err__; } }
-//
-//#define ERR_POP(ctx, v) \
-//	if (S(ctx) == 0) { \
-//		ERR(ctx, ERR_STACK_UNDERFLOW); \
-//	} else { \
-//		v = pop(ctx); \
-//	}
-//
-//typedef CELL (*FUNC)(CTX*);
-//
-//#define EXECUTE_PRIMITIVE(ctx, primitive) { \
-//	CELL result = ((FUNC)primitive)(ctx); \
-//	if (result < 0) { ERR(ctx, result); } \
-//}
-//
-//CELL execute(CTX* ctx, CELL xlist) {
-//	CELL result;
-//	CELL p = xlist;
-//	while (p) {
-//		switch (TYPE(p)) {
-//			case ATOM:
-//				if ((S(ctx) = cons(ctx, CAR(p), AS(ATOM, S(ctx)))) == 0) { 
-//					ERR(ctx, ERR_STACK_OVERFLOW); 
-//				}
-//				p = NEXT(p);
-//				break;
-//			case LIST:
-//				if ((S(ctx) = cons(ctx, clone(ctx, CAR(p)), AS(LIST, S(ctx)))) == 0) { 
-//					ERR(ctx, ERR_STACK_OVERFLOW); 
-//				}
-//				p = NEXT(p);
-//				break;
-//			case PRIM:
-//				switch (CAR(p)) {
-//					case ZJUMP: /* ZJUMP */
-//						if (pop(ctx) == 0) {
-//							p = CAR(NEXT(p));
-//						} else {
-//							p = NEXT(NEXT(p));
-//						}
-//						break;
-//					case JUMP: /* JUMP */
-//						p = CAR(NEXT(p));
-//						break;
-//					default:
-//						EXECUTE_PRIMITIVE(ctx, CAR(p));
-//						p = NEXT(p);
-//						break;
-//				}
-//				break;
-//			case WORD:
-//				if (NEXT(p)) { 
-//					execute(ctx, XT(CAR(p))); p = NEXT(p); 
-//				} else { 
-//					p = XT(CAR(p));
-//				}
-//				break;
-//		}
-//	}
-//}
-//
-//#define TC(ctx)									(*(ctx->tib + ctx->in))
-//#define TK(ctx)									(ctx->tib + ctx->token)
-//#define TL(ctx)									(ctx->in - ctx->token)
-//
-//CELL parse_token(CTX* ctx) {
-//	ctx->token = ctx->in;	while (TC(ctx) != 0 && isspace(TC(ctx))) { ctx->in++;	}
-//	ctx->token = ctx->in;	while (TC(ctx) != 0 && !isspace(TC(ctx))) { ctx->in++; }
-//	return ctx->in - ctx->token;
-//}
-//
-//CELL find_token(CTX* ctx) {
-//	CELL w = ctx->latest;
-//	while (w && !(strlen(NFA(w)) == TL(ctx) && strncmp(NFA(w), TK(ctx), TL(ctx)) == 0)) {
-//		w = NEXT(w);
-//	}
-//	return w;
-//}
-//
-//CELL evaluate(CTX* ctx, BYTE* str) { 
-//	CELL word, result; 
-//	char *endptr;
-//	ctx->tib = str; 
-//	ctx->token = ctx->in = 0;
-//	do {
-//		if (parse_token(ctx) == 0) { return 0; }
-//		if ((word = find_token(ctx)) != 0) {
-//			if (!ctx->state || IMMEDIATE(word)) {
-//				if ((result = execute(ctx, XT(word))) != 0) { ERR(ctx, result); }
-//			} else {
-//				if (compile_word(ctx, word) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
-//			}
-//		} else {
-//			intmax_t number = strtoimax(TK(ctx), &endptr, 10);
-//			if (number == 0 && endptr == (char*)(TK(ctx))) {
-//				ERR(ctx, ERR_UNDEFINED_WORD);
-//			} else if (ctx->state) {
-//				if (compile_number(ctx, number) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
-//			} else {
-//				if (PUSH(ctx, number) == 0) { ERR(ctx, ERR_STACK_OVERFLOW); }
-//			}
-//		}
-//	} while (1);
-//}
-//
-//CTX* bootstrap(CTX* ctx) {
-//	return ctx;
-//}
+#include<inttypes.h>
+#include<stdio.h>
+#ifdef _WIN32
+  #include <conio.h>
+#else
+	#include <unistd.h>
+	#include <termios.h>
+#endif
+
+typedef int8_t		B;
+typedef intptr_t	C;
+
+#define A(p)			(*((C*)p))
+#define D(p)			(*(((C*)p) + 1))
+#define N(p)			(D(p) & -4)
+#define T(p)			(D(p) & 3)
+
+enum Types { ATM, LST, PRM, WRD };
+
+#define AS(t, n)	((n & -4) | t)
+#define LK(p, n)	(D(p) = AS(T(p), n))
+
+#define XT(w)			(N(A(w)))
+
+typedef struct {
+	B *here;
+	C there, size, free, pile, latest;
+} X;
+
+#define F(x)			(x->free)
+#define S(x)			(A(x->pile))
+
+typedef C (*FUNC)(X*);
+
+enum Prims { ZJUMP, JUMP, BRANCH };
+
+#define ALIGN(a, b)			((((C)a) + (b - 1)) & ~(b - 1))
+#define BOTTOM(x)				(((B*)x) + sizeof(X))
+#define TOP(x)					(ALIGN(((B*)x) + x->size - (2*sizeof(C)) - 1, (2*sizeof(C))))
+
+X* init(B* bl, C sz) {
+	X* x = (X*)bl;	
+	x->size = sz;
+	x->here = BOTTOM(x);
+	x->there = ALIGN(BOTTOM(x), 2*sizeof(C));
+	x->pile = TOP(x);
+	A(x->pile) = 0;
+	D(x->pile) = AS(LST, 0);
+	x->free = x->pile - 2*sizeof(C);
+
+	for (C p = x->there; p <= x->free; p += 2*sizeof(C)) {
+		A(p) = p == x->free ? 0 : p + 2*sizeof(C);
+		D(p) = p == x->there ? 0 : p - 2*sizeof(C);
+	}
+
+	x->latest = 0;
+
+	return x;
+}
+
+C cons(X* x, C a, C d) { 
+	if (x->free == x->there) return 0;
+	else { C p = F(x); F(x) = D(F(x)); A(p) = a; D(p) = d; return p; }
+}
+
+C clone(X* x, C p) { 
+	if (!p) return 0;
+	else { return cons(x, T(p) == LST ? clone(x, A(p)) : A(p), AS(T(p), clone(x, N(p)))); }
+}
+
+C recl(X* x, C p) { 
+	if (!p) return 0;
+	else {
+		if (T(p) == LST) while (A(p)) A(p) = recl(x, A(p));
+		C t = N(p); D(p) = F(x); A(p) = 0; F(x) = p;
+		return t;
+	}
+}
+
+#define ERR_STACK_OVERFLOW		-1
+#define ERR_STACK_UNDERFLOW		-2
+
+C error(X* x, C err) { /* TODO */	return err; }
+
+#define ERR(x, e)	{ C __err__ = error(x, e); if (__err__) { return __err__; } }
+
+C inner(X* x, C l) {
+	C p = l, b;
+	while (p) {
+		switch (T(p)) {
+			case ATM: 
+				if ((S(x) = cons(x, A(p), AS(ATM, S(x)))) == 0) { ERR(x, ERR_STACK_OVERFLOW); }
+				p = N(p); 
+				break;
+			case LST: 
+				if ((S(x) = cons(x, clone(x, A(p)), AS(LST, S(x)))) == 0) { ERR(x, ERR_STACK_OVERFLOW); }
+				p = N(p); break;
+			case PRM: 
+				switch (A(p)) {
+					case BRANCH:
+						if (!S(x)) { ERR(x, ERR_STACK_UNDERFLOW); }
+						b = A(S(x)); S(x) = recl(x, S(x));
+						if (b) { p = (N(N(N(p)))) ? (inner(x, A(N(p))), N(N(N(p)))) : A(N(p)); } 
+						else { p = (N(N(N(p)))) ? (inner(x, A(N(N(p)))), N(N(N(p)))) : A(N(N(p))); }
+						break;
+					case ZJUMP:
+						if (!S(x)) { ERR(x, ERR_STACK_UNDERFLOW); }
+						b = A(S(x)); S(x) = recl(x, S(x));
+						if (b) { p = A(N(p)); }
+						else { p = N(N(p)); }
+						break;
+					case JUMP: 
+						p = A(N(p));
+						break;
+					default:
+						b = ((FUNC)A(p))(x); 
+						if (b != 0) { ERR(x, b); }
+						p = N(p); 
+						break;
+				} 
+				break;
+			case WRD: 
+				p = (N(p) ? (inner(x, XT(A(p))), N(p)) : XT(A(p))); break;
+		}
+	}
+	return 0;
+}
+
+C duplicate(X* x) { 
+	if (!S(x)) { ERR(x, ERR_STACK_UNDERFLOW); }
+	else if ((S(x) = cons(x, A(S(x)), AS(ATM, S(x)))) == 0) { ERR(x, ERR_STACK_OVERFLOW); }
+	else return 0; 
+}
+C swap(X* x) { 
+	if (!(S(x) && N(S(x)))) { ERR(x, ERR_STACK_UNDERFLOW); }
+	else { C t = A(S(x)); A(S(x)) = A(N(S(x))); A(N(S(x))) = t; return 0; }
+}
+C rot(X* x) { 
+	if (!(S(x) && N(S(x)) && N(N(S(x))))) { ERR(x, ERR_STACK_UNDERFLOW); }
+	else { C t = N(N(S(x))); LK(N(S(x)), N(N(N(S(x))))); LK(t, S(x)); S(x) = t; return 0;	}
+}
+C drop(X* x) { S(x) = recl(x, S(x)); return 0; }
+
+#define BINOP(o) \
+	if (!(S(x) && N(S(x)))) { ERR(x, ERR_STACK_UNDERFLOW); } \
+	else { A(N(S(x))) = A(N(S(x))) o A(S(x)); S(x) = recl(x, S(x)); return 0; }
+
+C gt(X* x) { BINOP(>) }
+C lt(X* x) { BINOP(<) }
+C eq(X* x) { BINOP(==) }
+C neq(X* x) { BINOP(!=) }
+
+C add(X* x) { BINOP(+) }
+C sub(X* x) { BINOP(-) }
+C mul(X* x) { BINOP(*) }
+C division(X* x) { BINOP(/) }
+C mod(X* x) { BINOP(%) }
+
+C and(X* x) { BINOP(&) }
+C or(X* x) { BINOP(|) }
+C invert(X* x) { 
+	if (!S(x)) { ERR(x, ERR_STACK_UNDERFLOW); } 
+	else { A(S(x)) = ~A(S(x)); return 0; } 
+}
+
+C exec_x(X* x) { 
+	if (!S(x)) { ERR(x, ERR_STACK_UNDERFLOW); }
+	else { return inner(x, A(S(x))); }
+}
+C exec_i(X* x) { 
+	if (!(S(x))) { ERR(x, ERR_STACK_UNDERFLOW); }
+	else { C t = S(x); S(x) = N(S(x)); C res = inner(x, A(t)); recl(x, t); return res; }
+}
+
+// Source code for getch is taken from:
+// Crossline readline (https://github.com/jcwangxp/Crossline).
+// It's a fantastic readline cross-platform replacement, but only getch was
+// needed and there's no need to include everything else.
+#ifdef _WIN32	// Windows
+int __getch__(void) { fflush(stdout); return _getch(); }
+#else
+int __getch__()
+{
+	char ch = 0;
+	struct termios old_term, cur_term;
+	fflush (stdout);
+	if (tcgetattr(STDIN_FILENO, &old_term) < 0)	{ perror("tcsetattr"); }
+	cur_term = old_term;
+	cur_term.c_lflag &= ~(ICANON | ECHO | ISIG); // echoing off, canonical off, no signal chars
+	cur_term.c_cc[VMIN] = 1;
+	cur_term.c_cc[VTIME] = 0;
+	if (tcsetattr(STDIN_FILENO, TCSANOW, &cur_term) < 0)	{ perror("tcsetattr"); }
+	if (read(STDIN_FILENO, &ch, 1) < 0)	{ /* perror("read()"); */ } // signal will interrupt
+	if (tcsetattr(STDIN_FILENO, TCSADRAIN, &old_term) < 0)	{ perror("tcsetattr"); }
+	return ch;
+}
+#endif
+
+C key(X* x) {
+	if ((S(x) = cons(x, __getch__(), AS(ATM, S(x)))) == 0) { ERR(x, ERR_STACK_OVERFLOW); }
+	else { return 0; }
+}
+C emit(X* x) {
+	if (!S(x)) { ERR(x, ERR_STACK_UNDERFLOW); }
+	else { C k = A(S(x)); S(x) = recl(x, S(x)); printf("%c", (B)k); return 0; }
+}
+
+// TODO: grow, shrink, store, fetch, bstore, bfetch
 
 #endif
