@@ -106,9 +106,11 @@ C dump_context(X* x) {
 }
 /* -TEMPORAL */
 
+// INNER INTERPRETER
+
 #define RETURN(x) \
 	if (!x->ip) { \
-		while (R(x) && T(R(x)) != ATM) { R(x) = recl(x, R(x)); } \
+		while (R(x) && T(R(x)) != PRM) { R(x) = recl(x, R(x)); } \
 		if (R(x)) x->ip = A(R(x)); R(x) = recl(x, R(x)); \
 		if (!x->ip) return; \
 	}
@@ -132,10 +134,10 @@ void inner(X* x, C l) {
 			case WRD:
 				//printf("calling %ld ", A(x->ip));
 				if (N(x->ip)) { 
-					R(x) = cons(x, N(x->ip), AS(ATM, R(x)));
+					R(x) = cons(x, N(x->ip), AS(PRM, R(x)));
 					R(x) = cons(x, A(x->ip), AS(WRD, R(x)));
 				}
-				x->ip = A(x->ip);
+				x->ip = XT(A(x->ip));
 				break;
 		}
 		//printf("\n");
@@ -147,18 +149,30 @@ void inner(X* x, C l) {
 #define UF2(x)	if (!(S(x) && N(S(x)))) { x->err = ERR_STACK_UNDERFLOW; return; }
 #define UF3(x)	if (!(S(x) && N(S(x)) && N(N(S(x))))) { x->err = ERR_STACK_UNDERFLOW; return; }
 
+// EXECUTION PRIMITIVES
+
 void branch(X* x) {
 	UF1(x);
 	C b = A(S(x)); S(x) = recl(x, S(x));
-	if (N(N(N(x->ip)))) { R(x) = cons(x, N(N(N(x->ip))), AS(ATM, R(x))); }
+	if (N(N(N(x->ip)))) { R(x) = cons(x, N(N(N(x->ip))), AS(PRM, R(x))); }
 	if (b) { x->ip = A(N(x->ip)); }
 	else { x->ip = A(N(N(x->ip))); }
 	x->err = 1;
 }
-
+void zjump(X* x) {
+	UF1(x);
+	C b = A(S(x)); S(x) = recl(x, S(x));
+	if (!b) { x->ip = A(N(x->ip)); }
+	else { x->ip = N(N(x->ip)); }
+	x->err = 1;
+}
+void jump(X* x) {
+	x->ip = A(N(x->ip));
+	x->err = 1;
+}
 void exec_x(X* x) { 
 	UF1(x); 
-	if (N(x->ip)) { R(x) = cons(x, N(x->ip), AS(ATM, R(x))); }
+	if (N(x->ip)) { R(x) = cons(x, N(x->ip), AS(PRM, R(x))); }
 	// TODO: Type of item on top of data stack should be checked
 	//printf("exec_x::setting ip to %ld\n", A(S(x)));
 	x->ip = A(S(x)); 
@@ -167,16 +181,29 @@ void exec_x(X* x) {
 void exec_i(X* x) { 
 	UF1(x); 
 	C t = S(x); S(x) = N(S(x)); 
-	if (N(x->ip)) R(x) = cons(x, N(x->ip), AS(ATM, R(x)));
+	if (N(x->ip)) R(x) = cons(x, N(x->ip), AS(PRM, R(x)));
 	R(x) = cons(x, t, AS(LST, R(x)));
 	x->ip = A(t);
 	x->err = 1;
 }
 
-void duplicate(X* x) { UF1(x); S(x) = cons(x, A(S(x)), AS(ATM, S(x))); }
-void swap(X* x) { UF2(x); C t = A(S(x)); A(S(x)) = A(N(S(x))); A(N(S(x))) = t; }
-void rot(X* x) { UF3(x); C t = N(N(S(x))); LK(N(S(x)), N(N(N(S(x))))); LK(t, S(x)); S(x) = t; }
+// STACK PRIMITIVES
+
+void duplicate(X* x) { 
+	UF1(x); 
+	if (T(S(x)) == LST) { S(x) = cons(x, clone(x, A(S(x))), AS(LST, S(x))); }
+	else { S(x) = cons(x, A(S(x)), AS(T(S(x)), S(x))); }
+}
+void swap(X* x) { UF2(x); C t = N(S(x)); LK(S(x), N(N(S(x)))); LK(t, S(x)); S(x) = t; }
 void drop(X* x) { S(x) = recl(x, S(x)); }
+void over(X* x) { 
+	UF2(x);
+	if (T(N(S(x))) == LST) { S(x) = cons(x, clone(x, A(N(S(x)))), AS(LST, S(x))); }
+	else { S(x) = cons(x, A(N(S(x))), AS(T(N(S(x))), S(x))); }
+}
+void rot(X* x) { UF3(x); C t = N(N(S(x))); LK(N(S(x)), N(N(N(S(x))))); LK(t, S(x)); S(x) = t; }
+
+// COMPARISON PRIMITIVES
 
 #define BINOP(o) A(N(S(x))) = A(N(S(x))) o A(S(x)); S(x) = recl(x, S(x));
 
@@ -185,11 +212,15 @@ void lt(X* x) { UF2(x); BINOP(<) }
 void eq(X* x) { UF2(x); BINOP(==) }
 void neq(X* x) { UF2(x); BINOP(!=) }
 
+// ARITHMETIC PRIMITIVES
+
 void add(X* x) { UF2(x); BINOP(+) }
 void sub(X* x) { UF2(x); BINOP(-) }
 void mul(X* x) { UF2(x); BINOP(*) }
 void division(X* x) { UF2(x); if (!A(S(x))) { x->err = ERR_DIVISION_BY_ZERO; return; } BINOP(/) }
 void mod(X* x) { UF2(x); BINOP(%) }
+
+// BIT PRIMITIVES
 
 void and(X* x) { UF2(x); BINOP(&) }
 void or(X* x) { UF2(x); BINOP(|) }
