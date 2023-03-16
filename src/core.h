@@ -27,15 +27,16 @@ enum Types { ATM, LST, PRM, WRD };
 
 typedef struct {
 	B *here;
-	C there, size, free, pile, latest;
+	C there, size, free, pile;
+	C err, ip, rstack;
+	C latest;
 } X;
 
 #define F(x)			(x->free)
 #define S(x)			(A(x->pile))
+#define R(x)			(x->rstack)
 
-typedef C (*FUNC)(X*);
-
-enum Prims { ZJUMP, JUMP, BRANCH };
+typedef void (*FUNC)(X*);
 
 #define ALIGN(a, b)			((((C)a) + (b - 1)) & ~(b - 1))
 #define BOTTOM(x)				(((B*)x) + sizeof(X))
@@ -56,13 +57,17 @@ X* init(B* bl, C sz) {
 		D(p) = p == x->there ? 0 : p - 2*sizeof(C);
 	}
 
-	x->latest = 0;
+	x->rstack = x->ip = x->err = x->latest = 0;
 
 	return x;
 }
 
+#define ERR_STACK_OVERFLOW		-1
+#define ERR_STACK_UNDERFLOW		-2
+#define ERR_DIVISION_BY_ZERO	-3
+
 C cons(X* x, C a, C d) { 
-	if (x->free == x->there) return 0;
+	if (x->free == x->there) { x->err = ERR_STACK_OVERFLOW; return 0; }
 	else { C p = F(x); F(x) = D(F(x)); A(p) = a; D(p) = d; return p; }
 }
 
@@ -80,100 +85,113 @@ C recl(X* x, C p) {
 	}
 }
 
-#define ERR_STACK_OVERFLOW		-1
-#define ERR_STACK_UNDERFLOW		-2
-
-C error(X* x, C err) { /* TODO */	return err; }
-
-#define ERR(x, e)	{ C __err__ = error(x, e); if (__err__) { return __err__; } }
-
-C inner(X* x, C l) {
-	C p = l, b;
-	while (p) {
-		switch (T(p)) {
-			case ATM: 
-				if ((S(x) = cons(x, A(p), AS(ATM, S(x)))) == 0) { ERR(x, ERR_STACK_OVERFLOW); }
-				p = N(p); 
-				break;
-			case LST: 
-				if ((S(x) = cons(x, clone(x, A(p)), AS(LST, S(x)))) == 0) { ERR(x, ERR_STACK_OVERFLOW); }
-				p = N(p); break;
-			case PRM: 
-				switch (A(p)) {
-					case BRANCH:
-						if (!S(x)) { ERR(x, ERR_STACK_UNDERFLOW); }
-						b = A(S(x)); S(x) = recl(x, S(x));
-						if (b) { p = (N(N(N(p)))) ? (inner(x, A(N(p))), N(N(N(p)))) : A(N(p)); } 
-						else { p = (N(N(N(p)))) ? (inner(x, A(N(N(p)))), N(N(N(p)))) : A(N(N(p))); }
-						break;
-					case ZJUMP:
-						if (!S(x)) { ERR(x, ERR_STACK_UNDERFLOW); }
-						b = A(S(x)); S(x) = recl(x, S(x));
-						if (b) { p = A(N(p)); }
-						else { p = N(N(p)); }
-						break;
-					case JUMP: 
-						p = A(N(p));
-						break;
-					default:
-						b = ((FUNC)A(p))(x); 
-						if (b != 0) { ERR(x, b); }
-						p = N(p); 
-						break;
-				} 
-				break;
-			case WRD: 
-				p = (N(p) ? (inner(x, XT(A(p))), N(p)) : XT(A(p))); break;
-		}
-	}
+/* TEMPORAL */
+C dump_stack(X* x) {
+	C p = S(x);
+	while (p) { printf("%ld\n", A(p)); p = N(p); }
 	return 0;
 }
 
-C duplicate(X* x) { 
-	if (!S(x)) { ERR(x, ERR_STACK_UNDERFLOW); }
-	else if ((S(x) = cons(x, A(S(x)), AS(ATM, S(x)))) == 0) { ERR(x, ERR_STACK_OVERFLOW); }
-	else return 0; 
-}
-C swap(X* x) { 
-	if (!(S(x) && N(S(x)))) { ERR(x, ERR_STACK_UNDERFLOW); }
-	else { C t = A(S(x)); A(S(x)) = A(N(S(x))); A(N(S(x))) = t; return 0; }
-}
-C rot(X* x) { 
-	if (!(S(x) && N(S(x)) && N(N(S(x))))) { ERR(x, ERR_STACK_UNDERFLOW); }
-	else { C t = N(N(S(x))); LK(N(S(x)), N(N(N(S(x))))); LK(t, S(x)); S(x) = t; return 0;	}
-}
-C drop(X* x) { S(x) = recl(x, S(x)); return 0; }
-
-#define BINOP(o) \
-	if (!(S(x) && N(S(x)))) { ERR(x, ERR_STACK_UNDERFLOW); } \
-	else { A(N(S(x))) = A(N(S(x))) o A(S(x)); S(x) = recl(x, S(x)); return 0; }
-
-C gt(X* x) { BINOP(>) }
-C lt(X* x) { BINOP(<) }
-C eq(X* x) { BINOP(==) }
-C neq(X* x) { BINOP(!=) }
-
-C add(X* x) { BINOP(+) }
-C sub(X* x) { BINOP(-) }
-C mul(X* x) { BINOP(*) }
-C division(X* x) { BINOP(/) }
-C mod(X* x) { BINOP(%) }
-
-C and(X* x) { BINOP(&) }
-C or(X* x) { BINOP(|) }
-C invert(X* x) { 
-	if (!S(x)) { ERR(x, ERR_STACK_UNDERFLOW); } 
-	else { A(S(x)) = ~A(S(x)); return 0; } 
+C dump_return_stack(X* x) {
+	C p = x->rstack;
+	while (p) { printf("%ld\n", A(p)); p = N(p); }
+	return 0;
 }
 
-C exec_x(X* x) { 
-	if (!S(x)) { ERR(x, ERR_STACK_UNDERFLOW); }
-	else { return inner(x, A(S(x))); }
+C dump_context(X* x) {
+	printf("DATA STACK ---------------\n"); dump_stack(x);
+	printf("RETURN STACK -------------\n"); dump_return_stack(x);
 }
-C exec_i(X* x) { 
-	if (!(S(x))) { ERR(x, ERR_STACK_UNDERFLOW); }
-	else { C t = S(x); S(x) = N(S(x)); C res = inner(x, A(t)); recl(x, t); return res; }
+/* -TEMPORAL */
+
+#define RETURN(x) \
+	if (!x->ip) { \
+		while (R(x) && T(R(x)) != ATM) { R(x) = recl(x, R(x)); } \
+		if (R(x)) x->ip = A(R(x)); R(x) = recl(x, R(x)); \
+		if (!x->ip) return; \
+	}
+
+#define ERROR(x) \
+	if (x->err == 1) { /*printf("ip modified by primitive, resetting x->err to 0\n");*/ x->err = 0; } \
+	else if (x->err) { /*printf("ERROR:%ld\n", x->err);*/ dump_context(x); return; }
+
+void inner(X* x, C l) {
+	//printf("************ INNER l = %ld\n", l);
+	x->ip = l;
+	//C old_ip = 0;
+	do {
+		//if (old_ip == x->ip) { printf("SAME IP!!!!\n"); return; } else { old_ip = x->ip; }
+		//printf("[IP:%ld|ERR:%ld] ", x->ip, x->err);
+		RETURN(x);
+		switch (T(x->ip)) {
+			case ATM: /*printf("pushing %ld ", A(x->ip));*/ S(x) = cons(x, A(x->ip), AS(ATM, S(x))); x->ip = N(x->ip); break;
+			case LST: /*printf("cloning %ld ", A(x->ip));*/ S(x) = cons(x, clone(x, A(x->ip)), AS(LST, S(x))); x->ip = N(x->ip); break;
+			case PRM: /*printf("executing %ld ", A(x->ip));*/ ((FUNC)A(x->ip))(x); /*printf("x->err %ld ", x->err);*/ if (x->err == 0) { /*printf("auto-advancing ip ");*/ x->ip = N(x->ip); } break;
+			case WRD:
+				//printf("calling %ld ", A(x->ip));
+				if (N(x->ip)) { 
+					R(x) = cons(x, N(x->ip), AS(ATM, R(x)));
+					R(x) = cons(x, A(x->ip), AS(WRD, R(x)));
+				}
+				x->ip = A(x->ip);
+				break;
+		}
+		//printf("\n");
+		ERROR(x);
+	} while(1);
 }
+
+#define UF1(x)	if (!S(x)) { x->err = ERR_STACK_UNDERFLOW; return; }
+#define UF2(x)	if (!(S(x) && N(S(x)))) { x->err = ERR_STACK_UNDERFLOW; return; }
+#define UF3(x)	if (!(S(x) && N(S(x)) && N(N(S(x))))) { x->err = ERR_STACK_UNDERFLOW; return; }
+
+void branch(X* x) {
+	UF1(x);
+	C b = A(S(x)); S(x) = recl(x, S(x));
+	if (N(N(N(x->ip)))) { R(x) = cons(x, N(N(N(x->ip))), AS(ATM, R(x))); }
+	if (b) { x->ip = A(N(x->ip)); }
+	else { x->ip = A(N(N(x->ip))); }
+	x->err = 1;
+}
+
+void exec_x(X* x) { 
+	UF1(x); 
+	if (N(x->ip)) { R(x) = cons(x, N(x->ip), AS(ATM, R(x))); }
+	// TODO: Type of item on top of data stack should be checked
+	//printf("exec_x::setting ip to %ld\n", A(S(x)));
+	x->ip = A(S(x)); 
+	x->err = 1;
+}
+void exec_i(X* x) { 
+	UF1(x); 
+	C t = S(x); S(x) = N(S(x)); 
+	if (N(x->ip)) R(x) = cons(x, N(x->ip), AS(ATM, R(x)));
+	R(x) = cons(x, t, AS(LST, R(x)));
+	x->ip = A(t);
+	x->err = 1;
+}
+
+void duplicate(X* x) { UF1(x); S(x) = cons(x, A(S(x)), AS(ATM, S(x))); }
+void swap(X* x) { UF2(x); C t = A(S(x)); A(S(x)) = A(N(S(x))); A(N(S(x))) = t; }
+void rot(X* x) { UF3(x); C t = N(N(S(x))); LK(N(S(x)), N(N(N(S(x))))); LK(t, S(x)); S(x) = t; }
+void drop(X* x) { S(x) = recl(x, S(x)); }
+
+#define BINOP(o) A(N(S(x))) = A(N(S(x))) o A(S(x)); S(x) = recl(x, S(x));
+
+void gt(X* x) { UF2(x); BINOP(>) }
+void lt(X* x) { UF2(x); BINOP(<) }
+void eq(X* x) { UF2(x); BINOP(==) }
+void neq(X* x) { UF2(x); BINOP(!=) }
+
+void add(X* x) { UF2(x); BINOP(+) }
+void sub(X* x) { UF2(x); BINOP(-) }
+void mul(X* x) { UF2(x); BINOP(*) }
+void division(X* x) { UF2(x); if (!A(S(x))) { x->err = ERR_DIVISION_BY_ZERO; return; } BINOP(/) }
+void mod(X* x) { UF2(x); BINOP(%) }
+
+void and(X* x) { UF2(x); BINOP(&) }
+void or(X* x) { UF2(x); BINOP(|) }
+void invert(X* x) { UF1(x); A(S(x)) = ~A(S(x)); } 
 
 // Source code for getch is taken from:
 // Crossline readline (https://github.com/jcwangxp/Crossline).
@@ -199,14 +217,8 @@ int __getch__()
 }
 #endif
 
-C key(X* x) {
-	if ((S(x) = cons(x, __getch__(), AS(ATM, S(x)))) == 0) { ERR(x, ERR_STACK_OVERFLOW); }
-	else { return 0; }
-}
-C emit(X* x) {
-	if (!S(x)) { ERR(x, ERR_STACK_UNDERFLOW); }
-	else { C k = A(S(x)); S(x) = recl(x, S(x)); printf("%c", (B)k); return 0; }
-}
+void key(X* x) { S(x) = cons(x, __getch__(), AS(ATM, S(x))); }
+void emit(X* x) { UF1(x); C k = A(S(x)); S(x) = recl(x, S(x)); printf("%c", (B)k); }
 
 // TODO: grow, shrink, store, fetch, bstore, bfetch
 
