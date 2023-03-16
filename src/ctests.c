@@ -657,19 +657,239 @@ void test_STACK_rot() {
 	TEST_ASSERT_EQUAL_INT(11, A(N(N(S(x)))));
 }
 
-////// ARITHMETIC PRMITIVES
-////
-////void test_ARITHMETIC_add() {
-////	C size = 512;
-////	B block[size];
-////	X* x = init(block, size);
-////
-////	S(x) = cons(x, 11, AS(ATM, cons(x, 7, AS(ATM, 0))));
-////	add(x);
-////	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-////	TEST_ASSERT_EQUAL_INT(18, A(S(x)));
-////}
-////
+// COMPARISON PRMITIVES
+
+void test_COMPARISON_gt() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	S(x) = cons(x, 7, AS(ATM, cons(x, 13, AS(ATM, 0))));
+	gt(x);
+	TEST_ASSERT_EQUAL_INT(1, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+
+	S(x) = cons(x, 13, AS(ATM, cons(x, 7, AS(ATM, 0))));
+	gt(x);
+	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+
+	S(x) = cons(x, 7, AS(ATM, cons(x, 7, AS(ATM, 0))));
+	gt(x);
+	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+}
+
+void test_COMPARISON_lt() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	S(x) = cons(x, 7, AS(ATM, cons(x, 13, AS(ATM, 0))));
+	lt(x);
+	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+
+	S(x) = cons(x, 13, AS(ATM, cons(x, 7, AS(ATM, 0))));
+	lt(x);
+	TEST_ASSERT_EQUAL_INT(1, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+
+	S(x) = cons(x, 7, AS(ATM, cons(x, 7, AS(ATM, 0))));
+	lt(x);
+	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+}
+
+void test_COMPARISON_eq() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	S(x) = cons(x, 7, AS(ATM, cons(x, 13, AS(ATM, 0))));
+	eq(x);
+	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+
+	S(x) = cons(x, 13, AS(ATM, cons(x, 7, AS(ATM, 0))));
+	eq(x);
+	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+
+	S(x) = cons(x, 7, AS(ATM, cons(x, 7, AS(ATM, 0))));
+	eq(x);
+	TEST_ASSERT_EQUAL_INT(1, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+}
+
+void test_COMPARISON_neq() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	S(x) = cons(x, 7, AS(ATM, cons(x, 13, AS(ATM, 0))));
+	neq(x);
+	TEST_ASSERT_EQUAL_INT(1, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+
+	S(x) = cons(x, 13, AS(ATM, cons(x, 7, AS(ATM, 0))));
+	neq(x);
+	TEST_ASSERT_EQUAL_INT(1, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+
+	S(x) = cons(x, 7, AS(ATM, cons(x, 7, AS(ATM, 0))));
+	neq(x);
+	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+}
+
+// ARITHMETIC PRMITIVES
+
+void test_ARITHMETIC_add() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	S(x) = cons(x, 11, AS(ATM, cons(x, 7, AS(ATM, 0))));
+	add(x);
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(18, A(S(x)));
+}
+
+void test_ARITHMETIC_sub() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	S(x) = cons(x, 7, AS(ATM, cons(x, 11, AS(ATM, 0))));
+	sub(x);
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(4, A(S(x)));
+}
+
+void test_ARITHMETIC_mul() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	S(x) = cons(x, 11, AS(ATM, cons(x, 7, AS(ATM, 0))));
+	mul(x);
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(77, A(S(x)));
+}
+
+void test_ARITHMETIC_division() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	S(x) = cons(x, 11, AS(ATM, cons(x, 77, AS(ATM, 0))));
+	division(x);
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(7, A(S(x)));
+}
+
+void test_ARITHMETIC_mod() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	S(x) = cons(x, 7, AS(ATM, cons(x, 11, AS(ATM, 0))));
+	mod(x);
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(4, A(S(x)));
+}
+
+// BIT PRMITIVES
+
+void test_BIT_and() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	S(x) = cons(x, 11, AS(ATM, cons(x, 7, AS(ATM, 0))));
+	and(x);
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(3, A(S(x)));
+
+	S(x) = cons(x, 0, AS(ATM, cons(x, 0, AS(ATM, 0))));
+	and(x);
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
+
+	S(x) = cons(x, -1, AS(ATM, cons(x, 0, AS(ATM, 0))));
+	and(x);
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
+
+	S(x) = cons(x, 0, AS(ATM, cons(x, -1, AS(ATM, 0))));
+	and(x);
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
+
+	S(x) = cons(x, -1, AS(ATM, cons(x, -1, AS(ATM, 0))));	
+	and(x);
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(-1, A(S(x)));
+}
+
+void test_BIT_or() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	S(x) = cons(x, 7, AS(ATM, cons(x, 11, AS(ATM, 0))));
+	or(x);
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(15, A(S(x)));
+
+	S(x) = cons(x, 0, AS(ATM, cons(x, 0, AS(ATM, 0))));
+	or(x);
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
+
+	S(x) = cons(x, -1, AS(ATM, cons(x, 0, AS(ATM, 0))));
+	or(x);
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(-1, A(S(x)));
+
+	S(x) = cons(x, 0, AS(ATM, cons(x, -1, AS(ATM, 0))));
+	or(x);
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(-1, A(S(x)));
+
+	S(x) = cons(x, -1, AS(ATM, cons(x, -1, AS(ATM, 0))));
+	or(x);
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(-1, A(S(x)));
+}
+
+void test_BIT_invert() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	S(x) = cons(x, 7, AS(ATM, 0));
+	invert(x);
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(-8, A(S(x)));
+
+	S(x) = cons(x, 0, AS(ATM, 0));
+	invert(x);
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(-1, A(S(x)));
+
+	S(x) = cons(x, 1, AS(ATM, 0));
+	invert(x);
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(-2, A(S(x)));
+
+	S(x) = cons(x, -1, AS(ATM, 0));
+	invert(x);
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
+}
+
 //// PILE PRMITIVES
 //
 //void test_PILE_spush() {
@@ -688,205 +908,6 @@ void test_STACK_rot() {
 //	TEST_ASSERT_EQUAL_INT(A(x->p), O(x));
 //}
 //
-////void test_ARITHMETIC_sub() {
-////	C size = 512;
-////	B block[size];
-////	X* x = init(block, size);
-////
-////	S(x) = cons(x, 7, AS(ATM, cons(x, 11, AS(ATM, 0))));
-////	sub(x);
-////	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-////	TEST_ASSERT_EQUAL_INT(4, A(S(x)));
-////}
-////
-////void test_ARITHMETIC_mul() {
-////	C size = 512;
-////	B block[size];
-////	X* x = init(block, size);
-////
-////	S(x) = cons(x, 11, AS(ATM, cons(x, 7, AS(ATM, 0))));
-////	mul(x);
-////	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-////	TEST_ASSERT_EQUAL_INT(77, A(S(x)));
-////}
-////
-////void test_ARITHMETIC_division() {
-////	C size = 512;
-////	B block[size];
-////	X* x = init(block, size);
-////
-////	S(x) = cons(x, 11, AS(ATM, cons(x, 77, AS(ATM, 0))));
-////	division(x);
-////	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-////	TEST_ASSERT_EQUAL_INT(7, A(S(x)));
-////}
-////
-////void test_ARITHMETIC_mod() {
-////	C size = 512;
-////	B block[size];
-////	X* x = init(block, size);
-////
-////	S(x) = cons(x, 7, AS(ATM, cons(x, 11, AS(ATM, 0))));
-////	mod(x);
-////	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-////	TEST_ASSERT_EQUAL_INT(4, A(S(x)));
-////}
-////
-////// COMPARISON PRMITIVES
-////
-////void test_COMPARISON_gt() {
-////	C size = 512;
-////	B block[size];
-////	X* x = init(block, size);
-////
-////	S(x) = cons(x, 7, AS(ATM, cons(x, 13, AS(ATM, 0))));
-////	gt(x);
-////	TEST_ASSERT_EQUAL_INT(1, A(S(x)));
-////	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-////
-////	S(x) = cons(x, 13, AS(ATM, cons(x, 7, AS(ATM, 0))));
-////	gt(x);
-////	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
-////	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-////
-////	S(x) = cons(x, 7, AS(ATM, cons(x, 7, AS(ATM, 0))));
-////	gt(x);
-////	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
-////	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-////}
-////
-////void test_COMPARISON_lt() {
-////	C size = 512;
-////	B block[size];
-////	X* x = init(block, size);
-////
-////	S(x) = cons(x, 7, AS(ATM, cons(x, 13, AS(ATM, 0))));
-////	lt(x);
-////	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
-////	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-////
-////	S(x) = cons(x, 13, AS(ATM, cons(x, 7, AS(ATM, 0))));
-////	lt(x);
-////	TEST_ASSERT_EQUAL_INT(1, A(S(x)));
-////	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-////
-////	S(x) = cons(x, 7, AS(ATM, cons(x, 7, AS(ATM, 0))));
-////	lt(x);
-////	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
-////	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-////}
-////
-////void test_COMPARISON_eq() {
-////	C size = 512;
-////	B block[size];
-////	X* x = init(block, size);
-////
-////	S(x) = cons(x, 7, AS(ATM, cons(x, 13, AS(ATM, 0))));
-////	eq(x);
-////	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
-////	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-////
-////	S(x) = cons(x, 13, AS(ATM, cons(x, 7, AS(ATM, 0))));
-////	eq(x);
-////	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
-////	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-////
-////	S(x) = cons(x, 7, AS(ATM, cons(x, 7, AS(ATM, 0))));
-////	eq(x);
-////	TEST_ASSERT_EQUAL_INT(1, A(S(x)));
-////	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-////}
-////
-////// BIT PRMITIVES
-////
-////void test_BIT_and() {
-////	C size = 512;
-////	B block[size];
-////	X* x = init(block, size);
-////
-////	S(x) = cons(x, 11, AS(ATM, cons(x, 7, AS(ATM, 0))));
-////	and(x);
-////	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-////	TEST_ASSERT_EQUAL_INT(3, A(S(x)));
-////
-////	S(x) = cons(x, 0, AS(ATM, cons(x, 0, AS(ATM, 0))));
-////	and(x);
-////	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-////	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
-////
-////	S(x) = cons(x, -1, AS(ATM, cons(x, 0, AS(ATM, 0))));
-////	and(x);
-////	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-////	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
-////
-////	S(x) = cons(x, 0, AS(ATM, cons(x, -1, AS(ATM, 0))));
-////	and(x);
-////	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-////	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
-////
-////	S(x) = cons(x, -1, AS(ATM, cons(x, -1, AS(ATM, 0))));	
-////	and(x);
-////	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-////	TEST_ASSERT_EQUAL_INT(-1, A(S(x)));
-////}
-////
-////void test_BIT_or() {
-////	C size = 512;
-////	B block[size];
-////	X* x = init(block, size);
-////
-////	S(x) = cons(x, 7, AS(ATM, cons(x, 11, AS(ATM, 0))));
-////	or(x);
-////	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-////	TEST_ASSERT_EQUAL_INT(15, A(S(x)));
-////
-////	S(x) = cons(x, 0, AS(ATM, cons(x, 0, AS(ATM, 0))));
-////	or(x);
-////	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-////	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
-////
-////	S(x) = cons(x, -1, AS(ATM, cons(x, 0, AS(ATM, 0))));
-////	or(x);
-////	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-////	TEST_ASSERT_EQUAL_INT(-1, A(S(x)));
-////
-////	S(x) = cons(x, 0, AS(ATM, cons(x, -1, AS(ATM, 0))));
-////	or(x);
-////	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-////	TEST_ASSERT_EQUAL_INT(-1, A(S(x)));
-////
-////	S(x) = cons(x, -1, AS(ATM, cons(x, -1, AS(ATM, 0))));
-////	or(x);
-////	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-////	TEST_ASSERT_EQUAL_INT(-1, A(S(x)));
-////}
-////
-////void test_BIT_invert() {
-////	C size = 512;
-////	B block[size];
-////	X* x = init(block, size);
-////
-////	S(x) = cons(x, 7, AS(ATM, 0));
-////	invert(x);
-////	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-////	TEST_ASSERT_EQUAL_INT(-8, A(S(x)));
-////
-////	S(x) = cons(x, 0, AS(ATM, 0));
-////	invert(x);
-////	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-////	TEST_ASSERT_EQUAL_INT(-1, A(S(x)));
-////
-////	S(x) = cons(x, 1, AS(ATM, 0));
-////	invert(x);
-////	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-////	TEST_ASSERT_EQUAL_INT(-2, A(S(x)));
-////
-////	S(x) = cons(x, -1, AS(ATM, 0));
-////	invert(x);
-////	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-////	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
-////}
-////
 ////// PARSING
 ////
 ////void test_PARSING_parse_token() {
@@ -2213,25 +2234,26 @@ int main() {
 	RUN_TEST(test_STACK_over);
 	RUN_TEST(test_STACK_rot);
 
-//	// PILE PRMITIVES
+	// COMPARISON PRMITIVES
+	RUN_TEST(test_COMPARISON_gt);
+	RUN_TEST(test_COMPARISON_lt);
+	RUN_TEST(test_COMPARISON_eq);
+	RUN_TEST(test_COMPARISON_neq);
+
+	// ARITHMETIC PRMITIVES
+	RUN_TEST(test_ARITHMETIC_add);
+	RUN_TEST(test_ARITHMETIC_sub);
+	RUN_TEST(test_ARITHMETIC_mul);
+	RUN_TEST(test_ARITHMETIC_division);
+	RUN_TEST(test_ARITHMETIC_mod);
+
+	// BIT PRMITIVES
+	RUN_TEST(test_BIT_and);
+	RUN_TEST(test_BIT_or);
+	RUN_TEST(test_BIT_invert);
+
+///	// PILE PRMITIVES
 //	RUN_TEST(test_PILE_spush);
-//
-//	//// ARITHMETIC PRMITIVES
-//	//RUN_TEST(test_ARITHMETIC_add);
-//	//RUN_TEST(test_ARITHMETIC_sub);
-//	//RUN_TEST(test_ARITHMETIC_mul);
-//	//RUN_TEST(test_ARITHMETIC_division);
-//	//RUN_TEST(test_ARITHMETIC_mod);
-//
-//	//// COMPARISON PRMITIVES
-//	//RUN_TEST(test_COMPARISON_gt);
-//	//RUN_TEST(test_COMPARISON_lt);
-//	//RUN_TEST(test_COMPARISON_eq);
-//
-//	//// BIT PRMITIVES
-//	//RUN_TEST(test_BIT_and);
-//	//RUN_TEST(test_BIT_or);
-//	//RUN_TEST(test_BIT_invert);
 //
 //	//// PARSING
 //	//RUN_TEST(test_PARSING_parse_token);
@@ -2285,11 +2307,7 @@ int main() {
 ////	RUN_TEST(test_quote_3);
 ////	RUN_TEST(test_quote_4);
 ////
-////	RUN_TEST(test_gt);
-////	RUN_TEST(test_lt);
-////	RUN_TEST(test_eq);
-////	RUN_TEST(test_neq);
-////
+///
 ////	RUN_TEST(test_not);
 ////
 ////	//RUN_TEST(test_clear_s);
