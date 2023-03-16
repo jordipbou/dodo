@@ -85,6 +85,8 @@ C recl(X* x, C p) {
 	}
 }
 
+C length(C p) { C c = 0; while (p) { c++; p = N(p); } return c; }
+
 /* TEMPORAL */
 C dump_stack(X* x) {
 	C p = S(x);

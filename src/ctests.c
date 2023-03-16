@@ -25,8 +25,6 @@ void test_basic_types() {
 
 // CONTEXT
 
-C length(C p) { C c = 0; while (p) { c++; p = N(p); } return c; }
-
 #define f_nodes(x)			(((x->size - sizeof(X)) / (2*sizeof(C))) - 2)
 #define FREE(x)					(length(F(x)) - 1)
 
@@ -48,6 +46,9 @@ void test_X_block_initialization() {
 
 	TEST_ASSERT_EQUAL_INT(0, x->latest);
 	TEST_ASSERT_EQUAL_INT(0, S(x));
+	TEST_ASSERT_EQUAL_INT(0, R(x));
+	TEST_ASSERT_EQUAL_INT(0, x->ip);
+	TEST_ASSERT_EQUAL_INT(0, x->err);
 }
 
 // LST CREATION AND DESTRUCTION (AUTOMATIC MEMORY MANAGEMENT)
@@ -70,6 +71,12 @@ void test_LST_cons() {
 	TEST_ASSERT_EQUAL_INT(f_nodes(x) - 4, FREE(x));
 	TEST_ASSERT_EQUAL_INT(7, A(p));
 	TEST_ASSERT_EQUAL_INT(0, D(p));
+
+	while (F(x) != x->there) { cons(x, 1, 0); }
+
+	C p3 = cons(x, 13, 0);
+	TEST_ASSERT_EQUAL_INT(0, p3);
+	TEST_ASSERT_EQUAL_INT(ERR_STACK_OVERFLOW, x->err);
 }
 
 void test_LST_clon() {
@@ -207,97 +214,86 @@ void test_LST_recl_list() {
 //	TEST_ASSERT_EQUAL_INT(p2, N(r));
 //	TEST_ASSERT_EQUAL_INT(p1, N(N(r)));
 //}
-//
-//void test_LST_length() {
-//	C p1 = (C)malloc(2*sizeof(C));
-//	C p2 = (C)malloc(2*sizeof(C));
-//	C p3 = (C)malloc(2*sizeof(C));
-//
-//	D(p1) = AS(ATM, p2);
-//	D(p2) = p3;
-//	D(p3) = 0;
-//
-//	TEST_ASSERT_EQUAL_INT(0, length(0));
-//	TEST_ASSERT_EQUAL_INT(1, length(p3));
-//	TEST_ASSERT_EQUAL_INT(2, length(p2));
-//	TEST_ASSERT_EQUAL_INT(3, length(p1));
-//}
-//
-//// INNER INTERPRETER
-//
-//void test_INNER_execute_atom() {
-//	C size = 512;
-//	B block[size];
-//	X* x = init(block, size);
-//
-//	C xlist = cons(x, 13, AS(ATM, cons(x, 7, AS(ATM, 0))));
-//	execute(x, xlist);
-//	TEST_ASSERT_EQUAL_INT(2, length(S(x)));
-//	TEST_ASSERT_EQUAL_INT(7, A(S(x)));
-//	TEST_ASSERT_EQUAL_INT(13, A(N(S(x))));
-//}
-//
-//void test_INNER_execute_list() {
-//	C size = 512;
-//	B block[size];
-//	X* x = init(block, size);
-//
-//	C xlist = 
-//		cons(x, 
-//			cons(x, 7, AS(ATM, 
-//			cons(x, 11, AS(ATM, 
-//			cons(x, 13, AS(ATM, 0)))))), 
-//		AS(LST, 0));
-//
-//	execute(x, xlist);
-//
-//	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-//	TEST_ASSERT_EQUAL(LST, T(S(x)));
-//	TEST_ASSERT_EQUAL_INT(3, length(A(S(x))));
-//	TEST_ASSERT_EQUAL_INT(7, A(A(S(x))));
-//	TEST_ASSERT_EQUAL_INT(11, A(N(A(S(x)))));
-//	TEST_ASSERT_EQUAL_INT(13, A(N(N(A(S(x))))));
-//	TEST_ASSERT_NOT_EQUAL_INT(xlist, S(x));
-//	TEST_ASSERT_NOT_EQUAL_INT(A(xlist), A(S(x)));
-//	TEST_ASSERT_NOT_EQUAL_INT(N(A(xlist)), N(A(S(x))));
-//	TEST_ASSERT_NOT_EQUAL_INT(N(N(A(xlist))), N(N(A(S(x)))));
-//}
-//
-//C test_add_t(X* x) {
-//	C a = A(S(x));
-//	C b = A(N(S(x)));
-//	S(x) = recl(x, recl(x, S(x)));
-//	S(x) = cons(x, b + a, AS(ATM, 0));
-//
-//	return 0;
-//}
-//
-//
-//C test_dup_t(X* x) {
-//	C a = A(S(x));
-//	S(x) = cons(x, a, AS(ATM, S(x)));
-//
-//	return 0;
-//}
-//
-//void test_INNER_execute_primitive() {
-//	C size = 512;
-//	B block[size];
-//	X* x = init(block, size);
-//
-//	C xlist = 
-//		cons(x, 13, AS(ATM, 
-//		cons(x, 7, AS(ATM, 
-//		cons(x, (C)&test_add_t, AS(PRM, 
-//		cons(x, (C)&test_dup_t, AS(PRM, 0))))))));
-//
-//	execute(x, xlist);
-//
-//	TEST_ASSERT_EQUAL_INT(2, length(S(x)));
-//	TEST_ASSERT_EQUAL_INT(20, A(S(x)));
-//	TEST_ASSERT_EQUAL_INT(20, A(N(S(x))));
-//}
-//
+
+void test_LST_length() {
+	C p1 = (C)malloc(2*sizeof(C));
+	C p2 = (C)malloc(2*sizeof(C));
+	C p3 = (C)malloc(2*sizeof(C));
+
+	D(p1) = AS(ATM, p2);
+	D(p2) = p3;
+	D(p3) = 0;
+
+	TEST_ASSERT_EQUAL_INT(0, length(0));
+	TEST_ASSERT_EQUAL_INT(1, length(p3));
+	TEST_ASSERT_EQUAL_INT(2, length(p2));
+	TEST_ASSERT_EQUAL_INT(3, length(p1));
+}
+
+// INNER INTERPRETER
+
+void test_INNER_execute_atom() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	C xlist = cons(x, 13, AS(ATM, cons(x, 7, AS(ATM, 0))));
+	inner(x, xlist);
+	TEST_ASSERT_EQUAL_INT(2, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(7, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(13, A(N(S(x))));
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+}
+
+void test_INNER_execute_list() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	C xlist = 
+		cons(x, 
+			cons(x, 7, AS(ATM, 
+			cons(x, 11, AS(ATM, 
+			cons(x, 13, AS(ATM, 0)))))), 
+		AS(LST, 0));
+
+	inner(x, xlist);
+
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL(LST, T(S(x)));
+	TEST_ASSERT_EQUAL_INT(3, length(A(S(x))));
+	TEST_ASSERT_EQUAL_INT(7, A(A(S(x))));
+	TEST_ASSERT_EQUAL_INT(11, A(N(A(S(x)))));
+	TEST_ASSERT_EQUAL_INT(13, A(N(N(A(S(x))))));
+	TEST_ASSERT_NOT_EQUAL_INT(xlist, S(x));
+	TEST_ASSERT_NOT_EQUAL_INT(A(xlist), A(S(x)));
+	TEST_ASSERT_NOT_EQUAL_INT(N(A(xlist)), N(A(S(x))));
+	TEST_ASSERT_NOT_EQUAL_INT(N(N(A(xlist))), N(N(A(S(x)))));
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+}
+
+void test_add_t(X* x) {	A(N(S(x))) = A(N(S(x))) + A(S(x)); S(x) = recl(x, S(x)); }
+void test_dup_t(X* x) { S(x) = cons(x, A(S(x)), AS(ATM, S(x))); }
+
+void test_INNER_execute_primitive() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	C xlist = 
+		cons(x, 13, AS(ATM, 
+		cons(x, 7, AS(ATM, 
+		cons(x, (C)&test_add_t, AS(PRM, 
+		cons(x, (C)&test_dup_t, AS(PRM, 0))))))));
+
+	inner(x, xlist);
+
+	TEST_ASSERT_EQUAL_INT(2, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(20, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(20, A(N(S(x))));
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+}
+
 //void test_INNER_execute_call() {
 //	C size = 512;
 //	B block[size];
@@ -2151,12 +2147,12 @@ int main() {
 	RUN_TEST(test_LST_recl);
 	RUN_TEST(test_LST_recl_list);
 //	RUN_TEST(test_LST_rvs);
-//	RUN_TEST(test_LST_length);
-//
-//	// INNER INTERPRETER
-//	RUN_TEST(test_INNER_execute_atom);
-//	RUN_TEST(test_INNER_execute_list);
-//	RUN_TEST(test_INNER_execute_primitive);
+	RUN_TEST(test_LST_length);
+
+	// INNER INTERPRETER
+	RUN_TEST(test_INNER_execute_atom);
+	RUN_TEST(test_INNER_execute_list);
+	RUN_TEST(test_INNER_execute_primitive);
 //	RUN_TEST(test_INNER_execute_call);
 //
 //	// PILE PRMITIVES
