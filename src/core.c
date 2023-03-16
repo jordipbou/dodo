@@ -15,6 +15,7 @@ char *strlwr(char *str)
   return str;
 }
 
+// Aprox. time 1.570s
 C fib(X* x) {
 	C code =
 		cons(x,
@@ -47,6 +48,37 @@ C fib(X* x) {
 	if (r != 0) printf("ERROR %ld\n", r);
 }
 
+// Aprox. time 0.670s
+C c_fib(X* x) {
+	duplicate(x);
+	S(x) = cons(x, 1, AS(ATM, S(x)));
+	gt(x);
+	C b = A(S(x)); S(x) = recl(x, S(x));
+	if (b) {
+		S(x) = cons(x, 1, AS(ATM, S(x)));
+		sub(x);
+		duplicate(x);
+		S(x) = cons(x, 1, AS(ATM, S(x)));
+		sub(x);
+		c_fib(x);
+		swap(x);
+		c_fib(x);
+		add(x);
+	}
+}
+
+// Aprox. time 0.180s
+C c_c_fib(X* x) {
+	if (A(S(x)) > 1) {
+		A(S(x)) = A(S(x)) - 1;
+		S(x) = cons(x, A(S(x)) - 1, AS(ATM, S(x)));
+		c_c_fib(x);
+		swap(x);
+		c_c_fib(x);
+		add(x);
+	}
+}
+
 //C repeat(X* x) {
 //	C code =
 //		cons(x, (C)&key, AS(PRM,
@@ -62,7 +94,7 @@ void main(int argc, char *argv[]) {
 	X* x = init(bk, sz);
 
 	S(x) = cons(x, 36, AS(ATM, 0));
-	fib(x);
+	c_c_fib(x);
 	printf("%ld\n", A(S(x)));
 
 	//repeat(x);
