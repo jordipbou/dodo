@@ -944,7 +944,7 @@ CELL cell(CTX* ctx) {
 CELL emit(CTX* ctx) {
 	CELL k;
 	ERR_POP(ctx, k);
-	printf("%c", k);
+	printf("%c", (BYTE)k);
 	return 0;
 }
 

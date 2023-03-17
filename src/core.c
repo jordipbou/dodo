@@ -90,6 +90,19 @@ void c_c_fib(X* x) {
 	}
 }
 
+C nfib(C n) {
+	if (n > 1) return nfib(n - 1) + nfib(n - 2);
+	else return n;
+}
+
+// Aprox. time 0.038s
+void nat_fib(X* x) {
+	UF1(x);
+	C n = A(S(x)); S(x) = recl(x, S(x));
+	C r = nfib(n);
+	S(x) = cons(x, r, AS(ATM, S(x)));
+}
+
 //C repeat(X* x) {
 //	C code =
 //		cons(x, (C)&key, AS(PRM,
@@ -100,15 +113,26 @@ void c_c_fib(X* x) {
 //}
 
 void main(int argc, char *argv[]) {
-	C sz = 2048;
+	C sz = 8192;
 	B bk[sz];
-	X* x = init(bk, sz);
+	X* x = bootstrap(init(bk, sz));
 
-	S(x) = cons(x, 36, AS(ATM, 0));
-	fib(x);
-	//c_fib(x);
-	//c_c_fib(x);
-	if (!x->err) printf("%ld\n", A(S(x)));
+	//S(x) = cons(x, 36, AS(ATM, 0));
+	//fib(x);
+	////c_fib(x);
+	////c_c_fib(x);
+	////nat_fib(x);
+	//if (!x->err) printf("%ld\n", A(S(x)));
 
-	//repeat(x);
+	////repeat(x);
+	B buf[255];
+	do {
+		fgets(buf, 255, stdin);
+		evaluate(x, buf);
+		if (x->err) {
+			printf("ERROR: %ld\n", x->err);
+			return;
+		}
+		dump_stack(x);
+	} while(1);
 }

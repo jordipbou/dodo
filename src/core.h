@@ -2,7 +2,10 @@
 #define __CORE__
 
 #include<inttypes.h>
+#include<string.h>
+#include<ctype.h>
 #include<stdio.h>
+
 #ifdef _WIN32
   #include <conio.h>
 #else
@@ -13,28 +16,36 @@
 typedef int8_t		B;
 typedef intptr_t	C;
 
-#define A(p)			(*((C*)p))
-#define D(p)			(*(((C*)p) + 1))
-#define N(p)			(D(p) & -4)
-#define T(p)			(D(p) & 3)
+#define A(p)							(*((C*)p))
+#define D(p)							(*(((C*)p) + 1))
+#define N(p)							(D(p) & -4)
+#define T(p)							(D(p) & 3)
 
 enum Types { ATM, LST, PRM, WRD };
 
-#define AS(t, n)	((n & -4) | t)
-#define LK(p, n)	(D(p) = AS(T(p), n))
+#define AS(t, n)					((n & -4) | t)
+#define LK(p, n)					(D(p) = AS(T(p), n))
 
-#define XT(w)			(N(A(w)))
+#define NFA(w)						((B*)(A(A(w))))
+#define XT(w)							(N(A(w)))
+
+enum Words { NIP, NIC, IMP, IMC };
+
+#define PRIMITIVE(w)			((T(w) & 1) == 0)
+#define IMMEDIATE(w)			((T(w) & 2) == 2)
 
 typedef struct {
 	B *here;
 	C there, size, free, pile;
 	C err, ip, rstack;
-	C latest;
+	C state, latest;
 } X;
 
-#define F(x)			(x->free)
-#define S(x)			(A(x->pile))
-#define R(x)			(x->rstack)
+#define F(x)							(x->free)
+#define P(x)							(x->pile)
+#define S(x)							(A(P(x)))
+#define R(x)							(x->rstack)
+#define L(x)							(x->latest)
 
 typedef void (*FUNC)(X*);
 
@@ -57,25 +68,28 @@ X* init(B* bl, C sz) {
 		D(p) = p == x->there ? 0 : p - 2*sizeof(C);
 	}
 
-	x->rstack = x->ip = x->err = x->latest = 0;
+	x->state = x->rstack = x->ip = x->err = x->latest = 0;
 
 	return x;
 }
 
-#define ERR_STACK_OVERFLOW		-1
-#define ERR_STACK_UNDERFLOW		-2
-#define ERR_DIVISION_BY_ZERO	-3
+#define ERR_STACK_OVERFLOW				-1
+#define ERR_STACK_UNDERFLOW				-2
+#define ERR_DIVISION_BY_ZERO			-3
+#define ERR_NOT_ENOUGH_MEMORY			-4
+#define ERR_NOT_ENOUGH_RESERVED		-5
+#define ERR_UNDEFINED_WORD				-6
+
+// LIST FUNCTIONS
 
 C cons(X* x, C a, C d) { 
 	if (x->free == x->there) { x->err = ERR_STACK_OVERFLOW; return 0; }
 	else { C p = F(x); F(x) = D(F(x)); A(p) = a; D(p) = d; return p; }
 }
-
 C clone(X* x, C p) { 
 	if (!p) return 0;
 	else { return cons(x, T(p) == LST ? clone(x, A(p)) : A(p), AS(T(p), clone(x, N(p)))); }
 }
-
 C recl(X* x, C p) { 
 	if (!p) return 0;
 	else {
@@ -84,15 +98,27 @@ C recl(X* x, C p) {
 		return t;
 	}
 }
-
+C pop(X* x) { C v = A(S(x)); S(x) = recl(x, S(x)); return v; }
+C reverse(C p, C l) { 
+	if (p) { C t = N(p); D(p) = AS(T(p), l); return reverse(t, p); } 
+	else { return l; }
+}
 C length(C p) { C c = 0; while (p) { c++; p = N(p); } return c; }
 
-/* TEMPORAL */
-C dump_stack(X* x) {
-	C p = S(x);
-	while (p) { printf("%ld\n", A(p)); p = N(p); }
-	return 0;
+/* TEMPORAL: INSPECTION */
+void dump_list(X* x, C l) {
+	while (l) {
+		switch (T(l)) {
+			case ATM: printf("%ld ", A(l)); break;
+			case LST: printf("{ "); dump_list(x, A(l)); printf("} "); break;
+			case PRM: printf("#%ld ", A(l)); break;
+			case WRD: printf("@%ld ", A(l)); break;
+		}
+		l = N(l);
+	}
 }
+
+void dump_stack(X* x) { printf("<%ld> ", length(S(x))); dump_list(x, S(x)); printf("\n"); }
 
 C dump_return_stack(X* x) {
 	C p = x->rstack;
@@ -171,9 +197,9 @@ void jump(X* x) {
 	x->err = 1;
 }
 void exec_x(X* x) { 
-	UF1(x); 
+	UF1(x);
 	if (N(x->ip)) { R(x) = cons(x, N(x->ip), AS(PRM, R(x))); }
-	// TODO: Type of item on top of data stack should be checked
+	// TODO: Type of item on top of data stack should be checked, if not list, execute primitive
 	//printf("exec_x::setting ip to %ld\n", A(S(x)));
 	x->ip = A(S(x)); 
 	x->err = 1;
@@ -186,6 +212,8 @@ void exec_i(X* x) {
 	x->ip = A(t);
 	x->err = 1;
 }
+void lbracket(X* x) { x->state = 0; }
+void rbracket(X* x) { x->state = 1; }
 
 // STACK PRIMITIVES
 
@@ -226,6 +254,51 @@ void and(X* x) { UF2(x); BINOP(&) }
 void or(X* x) { UF2(x); BINOP(|) }
 void invert(X* x) { UF1(x); A(S(x)) = ~A(S(x)); } 
 
+// MEMORY ACCESS PRIMITIVES
+
+void fetch(X* x) { UF1(x); A(S(x)) = *((C*)A(S(x))); }
+void store(X* x) { UF2(x); C a = pop(x); C v = pop(x); *((C*)a) = v; }
+void bfetch(X* x) { UF1(x); A(S(x)) = (C)*((B*)A(S(x))); }
+void bstore(X* x) { UF2(x); C a = pop(x); C v = pop(x); *((B*)a) = (B)v; }
+
+// CONTINUOUS MEMORY PRIMITIVES
+
+#define RESERVED(x)				((x->there) - ((C)x->here))
+
+void grow(X* x) { 
+	if (A(x->there) != (x->there + 2*sizeof(C))) { x->err = ERR_NOT_ENOUGH_MEMORY; return; }
+	x->there += 2*sizeof(C);
+	D(x->there) = 0;
+}
+void shrink(X* x) {
+	if (RESERVED(x) < 2*sizeof(C)) { x->err = ERR_NOT_ENOUGH_RESERVED; return; }
+	D(x->there) = x->there - 2*sizeof(C);
+	x->there -= 2*sizeof(C);
+	A(x->there) = x->there + 2*sizeof(C);
+	D(x->there) = 0;
+}
+// TODO: allot
+
+// CONTEXT PRIMITIVES
+
+void context(X* x) { S(x) = cons(x, (C)x, AS(ATM, S(x))); }
+void here(X* x) { S(x) = cons(x, (C)x->here, AS(ATM, S(x))); }
+void reserved(X* x) { S(x) = cons(x, RESERVED(x), AS(ATM, S(x))); }
+void latest(X* x) { S(x) = cons(x, (C)&x->latest, AS(ATM, S(x))); }
+
+// LIST PRIMITIVES
+
+void empty(X* x) { S(x) = cons(x, 0, AS(LST, S(x))); }
+// TODO: If executing l>s and stack is empty or top of stack is not a list, crashes
+void list_to_stack(X* x) { C t = S(x); S(x) = N(S(x)); LK(t, P(x)); P(x) = t; }
+void stack_to_list(X* x) {
+	S(x) = reverse(S(x), 0);
+	if (!N(P(x))) { P(x) = cons(x, P(x), AS(LST, 0)); }
+	else { C t = P(x); P(x) = N(P(x)); LK(t, A(P(x))); A(P(x)) = t; }
+}
+
+// INPUT/OUTPUT PRIMITIVES (this should go in platform dependent headers)
+
 // Source code for getch is taken from:
 // Crossline readline (https://github.com/jcwangxp/Crossline).
 // It's a fantastic readline cross-platform replacement, but only getch was
@@ -253,6 +326,97 @@ int __getch__()
 void key(X* x) { S(x) = cons(x, __getch__(), AS(ATM, S(x))); }
 void emit(X* x) { UF1(x); C k = A(S(x)); S(x) = recl(x, S(x)); printf("%c", (B)k); }
 
-// TODO: grow, shrink, store, fetch, bstore, bfetch
+// PARSING AND EVALUATION
+
+#define PARSE_SPACE(b, t, i)			*t = *i; while (*(b + *i) != 0 && isspace(*(b + *i))) { (*i)++; }
+#define PARSE_NON_SPACE(b, t, i)	*t = *i; while (*(b + *i) != 0 && !isspace(*(b + *i))) { (*i)++; }
+C parse_token(B* b, C* t, C* i) { PARSE_SPACE(b, t, i); PARSE_NON_SPACE(b, t, i); return *i - *t; }
+#define FOUND(w, n, l) ((strlen(NFA(w)) == l) && (strncmp(NFA(w), n, l) == 0))
+C find_token(X* x, B* n, C l) { C w = L(x); while(w && !FOUND(w, n, l)) { w = N(w); } return w; }
+
+void evaluate(X* x, B* buf) {
+	C w, tk = 0, in = 0;
+	char *endptr;
+	do {
+		if (parse_token(buf, &tk, &in) == 0) { return; }
+		if ((w = find_token(x, buf + tk, in - tk)) != 0) {
+			if (!x->state || IMMEDIATE(w)) {
+				inner(x, XT(w)); if (x->err) return;
+			} else {
+				if (PRIMITIVE(w)) {
+					S(x) = cons(x, A(XT(w)), AS(PRM, S(x)));
+				} else {
+					S(x) = cons(x, w, AS(WRD, S(x)));
+				}
+			}
+		} else {
+			intmax_t n = strtoimax(buf + tk, &endptr, 10);
+			if (n == 0 && endptr == (char*)(buf + tk)) {
+				x->err = ERR_UNDEFINED_WORD;
+				return;
+			} else {
+				S(x) = cons(x, n, AS(ATM, S(x)));
+			}
+		}
+	} while(1);
+}
+
+// BOOTSTRAPPING
+
+#define ADD_PRIMITIVE(x, n, f, i) \
+	L(x) = cons(x, cons(x, (C)n, AS(ATM, cons(x, (C)f, AS(PRM, 0)))), AS(i, L(x)));
+
+X* bootstrap(X* x) {
+	ADD_PRIMITIVE(x, "branch", &branch, 0);
+	ADD_PRIMITIVE(x, "zjump", &zjump, 0);
+	ADD_PRIMITIVE(x, "jump", &jump, 0);
+
+	ADD_PRIMITIVE(x, "i", &exec_i, 0);
+	ADD_PRIMITIVE(x, "x", &exec_x, 0);
+
+	ADD_PRIMITIVE(x, "[", &lbracket, 2);
+	ADD_PRIMITIVE(x, "]", &rbracket, 0);
+
+	ADD_PRIMITIVE(x, "+", &add, 0);
+	ADD_PRIMITIVE(x, "-", &sub, 0);
+	ADD_PRIMITIVE(x, "*", &mul, 0);
+	ADD_PRIMITIVE(x, "/", &division, 0);
+	ADD_PRIMITIVE(x, "mod", &mod, 0);
+
+	ADD_PRIMITIVE(x, ">", &gt, 0);
+	ADD_PRIMITIVE(x, "<", &lt, 0);
+	ADD_PRIMITIVE(x, "=", &eq, 0);
+	ADD_PRIMITIVE(x, "<>", &neq, 0);
+
+	ADD_PRIMITIVE(x, "and", &and, 0);
+	ADD_PRIMITIVE(x, "or", &or, 0);
+	ADD_PRIMITIVE(x, "invert", &invert, 0);
+
+	ADD_PRIMITIVE(x, "dup", &duplicate, 0);
+	ADD_PRIMITIVE(x, "swap", &swap, 0);
+	ADD_PRIMITIVE(x, "drop", &drop, 0);
+	ADD_PRIMITIVE(x, "over", &over, 0);
+	ADD_PRIMITIVE(x, "rot", &rot, 0);
+
+	ADD_PRIMITIVE(x, "{}", &empty, 0);
+	ADD_PRIMITIVE(x, "s>l", &stack_to_list, 0);
+	ADD_PRIMITIVE(x, "l>s", &list_to_stack, 0);
+
+	ADD_PRIMITIVE(x, "grow", &grow, 0);
+	ADD_PRIMITIVE(x, "shrink", &shrink, 0);
+
+	ADD_PRIMITIVE(x, "latest", &latest, 0);
+	ADD_PRIMITIVE(x, "here", &here, 0);
+
+	ADD_PRIMITIVE(x, "!", &store, 0);
+	ADD_PRIMITIVE(x, "@", &fetch, 0);
+	ADD_PRIMITIVE(x, "b!", &bstore, 0);
+	ADD_PRIMITIVE(x, "b@", &bfetch, 0);
+
+	ADD_PRIMITIVE(x, "key", &key, 0);
+	ADD_PRIMITIVE(x, "emit", &emit, 0);
+
+	return x;
+}
 
 #endif
