@@ -129,9 +129,11 @@ void main(int argc, char *argv[]) {
 	do {
 		fgets(buf, 255, stdin);
 		evaluate(x, buf);
-		if (x->err) {
-			printf("ERROR: %ld\n", x->err);
-			return;
+		switch (x->err) {
+			case 0: break;
+			case ERR_STACK_UNDERFLOW: printf("ERR::stack underflow\n"); x->err = 0; break;
+			case ERR_EXPECTED_LIST: printf(" ERR::expected list as top of stack\n"); x->err = 0; break;
+			default: printf("ERR %ld\n", x->err); return;
 		}
 		dump_stack(x);
 	} while(1);

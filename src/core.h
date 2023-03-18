@@ -79,6 +79,7 @@ X* init(B* bl, C sz) {
 #define ERR_NOT_ENOUGH_MEMORY			-4
 #define ERR_NOT_ENOUGH_RESERVED		-5
 #define ERR_UNDEFINED_WORD				-6
+#define ERR_EXPECTED_LIST					-7
 
 // LIST FUNCTIONS
 
@@ -143,7 +144,7 @@ C dump_context(X* x) {
 
 #define ERROR(x) \
 	if (x->err == 1) { /*printf("ip modified by primitive, resetting x->err to 0\n");*/ x->err = 0; } \
-	else if (x->err) { /*printf("ERROR:%ld\n", x->err);*/ dump_context(x); return; }
+	else if (x->err) { /*printf("ERROR:%ld\n", x->err);*/ /*dump_context(x);*/ return; }
 
 void inner(X* x, C l) {
 	//printf("************ INNER l = %ld\n", l);
@@ -174,6 +175,8 @@ void inner(X* x, C l) {
 #define UF1(x)	if (!S(x)) { x->err = ERR_STACK_UNDERFLOW; return; }
 #define UF2(x)	if (!(S(x) && N(S(x)))) { x->err = ERR_STACK_UNDERFLOW; return; }
 #define UF3(x)	if (!(S(x) && N(S(x)) && N(N(S(x))))) { x->err = ERR_STACK_UNDERFLOW; return; }
+
+#define EL(x)		if (T(S(x)) != LST) { x->err = ERR_EXPECTED_LIST; return; }
 
 // EXECUTION PRIMITIVES
 
@@ -290,7 +293,7 @@ void latest(X* x) { S(x) = cons(x, (C)&x->latest, AS(ATM, S(x))); }
 
 void empty(X* x) { S(x) = cons(x, 0, AS(LST, S(x))); }
 // TODO: If executing l>s and stack is empty or top of stack is not a list, crashes
-void list_to_stack(X* x) { C t = S(x); S(x) = N(S(x)); LK(t, P(x)); P(x) = t; }
+void list_to_stack(X* x) { UF1(x); EL(x); C t = S(x); S(x) = N(S(x)); LK(t, P(x)); P(x) = t; }
 void stack_to_list(X* x) {
 	S(x) = reverse(S(x), 0);
 	if (!N(P(x))) { P(x) = cons(x, P(x), AS(LST, 0)); }
