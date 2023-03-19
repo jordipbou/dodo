@@ -1008,6 +1008,86 @@ void test_MEM_shrink() {
 	TEST_ASSERT_EQUAL_INT(ERR_NOT_ENOUGH_RESERVED, x->err);
 }
 
+void test_MEM_allot() {
+	C size = 1024;
+	B block[size];
+	X* x = init(block, size);
+
+	B* here = x->here;
+	S(x) = cons(x, 0, AS(ATM, S(x)));
+	allot(x);
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_INT(here, x->here);
+
+	S(x) = cons(x, 13, AS(ATM, S(x)));
+	allot(x);
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_INT(here + 13, x->here);
+
+	C fnodes = FREE(x);
+	here = x->here;
+	C reserved = RESERVED(x);
+
+	// Ensure reserved memory is 0 to allow next tests to pass
+	S(x) = cons(x, RESERVED(x), AS(ATM, S(x)));
+	allot(x);
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_PTR(here + reserved, x->here);
+	TEST_ASSERT_EQUAL_INT(0, RESERVED(x));
+	TEST_ASSERT_EQUAL_INT(fnodes, FREE(x));
+
+	here = x->here;
+
+	S(x) = cons(x, 8*sizeof(C), AS(ATM, S(x)));
+	allot(x);
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_PTR(here + 8*sizeof(C), x->here);
+	TEST_ASSERT_EQUAL_INT(fnodes - 4, FREE(x));
+	TEST_ASSERT_EQUAL_INT(0, RESERVED(x));
+
+	here = x->here;
+
+	S(x) = cons(x, 2*sizeof(C) - 3, AS(ATM, S(x)));
+	allot(x);
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_PTR(here + 2*sizeof(C) - 3, x->here);
+	TEST_ASSERT_EQUAL_INT(fnodes - 5, FREE(x));
+	TEST_ASSERT_EQUAL_INT(3, RESERVED(x));
+
+	S(x) = cons(x, -(2*sizeof(C) - 3), AS(ATM, S(x)));
+	allot(x);
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_PTR(here, x->here);
+	TEST_ASSERT_EQUAL_INT(fnodes - 4, FREE(x));
+	TEST_ASSERT_EQUAL_INT(0, RESERVED(x));
+
+	S(x) = cons(x, -1, AS(ATM, S(x)));
+	allot(x);
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_PTR(here - 1, x->here);
+	TEST_ASSERT_EQUAL_INT(fnodes - 4, FREE(x));
+	TEST_ASSERT_EQUAL_INT(1, RESERVED(x));
+
+	here = x->here;
+	reserved = RESERVED(x);
+	fnodes = FREE(x);
+
+	S(x) = cons(x, 2048, AS(ATM, S(x)));
+	allot(x);
+	TEST_ASSERT_EQUAL_INT(ERR_NOT_ENOUGH_MEMORY, x->err);
+	TEST_ASSERT_EQUAL_PTR(here, x->here);
+	TEST_ASSERT_EQUAL_INT(reserved, RESERVED(x));
+	TEST_ASSERT_EQUAL_INT(fnodes, FREE(x));
+
+	x->err = 0;
+	S(x) = cons(x, -2048, AS(ATM, S(x)));
+	allot(x);
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_PTR(BOTTOM(x), x->here);
+	TEST_ASSERT_EQUAL_INT((C)ALIGN(x->here, 2*sizeof(C)), x->there);
+	TEST_ASSERT_EQUAL_INT(f_nodes(x), FREE(x));
+}
+
 // CONTEXT PRIMITIVES
 
 void test_CONTEXT_context() {
@@ -1132,71 +1212,64 @@ void test_PARSING_parse_token() {
 	C size = 512;
 	B block[size];
 	X* x = init(block, size);
-	B* str = "   test  ";
-	C tl = 0, tk = 0, in = 0;
+	x->tib = "   test  ";
 
-	tl = parse_token(str, &tk, &in);
+	parse_token(x);
 
-	TEST_ASSERT_EQUAL_INT(4, in - tk);
-	TEST_ASSERT_EQUAL_INT(4, tl);
-	TEST_ASSERT_EQUAL_INT(3, tk);
+	TEST_ASSERT_EQUAL_INT(4, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(x->tib + 3, A(N(S(x))));
+	TEST_ASSERT_EQUAL_INT(4, TL(x));
+	TEST_ASSERT_EQUAL_INT(x->tib + 3, TK(x));
 
-	tl = parse_token(str, &tk, &in);
+	parse_token(x);
 
-	TEST_ASSERT_EQUAL_INT(0, in - tk);
-	TEST_ASSERT_EQUAL_INT(9, tk);
+	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(9, x->in);
 
-	B* str2 = "";
-	tl = tk = in = 0;
+	x->tib = "";
+	x->token = x->in = 0;
 
-	tl = parse_token(str2, &tk, &in);
+	parse_token(x);
 
-	TEST_ASSERT_EQUAL_INT(0, in - tk);
-	TEST_ASSERT_EQUAL_INT(0, tl);
-	TEST_ASSERT_EQUAL_INT(0, tk);
+	TEST_ASSERT_EQUAL_INT(0, TL(x));
+	TEST_ASSERT_EQUAL_INT(0, x->token);
 
-	B* str3 = ": name    word1 ;";
-	tl = tk = in = 0;
+	x->tib = ": name    word1 ;";
+	x->token = x->in = 0;
 
-	tl = parse_token(str3, &tk, &in);
+	parse_token(x);
 
-	TEST_ASSERT_EQUAL_INT(1, in - tk);
-	TEST_ASSERT_EQUAL_INT(1, tl);
-	TEST_ASSERT(!strncmp(":", str3 + tk, in - tk));
-	TEST_ASSERT_EQUAL_INT(0, tk);
+	TEST_ASSERT_EQUAL_INT(1, TL(x));
+	TEST_ASSERT(!strncmp(":", TK(x), TL(x)));
+	TEST_ASSERT_EQUAL_INT(0, x->token);
 
-	tl = parse_token(str3, &tk, &in);
+	parse_token(x);
 
-	TEST_ASSERT_EQUAL_INT(4, in - tk);
-	TEST_ASSERT_EQUAL_INT(4, tl);
-	TEST_ASSERT(!strncmp("name", str3 + tk, in - tk));
-	TEST_ASSERT_EQUAL_INT(2, tk);
+	TEST_ASSERT_EQUAL_INT(4, TL(x));
+	TEST_ASSERT(!strncmp("name", TK(x), TL(x)));
+	TEST_ASSERT_EQUAL_INT(2, x->token);
 
-	tl = parse_token(str3, &tk, &in);
+	parse_token(x);
 
-	TEST_ASSERT_EQUAL_INT(5, in - tk);
-	TEST_ASSERT_EQUAL_INT(5, tl);
-	TEST_ASSERT(!strncmp("word1", str3 + tk, in - tk));
-	TEST_ASSERT_EQUAL_INT(10, tk);
+	TEST_ASSERT_EQUAL_INT(5, TL(x));
+	TEST_ASSERT(!strncmp("word1", TK(x), TL(x)));
+	TEST_ASSERT_EQUAL_INT(10, x->token);
 
-	tl = parse_token(str3, &tk, &in);
+	parse_token(x);
 
-	TEST_ASSERT_EQUAL_INT(1, in - tk);
-	TEST_ASSERT_EQUAL_INT(1, tl);
-	TEST_ASSERT(!strncmp(";", str3 + tk, in - tk));
-	TEST_ASSERT_EQUAL_INT(16, tk);
+	TEST_ASSERT_EQUAL_INT(1, TL(x));
+	TEST_ASSERT(!strncmp(";", TK(x), TL(x)));
+	TEST_ASSERT_EQUAL_INT(16, x->token);
 
-	tl = parse_token(str3, &tk, &in);
+	parse_token(x);
 
-	TEST_ASSERT_EQUAL_INT(0, in - tk);
-	TEST_ASSERT_EQUAL_INT(0, tl);
-	TEST_ASSERT_EQUAL_INT(17, tk);
+	TEST_ASSERT_EQUAL_INT(0, TL(x));
+	TEST_ASSERT_EQUAL_INT(17, x->token);
 
-	tl = parse_token(str3, &tk, &in);
+	parse_token(x);
 
-	TEST_ASSERT_EQUAL_INT(0, in - tk);
-	TEST_ASSERT_EQUAL_INT(0, tl);
-	TEST_ASSERT_EQUAL_INT(17, tk);
+	TEST_ASSERT_EQUAL_INT(0, TL(x));
+	TEST_ASSERT_EQUAL_INT(17, x->token);
 }
 
 void test_PARSING_find_token() {
@@ -1210,32 +1283,51 @@ void test_PARSING_find_token() {
 		cons(x, cons(x, (C)"join", AS(ATM, 0)), AS(NIC,
 		cons(x, cons(x, (C)"test", AS(ATM, 0)), AS(NIC, 0))))))));
 
-	B* str = "dup";
-	C tk = 0, in = 3;
+	x->tib = "";
+	x->token = x->in = 0;
+	
+	parse_token(x);
+	find_token(x);
+	C i = pop(x);
+	C w = pop(x);
 
-	C word = find_token(x, str+tk, in-tk);
+	TEST_ASSERT_EQUAL_INT(0, i);
+	TEST_ASSERT_EQUAL_INT(ERR_ZERO_LENGTH_NAME, x->err);
+	x->err = 0;
 
-	TEST_ASSERT_NOT_EQUAL_INT(0, word);
-	TEST_ASSERT_EQUAL_INT(1, IMMEDIATE(word));
-	TEST_ASSERT_EQUAL_INT(N(L(x)), word);
+	x->tib = "dup";
+	x->token = x->in = 0;
 
-	B* str2 = "   join  ";
-	tk = in = 0;
+	parse_token(x);
+	find_token(x);
+	i = pop(x);
+	w = pop(x);
 
-	parse_token(str2, &tk, &in);
-	word = find_token(x, str2+tk, in-tk);
+	TEST_ASSERT_NOT_EQUAL_INT(0, w);
+	TEST_ASSERT_EQUAL_INT(1, i);
+	TEST_ASSERT_EQUAL_INT(N(L(x)), w);
 
-	TEST_ASSERT_EQUAL_INT(0, IMMEDIATE(word));
-	TEST_ASSERT_EQUAL_INT(N(N(L(x))), word);
+	x->tib = "   join  ";
+	x->token = x->in = 0;
 
-	B* str3 = "test";
-	tk = in = 0;
+	parse_token(x);
+	find_token(x);
+	i = pop(x);
+	w = pop(x);
 
-	parse_token(str3, &tk, &in);
-	word = find_token(x, str3+tk, in-tk);
+	TEST_ASSERT_EQUAL_INT(-1, i);
+	TEST_ASSERT_EQUAL_INT(N(N(L(x))), w);
 
-	TEST_ASSERT_EQUAL_STRING("test", (B*)NFA(word));
-	TEST_ASSERT_EQUAL_INT(N(N(N(L(x)))), word);
+	x->tib = "test";
+	x->token = x->in = 0;
+
+	parse_token(x);
+	find_token(x);
+	i = pop(x);
+	w = pop(x);
+
+	TEST_ASSERT_EQUAL_STRING("test", (B*)NFA(w));
+	TEST_ASSERT_EQUAL_INT(N(N(N(L(x)))), w);
 }
 
 
@@ -1407,85 +1499,6 @@ void test_PARSING_find_token() {
 ////}
 ////
 ////// CONTIGUOUS MEMORY
-////
-////void test_MEM_allot() {
-////	C size = 1024;
-////	B block[size];
-////	X* x = init(block, size);
-////
-////	B* here = x->here;
-////	S(x) = cons(x, 0, AS(ATM, S(x)));
-////	C result = allot(x);
-////	TEST_ASSERT_EQUAL_INT(0, result);
-////	TEST_ASSERT_EQUAL_INT(here, x->here);
-////
-////	S(x) = cons(x, 13, AS(ATM, S(x)));
-////	result = allot(x);
-////	TEST_ASSERT_EQUAL_INT(0, result);
-////	TEST_ASSERT_EQUAL_INT(here + 13, x->here);
-////
-////	C fnodes = FREE(x);
-////	here = x->here;
-////	C reserved = RESERVED(x);
-////
-////	// Ensure reserved memory is 0 to allow next tests to pass
-////	S(x) = cons(x, RESERVED(x), AS(ATM, S(x)));
-////	result = allot(x);
-////	TEST_ASSERT_EQUAL_INT(0, result);
-////	TEST_ASSERT_EQUAL_PTR(here + reserved, x->here);
-////	TEST_ASSERT_EQUAL_INT(0, RESERVED(x));
-////	TEST_ASSERT_EQUAL_INT(fnodes, FREE(x));
-////
-////	here = x->here;
-////
-////	S(x) = cons(x, 8*sizeof(C), AS(ATM, S(x)));
-////	result = allot(x);
-////	TEST_ASSERT_EQUAL_INT(0, result);
-////	TEST_ASSERT_EQUAL_PTR(here + 8*sizeof(C), x->here);
-////	TEST_ASSERT_EQUAL_INT(fnodes - 4, FREE(x));
-////	TEST_ASSERT_EQUAL_INT(0, RESERVED(x));
-////
-////	here = x->here;
-////
-////	S(x) = cons(x, 2*sizeof(C) - 3, AS(ATM, S(x)));
-////	result = allot(x);
-////	TEST_ASSERT_EQUAL_INT(0, result);
-////	TEST_ASSERT_EQUAL_PTR(here + 2*sizeof(C) - 3, x->here);
-////	TEST_ASSERT_EQUAL_INT(fnodes - 5, FREE(x));
-////	TEST_ASSERT_EQUAL_INT(3, RESERVED(x));
-////
-////	S(x) = cons(x, -(2*sizeof(C) - 3), AS(ATM, S(x)));
-////	result = allot(x);
-////	TEST_ASSERT_EQUAL_INT(0, result);
-////	TEST_ASSERT_EQUAL_PTR(here, x->here);
-////	TEST_ASSERT_EQUAL_INT(fnodes - 4, FREE(x));
-////	TEST_ASSERT_EQUAL_INT(0, RESERVED(x));
-////
-////	S(x) = cons(x, -1, AS(ATM, S(x)));
-////	result = allot(x);
-////	TEST_ASSERT_EQUAL_INT(0, result);
-////	TEST_ASSERT_EQUAL_PTR(here - 1, x->here);
-////	TEST_ASSERT_EQUAL_INT(fnodes - 4, FREE(x));
-////	TEST_ASSERT_EQUAL_INT(1, RESERVED(x));
-////
-////	here = x->here;
-////	reserved = RESERVED(x);
-////	fnodes = FREE(x);
-////
-////	S(x) = cons(x, 2048, AS(ATM, S(x)));
-////	result = allot(x);
-////	TEST_ASSERT_EQUAL_INT(ERR_NOT_ENOUGH_MEMORY, result);
-////	TEST_ASSERT_EQUAL_PTR(here, x->here);
-////	TEST_ASSERT_EQUAL_INT(reserved, RESERVED(x));
-////	TEST_ASSERT_EQUAL_INT(fnodes, FREE(x));
-////
-////	S(x) = cons(x, -2048, AS(ATM, S(x)));
-////	result = allot(x);
-////	TEST_ASSERT_EQUAL_INT(0, result);
-////	TEST_ASSERT_EQUAL_PTR(BOTTOM(x), x->here);
-////	TEST_ASSERT_EQUAL_INT((C)ALIGN(x->here, 2*sizeof(C)), x->t);
-////	TEST_ASSERT_EQUAL_INT(f_nodes(x), FREE(x));
-////}
 ////
 ////void test_MEM_compile_str() {
 ////	C size = 512;
@@ -2609,7 +2622,7 @@ int main() {
 	// CONTIGUOUS MEMORY
 	RUN_TEST(test_MEM_grow);
 	RUN_TEST(test_MEM_shrink);
-	//RUN_TEST(test_MEM_allot);
+	RUN_TEST(test_MEM_allot);
 	//RUN_TEST(test_MEM_compile_str);
 	////RUN_TEST(test_align);
 

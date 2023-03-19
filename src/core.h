@@ -35,10 +35,11 @@ enum Words { NIP, NIC, IMP, IMC };
 #define IMMEDIATE(w)			((T(w) & 2) == 2)
 
 typedef struct {
-	B *here;
+	B *tib, *here;
 	C there, size, free, pile;
 	C err, ip, rstack;
 	C state, latest;
+	C token, in;
 } X;
 
 #define F(x)							(x->free)
@@ -46,6 +47,10 @@ typedef struct {
 #define S(x)							(A(P(x)))
 #define R(x)							(x->rstack)
 #define L(x)							(x->latest)
+
+#define TK(x)							(x->tib + x->token)
+#define TC(x)							(*(x->tib + x->in))
+#define TL(x)							(x->in - x->token)
 
 typedef void (*FUNC)(X*);
 
@@ -68,7 +73,8 @@ X* init(B* bl, C sz) {
 		D(p) = p == x->there ? 0 : p - 2*sizeof(C);
 	}
 
-	x->state = x->rstack = x->ip = x->err = x->latest = 0;
+	x->tib = 0;
+	x->token = x->in = x->state = x->rstack = x->ip = x->err = x->latest = 0;
 
 	return x;
 }
@@ -80,6 +86,7 @@ X* init(B* bl, C sz) {
 #define ERR_NOT_ENOUGH_RESERVED		-5
 #define ERR_UNDEFINED_WORD				-6
 #define ERR_EXPECTED_LIST					-7
+#define ERR_ZERO_LENGTH_NAME			-8
 
 // LIST FUNCTIONS
 
@@ -99,12 +106,14 @@ C recl(X* x, C p) {
 		return t;
 	}
 }
-C pop(X* x) { C v = A(S(x)); S(x) = recl(x, S(x)); return v; }
 C reverse(C p, C l) { 
 	if (p) { C t = N(p); D(p) = AS(T(p), l); return reverse(t, p); } 
 	else { return l; }
 }
 C length(C p) { C c = 0; while (p) { c++; p = N(p); } return c; }
+
+#define PUSH(x, n, t)		S(x) = cons(x, (C)n, AS(t, S(x)))
+C pop(X* x) { C v = A(S(x)); S(x) = recl(x, S(x)); return v; }
 
 /* TEMPORAL: INSPECTION */
 void dump_list(X* x, C l) {
@@ -280,7 +289,17 @@ void shrink(X* x) {
 	A(x->there) = x->there + 2*sizeof(C);
 	D(x->there) = 0;
 }
-// TODO: allot
+void allot(X* x) {
+	C b = pop(x);
+	if (b > 0) { 
+		if (b >= (TOP(x) - ((C)x->here))) { x->err = ERR_NOT_ENOUGH_MEMORY; return; }
+		while (RESERVED(x) < b) { grow(x); if (x->err) return; }
+		x->here += b;
+	} else if (b < 0) {
+		x->here = (b < (BOTTOM(x) - x->here)) ? BOTTOM(x) : x->here + b;
+		while (RESERVED(x) >= 2*sizeof(C)) { shrink(x); if (x->err) return; }
+	}
+}
 
 // CONTEXT PRIMITIVES
 
@@ -331,35 +350,33 @@ void emit(X* x) { UF1(x); C k = A(S(x)); S(x) = recl(x, S(x)); printf("%c", (B)k
 
 // PARSING AND EVALUATION
 
-#define PARSE_SPACE(b, t, i)			*t = *i; while (*(b + *i) != 0 && isspace(*(b + *i))) { (*i)++; }
-#define PARSE_NON_SPACE(b, t, i)	*t = *i; while (*(b + *i) != 0 && !isspace(*(b + *i))) { (*i)++; }
-C parse_token(B* b, C* t, C* i) { PARSE_SPACE(b, t, i); PARSE_NON_SPACE(b, t, i); return *i - *t; }
-#define FOUND(w, n, l) ((strlen(NFA(w)) == l) && (strncmp(NFA(w), n, l) == 0))
-C find_token(X* x, B* n, C l) { C w = L(x); while(w && !FOUND(w, n, l)) { w = N(w); } return w; }
+#define PRS_SPC(x)		while (TC(x) != 0 && isspace(TC(x))) { x->in++; } x->token = x->in;
+#define PRS_N_SPC(x)	while (TC(x) != 0 && !isspace(TC(x))) { x->in++; }
+void parse_token(X* x) { PRS_SPC(x); PUSH(x, TK(x), ATM); PRS_N_SPC(x); PUSH(x, TL(x), ATM); }
+#define FOUND(w)			((strlen(NFA(w)) == TL(x)) && (strncmp(NFA(w), TK(x), TL(x)) == 0))
+void find_token(X* x) { 
+	UF2(x);
+	if (TL(x) == 0) { x->err = ERR_ZERO_LENGTH_NAME; return; }
+	C w = L(x); while(w && !FOUND(w)) { w = N(w); }
+	if (w) { S(x) = recl(x, recl(x, S(x))); PUSH(x, w, WRD); PUSH(x, IMMEDIATE(w) ? 1 : -1, ATM); }
+	else { PUSH(x, 0, ATM); }
+}
 
 void evaluate(X* x, B* buf) {
-	C w, tk = 0, in = 0;
+	C w, i, tk = 0, in = 0;
 	char *endptr;
+	x->tib = buf;
 	do {
-		if (parse_token(buf, &tk, &in) == 0) { return; }
-		if ((w = find_token(x, buf + tk, in - tk)) != 0) {
-			if (!x->state || IMMEDIATE(w)) {
-				inner(x, XT(w)); if (x->err) return;
-			} else {
-				if (PRIMITIVE(w)) {
-					S(x) = cons(x, A(XT(w)), AS(PRM, S(x)));
-				} else {
-					S(x) = cons(x, w, AS(WRD, S(x)));
-				}
-			}
+		parse_token(x); if (!TL(x)) { return; }
+		find_token(x); i = pop(x);
+		if (i) {
+			w = pop(x);
+			if (!x->state || IMMEDIATE(w)) { inner(x, XT(w)); if (x->err) return; }
+			else { if (PRIMITIVE(w)) { PUSH(x, A(XT(w)), PRM); } else { PUSH(x, w, WRD); } }
 		} else {
-			intmax_t n = strtoimax(buf + tk, &endptr, 10);
-			if (n == 0 && endptr == (char*)(buf + tk)) {
-				x->err = ERR_UNDEFINED_WORD;
-				return;
-			} else {
-				S(x) = cons(x, n, AS(ATM, S(x)));
-			}
+			intmax_t n = strtoimax(TK(x), &endptr, 10);
+			if (n == 0 && endptr == (char*)(TK(x))) { x->err = ERR_UNDEFINED_WORD; return; }
+			else { PUSH(x, n, ATM); }
 		}
 	} while(1);
 }

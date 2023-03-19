@@ -125,7 +125,21 @@ void main(int argc, char *argv[]) {
 	//if (!x->err) printf("%ld\n", A(S(x)));
 
 	////repeat(x);
+	FILE *fptr;
 	B buf[255];
+	if (argc == 2) {
+		fptr = fopen(argv[1], "r");
+		while (fgets(buf, 255, fptr)) {
+			evaluate(x, buf);
+			switch (x->err) {
+				case 0: break;
+				case ERR_STACK_UNDERFLOW: printf("ERR::stack underflow\n"); x->err = 0; break;
+				case ERR_EXPECTED_LIST: printf("ERR::expected list as top of stack\n"); x->err = 0; break;
+				case ERR_UNDEFINED_WORD: printf("ERR::undefined word\n"); break;
+				default: printf("ERR %ld\n", x->err); return;
+			}
+		}
+	}
 	do {
 		fgets(buf, 255, stdin);
 		evaluate(x, buf);
