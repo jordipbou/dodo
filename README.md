@@ -1,17 +1,24 @@
  --			                                                                      
 ({o ~~/)
 
-Based on ideas from Forth, APL/K, Lisp and Joy.
+Based on ideas from Forth, APL/K, Lisp and Joy/Factor.
+
+The requirements for Dodo are:
+
+* C VM easily embedded on other applications.
+* Interpreted for great interactivity, but must allow adding compiled functions.
+* VM can not be fast, but must not add too much overhead to compiled functions.
 
 # Data structures
 
 There are 3 basic data structures:
 
-* BYTE -- 8 bits
-* CELL -- 16, 32 or 64 bits (depends on target architecture)
-* PAIR -- 2 cells
-	* NEXT	-- PAIR * (last 2 bits are used to store typing information)
-	* VALUE -- CELL
+	· BYTE -- 8 bits
+	· CELL -- 16, 32 or 64 bits (depends on target architecture)
+	· PAIR -- 2 cells
+		· NEXT	-- PAIR * (last 2 bits are used to store typing information)
+		· VALUE -- CELL
+						+- PAIR * (last 2 bits can be used to store subtyping information)
 
 # Types
 
@@ -24,8 +31,8 @@ free to store typing information.
 
 The 4 types defined are:
 
-- Number (scalar)
-- List
+- Atom
+- List (allows subtypes by using the 2 bits of the value/reference)
 - Primitive word (defined in C)
 - Colon definition
 
@@ -33,10 +40,9 @@ The 4 types defined are:
 
 
 
-
 # Memory model
 
-Memory is divided in three regions: header, contiguous and managed.
+Memory is divided in four regions: header, contiguous, transient and managed.
 
 ## Header
 
@@ -56,5 +62,18 @@ to the list.
 As in Forth. 
 
 # Words
+
+	+-------+-------+			 +-------+-------+
+	|   | W +   ---------->|   | L + NFA@ -------> name counted byte array
+	+---|---+-------+      +---|---+-------+
+	                           v
+												 +-------+-------+
+												 |   | L |  XT@ -------> list representing interpretation semantics
+												 +---|---+-------+
+												     v?
+												 +-------+-------+
+												 |   0   | NDCS@ ------> list representing compilation semantics
+												 +-------+-------+
+
 
 
