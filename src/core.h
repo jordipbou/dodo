@@ -126,33 +126,123 @@ void inner(X* x, C l) {
 
 // EXECUTION PRIMITIVES
 
-void branch(X* x) { 
-	UF1(x); 
+void branch(X* x) { UF1(x);
 	if (N(N(N(x->ip)))) { PUSH(x, x->rs, N(N(N(x->ip))), PRM); }
 	x->ip = POP(x, S(x)) ? A(N(x->ip)) : A(N(N(x->ip)));
 	x->err = IP_MODIFIED;
 }
 void zjump(X* x) { UF1(x); x->ip = POP(x, S(x)) ? N(N(x->ip)) : A(N(x->ip)); x->err = IP_MODIFIED; }
 void jump(X* x) {	x->ip = A(N(x->ip)); x->err = IP_MODIFIED; }
-//void exec_x(X* x) { 
-//	UF1(x);
-//	if (N(x->ip)) { R(x) = cons(x, N(x->ip), AS(PRM, R(x))); }
-//	// TODO: Type of item on top of data stack should be checked, if not list, execute primitive
-//	//printf("exec_x::setting ip to %ld\n", A(S(x)));
-//	x->ip = A(S(x)); 
-//	x->err = 1;
-//}
-//void exec_i(X* x) { 
-//	UF1(x); 
-//	C t = S(x); S(x) = N(S(x)); 
-//	if (N(x->ip)) R(x) = cons(x, N(x->ip), AS(PRM, R(x)));
-//	R(x) = cons(x, t, AS(LST, R(x)));
-//	x->ip = A(t);
-//	x->err = 1;
-//}
-//void lbracket(X* x) { x->state = 0; }
-//void rbracket(X* x) { x->state = 1; }
-//
+void exec_x(X* x) { UF1(x);
+	if (T(S(x)) == LST) {
+		if (N(x->ip)) PUSH(x, x->rs, N(x->ip), PRM); 
+		x->ip = A(S(x));
+		x->err = IP_MODIFIED;
+	} else {
+		((FUNC)A(S(x)))(x); 
+	}
+}
+void exec_i(X* x) { UF1(x);
+	C t = S(x); S(x) = N(S(x));
+	if (T(t) == LST) {
+		if (N(x->ip)) PUSH(x, x->rs, N(x->ip), PRM);
+		PUSH(x, x->rs, t, LST);
+		x->ip = A(t);
+		x->err = IP_MODIFIED;
+	} else {
+		((FUNC)A(t))(x);
+		recl(x, t);
+	}
+}
+void lbracket(X* x) { x->st = 0; }
+void rbracket(X* x) { x->st = 1; }
+
+// STACK PRIMITIVES
+
+void duplicate(X* x) { UF1(x); 
+	if (T(S(x)) == LST) { PUSH(x, S(x), clone(x, A(S(x))), LST); }
+	else { PUSH(x, S(x), A(S(x)), T(S(x))); }
+}
+void swap(X* x) { UF2(x); C t = N(S(x)); LK(S(x), N(N(S(x)))); LK(t, S(x)); S(x) = t; }
+void drop(X* x) { S(x) = lrecl(x, S(x)); }
+void over(X* x) { UF2(x);
+	if (T(N(S(x))) == LST) { PUSH(x, S(x), clone(x, A(N(S(x)))), LST); }
+	else { PUSH(x, S(x), A(N(S(x))), T(N(S(x)))); }
+}
+void rot(X* x) { UF3(x); C t = N(N(S(x))); LK(N(S(x)), N(N(N(S(x))))); LK(t, S(x)); S(x) = t; }
+
+// COMPARISON PRIMITIVES
+
+#define BINOP(o) A(N(S(x))) = A(N(S(x))) o A(S(x)); S(x) = recl(x, S(x));
+
+void gt(X* x) { UF2(x); BINOP(>) }
+void lt(X* x) { UF2(x); BINOP(<) }
+void eq(X* x) { UF2(x); BINOP(==) }
+void neq(X* x) { UF2(x); BINOP(!=) }
+
+// ARITHMETIC PRIMITIVES
+
+void add(X* x) { UF2(x); BINOP(+) }
+void sub(X* x) { UF2(x); BINOP(-) }
+void mul(X* x) { UF2(x); BINOP(*) }
+void division(X* x) { UF2(x); if (!A(S(x))) { x->err = ERR_DIVISION_BY_ZERO; return; } BINOP(/) }
+void mod(X* x) { UF2(x); BINOP(%) }
+
+// BIT PRIMITIVES
+
+void and(X* x) { UF2(x); BINOP(&) }
+void or(X* x) { UF2(x); BINOP(|) }
+void invert(X* x) { UF1(x); A(S(x)) = ~A(S(x)); } 
+
+// MEMORY ACCESS PRIMITIVES
+
+void fetch(X* x) { UF1(x); A(S(x)) = *((C*)A(S(x))); }
+void store(X* x) { UF2(x); C a = POP(x, S(x)); C v = POP(x, S(x)); *((C*)a) = v; }
+void bfetch(X* x) { UF1(x); A(S(x)) = (C)*((B*)A(S(x))); }
+void bstore(X* x) { UF2(x); C a = POP(x, S(x)); C v = POP(x, S(x)); *((B*)a) = (B)v; }
+
+// CONTINUOUS MEMORY PRIMITIVES
+
+#define RESERVED(x)				((x->th) - ((C)x->hr))
+
+void grow(X* x) { 
+	if (A(x->th) != (x->th + sP)) { x->err = ERR_NOT_ENOUGH_MEMORY; return; }
+	x->th += sP;
+	D(x->th) = 0;
+	x->free--;
+}
+void shrink(X* x) {
+	if (RESERVED(x) < sP) { x->err = ERR_NOT_ENOUGH_RESERVED; return; }
+	D(x->th) = x->th - sP;
+	x->th -= sP;
+	A(x->th) = x->th + sP;
+	D(x->th) = 0;
+	x->free++;
+}
+// TODO: Tests for ALLOT fails sometimes, not always !!!! (I think its alignment related)
+void allot(X* x) {
+	C b = POP(x, S(x));
+	if (b > 0) { 
+		if (b >= (TOP(x) - ((C)x->hr))) { x->err = ERR_NOT_ENOUGH_MEMORY; return; }
+		while (RESERVED(x) < b) { grow(x); if (x->err) return; }
+		x->hr += b;
+	} else if (b < 0) {
+		x->hr = (b < (BOTTOM(x) - x->hr)) ? BOTTOM(x) : x->hr + b;
+		while (RESERVED(x) >= sP) { shrink(x); if (x->err) return; }
+	}
+}
+
+// LIST PRIMITIVES
+
+void empty(X* x) { PUSH(x, S(x), 0, LST); }
+// TODO: If executing l>s and stack is empty or top of stack is not a list, crashes
+void list_to_stack(X* x) { UF1(x); C t = S(x); S(x) = N(S(x)); LK(t, x->ps); x->ps = t; }
+void stack_to_list(X* x) {
+	S(x) = reverse(S(x), 0);
+	if (!N(x->ps)) { x->ps = cons(x, x->ps, AS(LST, 0)); }
+	else { C t = x->ps; x->ps = N(x->ps); LK(t, A(x->ps)); A(x->ps) = t; }
+}
+
 //#include<string.h>
 //#include<ctype.h>
 //#include<stdio.h>
@@ -164,21 +254,9 @@ void jump(X* x) {	x->ip = A(N(x->ip)); x->err = IP_MODIFIED; }
 //	#include <termios.h>
 //#endif
 //
-//#define NFA(w)						((B*)(A(A(w))))
-//#define XT(w)							(A(N(A(w))))
-//#define NDCS(w)						(N(N(A(w))))
-//
-//enum Words { NIP, NIC, IMP, IMC };
-//
-//#define PRIMITIVE(w)			((T(w) & 1) == 0)
-//#define IMMEDIATE(w)			((T(w) & 2) == 2)
-//
 //#define TK(x)							(x->tb + x->tk)
 //#define TC(x)							(*(x->tb + x->in))
 //#define TL(x)							(x->in - x->tk)
-//
-//#define PUSH(x, n, t)		S(x) = cons(x, (C)n, AS(t, S(x)))
-//C pop(X* x) { C v = A(S(x)); S(x) = recl(x, S(x)); return v; }
 //
 ///* TEMPORAL: INSPECTION */
 //void dump_list(X* x, C l) {
@@ -214,97 +292,12 @@ void jump(X* x) {	x->ip = A(N(x->ip)); x->err = IP_MODIFIED; }
 //
 //#define EL(x)		if (T(S(x)) != LST) { x->err = ERR_EXPECTED_LIST; return; }
 //
-//// STACK PRIMITIVES
-//
-//void duplicate(X* x) { 
-//	UF1(x); 
-//	if (T(S(x)) == LST) { S(x) = cons(x, clone(x, A(S(x))), AS(LST, S(x))); }
-//	else { S(x) = cons(x, A(S(x)), AS(T(S(x)), S(x))); }
-//}
-//void swap(X* x) { UF2(x); C t = N(S(x)); LK(S(x), N(N(S(x)))); LK(t, S(x)); S(x) = t; }
-//void drop(X* x) { S(x) = recl(x, S(x)); }
-//void over(X* x) { 
-//	UF2(x);
-//	if (T(N(S(x))) == LST) { S(x) = cons(x, clone(x, A(N(S(x)))), AS(LST, S(x))); }
-//	else { S(x) = cons(x, A(N(S(x))), AS(T(N(S(x))), S(x))); }
-//}
-//void rot(X* x) { UF3(x); C t = N(N(S(x))); LK(N(S(x)), N(N(N(S(x))))); LK(t, S(x)); S(x) = t; }
-//
-//// COMPARISON PRIMITIVES
-//
-//#define BINOP(o) A(N(S(x))) = A(N(S(x))) o A(S(x)); S(x) = recl(x, S(x));
-//
-//void gt(X* x) { UF2(x); BINOP(>) }
-//void lt(X* x) { UF2(x); BINOP(<) }
-//void eq(X* x) { UF2(x); BINOP(==) }
-//void neq(X* x) { UF2(x); BINOP(!=) }
-//
-//// ARITHMETIC PRIMITIVES
-//
-//void add(X* x) { UF2(x); BINOP(+) }
-//void sub(X* x) { UF2(x); BINOP(-) }
-//void mul(X* x) { UF2(x); BINOP(*) }
-//void division(X* x) { UF2(x); if (!A(S(x))) { x->err = ERR_DIVISION_BY_ZERO; return; } BINOP(/) }
-//void mod(X* x) { UF2(x); BINOP(%) }
-//
-//// BIT PRIMITIVES
-//
-//void and(X* x) { UF2(x); BINOP(&) }
-//void or(X* x) { UF2(x); BINOP(|) }
-//void invert(X* x) { UF1(x); A(S(x)) = ~A(S(x)); } 
-//
-//// MEMORY ACCESS PRIMITIVES
-//
-//void fetch(X* x) { UF1(x); A(S(x)) = *((C*)A(S(x))); }
-//void store(X* x) { UF2(x); C a = pop(x); C v = pop(x); *((C*)a) = v; }
-//void bfetch(X* x) { UF1(x); A(S(x)) = (C)*((B*)A(S(x))); }
-//void bstore(X* x) { UF2(x); C a = pop(x); C v = pop(x); *((B*)a) = (B)v; }
-//
-//// CONTINUOUS MEMORY PRIMITIVES
-//
-//#define RESERVED(x)				((TH(x)) - ((C)H(x)))
-//
-//void grow(X* x) { 
-//	if (A(TH(x)) != (TH(x) + 2*sizeof(C))) { x->err = ERR_NOT_ENOUGH_MEMORY; return; }
-//	TH(x) += 2*sizeof(C);
-//	D(TH(x)) = 0;
-//}
-//void shrink(X* x) {
-//	if (RESERVED(x) < 2*sizeof(C)) { x->err = ERR_NOT_ENOUGH_RESERVED; return; }
-//	D(TH(x)) = TH(x) - 2*sizeof(C);
-//	TH(x) -= 2*sizeof(C);
-//	A(TH(x)) = TH(x) + 2*sizeof(C);
-//	D(TH(x)) = 0;
-//}
-//void allot(X* x) {
-//	C b = pop(x);
-//	if (b > 0) { 
-//		if (b >= (TOP(x) - ((C)H(x)))) { x->err = ERR_NOT_ENOUGH_MEMORY; return; }
-//		while (RESERVED(x) < b) { grow(x); if (x->err) return; }
-//		H(x) += b;
-//	} else if (b < 0) {
-//		H(x) = (b < (BOTTOM(x) - H(x))) ? BOTTOM(x) : H(x) + b;
-//		while (RESERVED(x) >= 2*sizeof(C)) { shrink(x); if (x->err) return; }
-//	}
-//}
-//
 //// CONTEXT PRIMITIVES
 //
 //void context(X* x) { S(x) = cons(x, (C)x, AS(ATM, S(x))); }
 //void here(X* x) { S(x) = cons(x, (C)H(x), AS(ATM, S(x))); }
 //void reserved(X* x) { S(x) = cons(x, RESERVED(x), AS(ATM, S(x))); }
 //void latest(X* x) { S(x) = cons(x, (C)&x->latest, AS(ATM, S(x))); }
-//
-//// LIST PRIMITIVES
-//
-//void empty(X* x) { S(x) = cons(x, 0, AS(LST, S(x))); }
-//// TODO: If executing l>s and stack is empty or top of stack is not a list, crashes
-//void list_to_stack(X* x) { UF1(x); EL(x); C t = S(x); S(x) = N(S(x)); LK(t, P(x)); P(x) = t; }
-//void stack_to_list(X* x) {
-//	S(x) = reverse(S(x), 0);
-//	if (!N(P(x))) { P(x) = cons(x, P(x), AS(LST, 0)); }
-//	else { C t = P(x); P(x) = N(P(x)); LK(t, A(P(x))); A(P(x)) = t; }
-//}
 //
 //// INPUT/OUTPUT PRIMITIVES (this should go in platform dependent headers)
 //
