@@ -1044,6 +1044,81 @@ void test_MEM_bstore() {
 	TEST_ASSERT_EQUAL_INT(11, var);
 }
 
+// LIST PRIMITIVES
+
+void test_LIST_empty() {
+	C size = 1024;
+	B block[size];
+	X* x = init(block, size);
+
+	empty(x);
+
+	TEST_ASSERT_EQUAL_INT(1, length(x->ps));
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(LST, T(S(x)));
+	TEST_ASSERT_EQUAL_INT(0, length(A(S(x))));
+}
+
+void test_LIST_list_to_stack_1() {
+	C size = 1024;
+	B block[size];
+	X* x = init(block, size);
+
+	empty(x);
+	list_to_stack(x);
+
+	TEST_ASSERT_EQUAL_INT(2, length(x->ps));
+	TEST_ASSERT_EQUAL_INT(LST, T(x->ps));
+	TEST_ASSERT_EQUAL_INT(LST, T(N(x->ps)));
+	TEST_ASSERT_EQUAL_INT(0, length(A(x->ps)));
+	TEST_ASSERT_EQUAL_INT(0, length(A(N(x->ps))));
+}
+
+void test_LIST_stack_to_list_1() {
+	C size = 1024;
+	B block[size];
+	X* x = init(block, size);
+
+	S(x) = cons(x, 7, AS(ATM, cons(x, 11, AS(ATM, 0))));
+
+	stack_to_list(x);
+
+	TEST_ASSERT_EQUAL_INT(1, length(x->ps));
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(2, length(A(S(x))));
+	TEST_ASSERT_EQUAL_INT(11, A(A(S(x))));
+	TEST_ASSERT_EQUAL_INT(7, A(N(A(S(x)))));
+}
+
+void test_LIST_stack_to_list_2() {
+	C size = 1024;
+	B block[size];
+	X* x = init(block, size);
+
+	x->ps =
+		cons(x,
+			cons(x, 17, AS(ATM,
+			cons(x, 13, AS(ATM, 0)))),
+		AS(LST,
+		cons(x,
+			cons(x, 7, AS(ATM,
+			cons(x, 11, AS(ATM, 0)))),
+		AS(LST, 0))));
+
+	stack_to_list(x);
+
+	TEST_ASSERT_EQUAL_INT(1, length(x->ps));
+	TEST_ASSERT_EQUAL_INT(3, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(LST, T(S(x)));
+	TEST_ASSERT_EQUAL_INT(2, length(A(S(x))));
+	TEST_ASSERT_EQUAL_INT(13, A(A(S(x))));
+	TEST_ASSERT_EQUAL_INT(17, A(N(A(S(x)))));
+	TEST_ASSERT_EQUAL_INT(ATM, T(N(S(x))));
+	TEST_ASSERT_EQUAL_INT(7, A(N(S(x))));
+	TEST_ASSERT_EQUAL_INT(ATM, T(N(N(S(x)))));
+	TEST_ASSERT_EQUAL_INT(11, A(N(N(S(x)))));
+}
+
 // CONTIGUOUS MEMORY PRIMITIVES
 
 void test_MEM_grow() {
@@ -1176,83 +1251,8 @@ void test_MEM_allot() {
 	allot(x);
 	TEST_ASSERT_EQUAL_INT(0, x->err);
 	TEST_ASSERT_EQUAL_PTR(BOTTOM(x), x->hr);
-	TEST_ASSERT_EQUAL_INT((C)ALIGN(x->hr, 2*sP), x->th);
+	TEST_ASSERT_EQUAL_INT((C)ALIGN(x->hr, sP), x->th);
 	TEST_ASSERT_EQUAL_INT(f_nodes(x), x->free);
-}
-
-// LIST PRIMITIVES
-
-void test_LIST_empty() {
-	C size = 1024;
-	B block[size];
-	X* x = init(block, size);
-
-	empty(x);
-
-	TEST_ASSERT_EQUAL_INT(1, length(x->ps));
-	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-	TEST_ASSERT_EQUAL_INT(LST, T(S(x)));
-	TEST_ASSERT_EQUAL_INT(0, length(A(S(x))));
-}
-
-void test_LIST_list_to_stack_1() {
-	C size = 1024;
-	B block[size];
-	X* x = init(block, size);
-
-	empty(x);
-	list_to_stack(x);
-
-	TEST_ASSERT_EQUAL_INT(2, length(x->ps));
-	TEST_ASSERT_EQUAL_INT(LST, T(x->ps));
-	TEST_ASSERT_EQUAL_INT(LST, T(N(x->ps)));
-	TEST_ASSERT_EQUAL_INT(0, length(A(x->ps)));
-	TEST_ASSERT_EQUAL_INT(0, length(A(N(x->ps))));
-}
-
-void test_LIST_stack_to_list_1() {
-	C size = 1024;
-	B block[size];
-	X* x = init(block, size);
-
-	S(x) = cons(x, 7, AS(ATM, cons(x, 11, AS(ATM, 0))));
-
-	stack_to_list(x);
-
-	TEST_ASSERT_EQUAL_INT(1, length(x->ps));
-	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-	TEST_ASSERT_EQUAL_INT(2, length(A(S(x))));
-	TEST_ASSERT_EQUAL_INT(11, A(A(S(x))));
-	TEST_ASSERT_EQUAL_INT(7, A(N(A(S(x)))));
-}
-
-void test_LIST_stack_to_list_2() {
-	C size = 1024;
-	B block[size];
-	X* x = init(block, size);
-
-	x->ps =
-		cons(x,
-			cons(x, 17, AS(ATM,
-			cons(x, 13, AS(ATM, 0)))),
-		AS(LST,
-		cons(x,
-			cons(x, 7, AS(ATM,
-			cons(x, 11, AS(ATM, 0)))),
-		AS(LST, 0))));
-
-	stack_to_list(x);
-
-	TEST_ASSERT_EQUAL_INT(1, length(x->ps));
-	TEST_ASSERT_EQUAL_INT(3, length(S(x)));
-	TEST_ASSERT_EQUAL_INT(LST, T(S(x)));
-	TEST_ASSERT_EQUAL_INT(2, length(A(S(x))));
-	TEST_ASSERT_EQUAL_INT(13, A(A(S(x))));
-	TEST_ASSERT_EQUAL_INT(17, A(N(A(S(x)))));
-	TEST_ASSERT_EQUAL_INT(ATM, T(N(S(x))));
-	TEST_ASSERT_EQUAL_INT(7, A(N(S(x))));
-	TEST_ASSERT_EQUAL_INT(ATM, T(N(N(S(x)))));
-	TEST_ASSERT_EQUAL_INT(11, A(N(N(S(x)))));
 }
 
 //// CONTEXT PRIMITIVES
@@ -2694,18 +2694,18 @@ int main() {
 	RUN_TEST(test_MEM_bfetch);
 	RUN_TEST(test_MEM_bstore);
 
+	// LIST PRMITIVES
+	RUN_TEST(test_LIST_empty);
+	RUN_TEST(test_LIST_list_to_stack_1);
+	RUN_TEST(test_LIST_stack_to_list_1);
+	RUN_TEST(test_LIST_stack_to_list_2);
+
 	// CONTIGUOUS MEMORY
 	RUN_TEST(test_MEM_grow);
 	RUN_TEST(test_MEM_shrink);
 	RUN_TEST(test_MEM_allot);
 	////RUN_TEST(test_MEM_compile_str);
 	//////RUN_TEST(test_align);
-
-	// LIST PRMITIVES
-	RUN_TEST(test_LIST_empty);
-	RUN_TEST(test_LIST_list_to_stack_1);
-	RUN_TEST(test_LIST_stack_to_list_1);
-	RUN_TEST(test_LIST_stack_to_list_2);
 
 	//// CONTEXT PRIMITIVES
 	//RUN_TEST(test_CONTEXT_context);

@@ -2,6 +2,8 @@
 #define __CORE__
 
 #include<inttypes.h>
+#include<string.h>
+#include<ctype.h>
 
 typedef int8_t		B;
 typedef intptr_t	C;
@@ -41,7 +43,7 @@ X* init(B* bl, C sz) {
 	x->fr = x->ps - sP;
 
 	x->free = -1;
-	for (C p = x->th; p <= x->fr; p += sP) {
+	C p; for (p = x->th; p <= x->fr; p += sP) {
 		x->free++;
 		A(p) = p == x->fr ? 0 : p + sP;
 		D(p) = p == x->th ? 0 : p - sP;
@@ -194,6 +196,17 @@ void and(X* x) { UF2(x); BINOP(&) }
 void or(X* x) { UF2(x); BINOP(|) }
 void invert(X* x) { UF1(x); A(S(x)) = ~A(S(x)); } 
 
+// LIST PRIMITIVES
+
+void empty(X* x) { PUSH(x, S(x), 0, LST); }
+// TODO: If executing l>s and stack is empty or top of stack is not a list, crashes
+void list_to_stack(X* x) { UF1(x); C t = S(x); S(x) = N(S(x)); LK(t, x->ps); x->ps = t; }
+void stack_to_list(X* x) {
+	S(x) = reverse(S(x), 0);
+	if (!N(x->ps)) { x->ps = cons(x, x->ps, AS(LST, 0)); }
+	else { C t = x->ps; x->ps = N(x->ps); LK(t, A(x->ps)); A(x->ps) = t; }
+}
+
 // MEMORY ACCESS PRIMITIVES
 
 void fetch(X* x) { UF1(x); A(S(x)) = *((C*)A(S(x))); }
@@ -219,7 +232,6 @@ void shrink(X* x) {
 	D(x->th) = 0;
 	x->free++;
 }
-// TODO: Tests for ALLOT fails sometimes, not always !!!! (I think its alignment related)
 void allot(X* x) {
 	C b = POP(x, S(x));
 	if (b > 0) { 
@@ -232,19 +244,59 @@ void allot(X* x) {
 	}
 }
 
-// LIST PRIMITIVES
+// PARSING AND EVALUATION
 
-void empty(X* x) { PUSH(x, S(x), 0, LST); }
-// TODO: If executing l>s and stack is empty or top of stack is not a list, crashes
-void list_to_stack(X* x) { UF1(x); C t = S(x); S(x) = N(S(x)); LK(t, x->ps); x->ps = t; }
-void stack_to_list(X* x) {
-	S(x) = reverse(S(x), 0);
-	if (!N(x->ps)) { x->ps = cons(x, x->ps, AS(LST, 0)); }
-	else { C t = x->ps; x->ps = N(x->ps); LK(t, A(x->ps)); A(x->ps) = t; }
-}
+//#define TK(x)							(x->tb + x->tk)
+//#define TC(x)							(*(x->tb + x->in))
+//#define TL(x)							(x->in - x->tk)
+//
+//void parse_token(X* x) {
+//	while (TC(x) && isspace(TC(x))) { x->in++; } x->tk = x->in;
+//	PUSH(x, S(x), (C)TK(x), ATM); ERR(x);
+//	while (TC(x) && !isspace(TC(x))) { x->in++; }
+//	PUSH(x, S(x), TL(x), ATM);
+//}
+//#define FOUND(w)			((strlen(NFA(w)) == TL(x)) && (strncmp(NFA(w), TK(x), TL(x)) == 0))
+//void find_token(X* x) { 
+//	UF2(x);
+//	if (TL(x) == 0) { x->err = ERR_ZERO_LENGTH_NAME; return; }
+//	C w = x->lt; while(w && !FOUND(w)) { w = N(w); }
+//	if (w) {
+//		POP(x, S(x)); POP(x, S(x));
+//		PUSH(x, S(x), PRIMITIVE(w) ? A(XT(w)): w, PRIMITIVE(w) ? PRM : WRD);
+//		PUSH(x, S(x), NDCS(w) ? 1 : -1, ATM);
+//	} else {
+//		PUSH(x, S(x), 0, ATM);
+//	}
+//}
 
-//#include<string.h>
-//#include<ctype.h>
+//void outer(X* x) {
+//	C w, i;
+//	char *endptr;
+//	do {
+//		parse_token(x); 
+//		if (TL(x) == 0) { drop(x); drop(x); x->err = ERR_EMPTY_TIB; return; }
+//		printf("TOKEN: %.*s\n", (int)TL(x), TK(x));
+//		find_token(x); i = pop(x); w = pop(x);
+//		if (i) {
+//			if (!x->state || IMMEDIATE(w)) { inner(x, XT(w)); if (x->err) return; }
+//			else { if (PRIMITIVE(w)) { PUSH(x, A(XT(w)), PRM); } else { PUSH(x, w, WRD); } }
+//		} else {
+//			pop(x); // Remove address
+//			intmax_t n = strtoimax(TK(x), &endptr, 10);
+//			if (n == 0 && endptr == (char*)(TK(x))) { x->err = ERR_UNDEFINED_WORD; return; }
+//			else { PUSH(x, n, ATM); }
+//		}
+//	} while(1);
+//}
+//
+//void evaluate(X* x, B* buf) {
+//	x->tib = buf;
+//	x->token = x->in = 0;
+//	C c = cons(x, (C)outer, AS(PRM, 0));
+//	inner(x, c);
+//}
+
 //#include<stdio.h>
 
 //#ifdef _WIN32
@@ -253,10 +305,6 @@ void stack_to_list(X* x) {
 //	#include <unistd.h>
 //	#include <termios.h>
 //#endif
-//
-//#define TK(x)							(x->tb + x->tk)
-//#define TC(x)							(*(x->tb + x->in))
-//#define TL(x)							(x->in - x->tk)
 //
 ///* TEMPORAL: INSPECTION */
 //void dump_list(X* x, C l) {
@@ -327,47 +375,6 @@ void stack_to_list(X* x) {
 //
 //void key(X* x) { S(x) = cons(x, __getch__(), AS(ATM, S(x))); }
 //void emit(X* x) { UF1(x); C k = A(S(x)); S(x) = recl(x, S(x)); printf("%c", (B)k); }
-//
-//// PARSING AND EVALUATION
-//
-//#define PRS_SPC(x)		while (TC(x) != 0 && isspace(TC(x))) { x->in++; } x->token = x->in;
-//#define PRS_N_SPC(x)	while (TC(x) != 0 && !isspace(TC(x))) { x->in++; }
-//void parse_token(X* x) { PRS_SPC(x); PUSH(x, TK(x), ATM); PRS_N_SPC(x); PUSH(x, TL(x), ATM); }
-//#define FOUND(w)			((strlen(NFA(w)) == TL(x)) && (strncmp(NFA(w), TK(x), TL(x)) == 0))
-//void find_token(X* x) { 
-//	UF2(x);
-//	if (TL(x) == 0) { x->err = ERR_ZERO_LENGTH_NAME; return; }
-//	C w = L(x); while(w && !FOUND(w)) { w = N(w); }
-//	if (w) { S(x) = recl(x, recl(x, S(x))); PUSH(x, w, WRD); PUSH(x, IMMEDIATE(w) ? 1 : -1, ATM); }
-//	else { PUSH(x, 0, ATM); }
-//}
-//
-//void outer(X* x) {
-//	C w, i;
-//	char *endptr;
-//	do {
-//		parse_token(x); 
-//		if (TL(x) == 0) { drop(x); drop(x); x->err = ERR_EMPTY_TIB; return; }
-//		printf("TOKEN: %.*s\n", (int)TL(x), TK(x));
-//		find_token(x); i = pop(x); w = pop(x);
-//		if (i) {
-//			if (!x->state || IMMEDIATE(w)) { inner(x, XT(w)); if (x->err) return; }
-//			else { if (PRIMITIVE(w)) { PUSH(x, A(XT(w)), PRM); } else { PUSH(x, w, WRD); } }
-//		} else {
-//			pop(x); // Remove address
-//			intmax_t n = strtoimax(TK(x), &endptr, 10);
-//			if (n == 0 && endptr == (char*)(TK(x))) { x->err = ERR_UNDEFINED_WORD; return; }
-//			else { PUSH(x, n, ATM); }
-//		}
-//	} while(1);
-//}
-//
-//void evaluate(X* x, B* buf) {
-//	x->tib = buf;
-//	x->token = x->in = 0;
-//	C c = cons(x, (C)outer, AS(PRM, 0));
-//	inner(x, c);
-//}
 //
 //// BOOTSTRAPPING
 //

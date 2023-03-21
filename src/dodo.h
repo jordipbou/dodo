@@ -84,7 +84,7 @@ CTX* init(BYTE* block, CELL size) {
 	CDR(ctx->pile) = AS(LIST, 0);
 	ctx->free = ctx->pile - 2*sizeof(CELL);
 
-	for (CELL pair = ctx->there; pair <= ctx->free; pair += 2*sizeof(CELL)) {
+	CELL pair; for (pair = ctx->there; pair <= ctx->free; pair += 2*sizeof(CELL)) {
 		CAR(pair) = pair == ctx->free ? 0 : pair + 2*sizeof(CELL);
 		CDR(pair) = pair == ctx->there ? 0 : pair - 2*sizeof(CELL);
 	}

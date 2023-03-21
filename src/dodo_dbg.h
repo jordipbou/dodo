@@ -114,12 +114,12 @@ void dump_context(CTX* ctx) {
 	printf("STATE: %ld\n", ctx->state);
 	printf("FREE NODES: %ld\n", FREE(ctx));
 	printf("STACK PILE:\n");
-	for (CELL s = ctx->pile; s; s = NEXT(s)) {
+	CELL s; for (s = ctx->pile; s; s = NEXT(s)) {
 		printf("[%ld] ", s); dump_list(ctx, s, 1); printf("\n");
 	}
 	printf("\n");
 	printf("COMPILING PILE:\n");
-	for (CELL s = ctx->cpile; s; s = NEXT(s)) {
+	for (s = ctx->cpile; s; s = NEXT(s)) {
 		if (TYPE(s) == LIST) {
 			printf("List:   [%ld] ", CAR(s)); dump_list(ctx, CAR(s), 1); printf("\n");
 		} else if (TYPE(s) == WORD) {
