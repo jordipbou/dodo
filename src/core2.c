@@ -6,13 +6,14 @@ void main() {
 	B bk[sz];
 	X* x = init(bk, sz);
 
-	x->rs =
+	R(x) =
 		cons(x, 36, AS(ATM,
 		cons(x,
 			cons(x, (C)&swap, AS(PRM,
 			cons(x, (C)&duplicate, AS(PRM,
 			cons(x, 1, AS(ATM,
 			cons(x, (C)&gt, AS(PRM,
+			//cons(x, (C)&when, AS(PRM,
 			cons(x,
 				cons(x, 1, AS(ATM,
 				cons(x, (C)&sub, AS(PRM,
@@ -29,6 +30,7 @@ void main() {
 			AS(LST,
 			cons(x, 0, AS(LST,
 			cons(x, (C)&branch, AS(PRM, 0)))))))))))))),
+			//AS(LST, 0)))))))))))),
 		AS (LST,
 		cons(x, (C)&exec_x, AS(PRM,
 		cons(x, (C)&swap, AS(PRM,

@@ -24,10 +24,11 @@ enum Types { ATM, LST, PRM, WRD };
 
 typedef struct {
 	B *tb, *hr;
-	C th, sz, fr, ps, err, ip, rs, st, lt, tk, in, free;
+	C th, sz, fr, ds, err, ip, rs, st, lt, tk, in, free;
 } X;
 
-#define S(x)							(A(x->ps))
+#define S(x)							(A(x->ds))
+#define R(x)							(A(x->rs))
 
 #define ALIGN(a, b)			((((C)a) + (b - 1)) & ~(b - 1))
 #define BOTTOM(x)				(((B*)x) + sizeof(X))
@@ -38,10 +39,13 @@ X* init(B* bl, C sz) {
 	x->sz = sz;
 	x->hr = BOTTOM(x);
 	x->th = ALIGN(BOTTOM(x), sP);
-	x->ps = TOP(x);
-	A(x->ps) = 0;
-	D(x->ps) = AS(LST, 0);
-	x->fr = x->ps - sP;
+	x->ds = TOP(x);
+	A(x->ds) = 0;
+	D(x->ds) = AS(LST, 0);
+	x->rs = x->ds - sP;
+	A(x->rs) = 0;
+	D(x->rs) = AS(LST, 0);
+	x->fr = x->rs - sP;
 
 	x->free = -1;
 	C p; for (p = x->th; p <= x->fr; p += sP) {
@@ -51,7 +55,7 @@ X* init(B* bl, C sz) {
 	}
 
 	x->tb = 0;
-	x->tk = x->in = x->st = x->rs = x->ip = x->err = x->lt = 0;
+	x->tk = x->in = x->st = x->ip = x->err = x->lt = 0;
 
 	return x;
 }
@@ -73,20 +77,22 @@ void dump_list(X*, C);
 
 void inner(X* x) {
 	C t;
-	// Use return stack as stack of instructions to be executed from top to bottom
-	while (x->rs) {
+	do {
+		while (!R(x) && N(x->rs)) { x->rs = recl(x, x->rs); }
+		if (!R(x)) return;
+		//printf("<%ld> ", length(x->ds));
 		//dump_stack(x, S(x));
-		//printf("| ");
-		//dump_list(x, x->rs);
-		//printf("\n");
-		switch (T(x->rs)) {
-			case ATM: t = x->rs; x->rs = N(x->rs); LK(t, S(x)); S(x) = t; break;
-			case LST: t = x->rs; x->rs = N(x->rs); LK(t, S(x)); S(x) = t; break;
-			case PRM: ((FUNC)A(x->rs))(x); if (!x->err) x->rs = recl(x, x->rs); else x->err = 0; break;
+		//printf("█ ");
+		//dump_list(x, R(x));
+		//printf("<%ld>\n", length(x->rs));
+		switch (T(R(x))) {
+			case ATM: t = R(x); R(x) = N(R(x)); LK(t, S(x)); S(x) = t; break;
+			case LST: t = R(x); R(x) = N(R(x)); LK(t, S(x)); S(x) = t; break;
+			case PRM: ((FUNC)A(R(x)))(x); if (!x->err) R(x) = recl(x, R(x)); else x->err = 0; break;
 			case WRD: /* Push word list into return stack */ break;
 		}
 		//getchar();
-	}
+	} while(1);
 }
 
 // STACK PRIMITIVES
@@ -130,37 +136,33 @@ void invert(X* x) { A(S(x)) = ~A(S(x)); }
 
 void empty(X* x) { S(x) = cons(x, 0, AS(LST, S(x))); }
 // TODO: If executing l>s and stack is empty or top of stack is not a list, crashes
-void list_to_stack(X* x) { C t = S(x); S(x) = N(S(x)); LK(t, x->ps); x->ps = t; }
+void list_to_stack(X* x) { C t = S(x); S(x) = N(S(x)); LK(t, x->ds); x->ds = t; }
 void stack_to_list(X* x) {
 	S(x) = reverse(S(x), 0);
-	if (!N(x->ps)) { x->ps = cons(x, x->ps, AS(LST, 0)); }
-	else { C t = x->ps; x->ps = N(x->ps); LK(t, A(x->ps)); A(x->ps) = t; }
+	if (!N(x->ds)) { x->ds = cons(x, x->ds, AS(LST, 0)); }
+	else { C t = x->ds; x->ds = N(x->ds); LK(t, A(x->ds)); A(x->ds) = t; }
 }
 
 // EXECUTION PRIMITIVES
 
-void exec_x(X* x) { //x->rs = cons(x, clone(x, A(S(x))), AS(LST, x->rs)); x->err = 1; }
-	C c = clone(x, A(S(x)));
-	C p = c;
-	while (N(p)) {
-		p = N(p);	
+void when(X* x) { 
+	C b = A(S(x)); S(x) = recl(x, S(x)); 
+	if (!b) { R(x) = recl(x, R(x)); } 
+	else {
+		R(x) = recl(x, R(x));
+		C t = R(x);
+		R(x) = N(R(x));
+		LK(t, x->rs);
+		x->rs = t;
+		x->err = 1;
 	}
-	LK(p, recl(x, x->rs));
-	x->rs = c;
-	x->err = 1;
 }
-void exec_i(X* x) { //C t = S(x); S(x) = N(S(x)); LK(t, x->rs); x->rs = t; x->err = 1; }
-	// Could be put as a stack on top of return stack directly
+void exec_x(X* x) { 
+	C c = clone(x, A(S(x))); R(x) = recl(x, R(x)); x->rs = cons(x, c, AS(LST, x->rs)); x->err = 1;
+}
+void exec_i(X* x) { 
 	if (A(S(x)) == 0) { S(x) = recl(x, S(x)); return; }
-	C p = A(S(x));
-	while (N(p)) {
-		p = N(p);
-	}
-	LK(p, recl(x, x->rs));
-	x->rs = A(S(x));
-	A(S(x)) = 0;
-	S(x) = recl(x, S(x));
-	x->err = 1;
+	C t = S(x); S(x) = N(S(x)); LK(t, x->rs); R(x) = recl(x, R(x)); x->rs = t; x->err = 1;
 }
 
 void branch(X* x) { if (!A(N(N(S(x))))) { swap(x); } drop(x); swap(x); drop(x); exec_i(x); }
@@ -185,6 +187,7 @@ void dump_cell(X* x, C c) {
 			else if (A(c) == (C)&exec_x) printf("x ");
 			else if (A(c) == (C)&branch) printf("branch ");
 			else if (A(c) == (C)&drop) printf("drop ");
+			else if (A(c) == (C)&when) printf("when ");
 			else printf("P:%ld ", A(c));
 			break;
 		case WRD: break;
