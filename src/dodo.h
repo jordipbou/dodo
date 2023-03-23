@@ -24,7 +24,7 @@ enum Types { ATM, LST, PRM, WRD };
 
 typedef struct {
 	B *tb, *hr;
-	C th, sz, fr, ds, err, rs, st, lt, tk, in, free;
+	C th, sz, fr, ds, err, rs, st, lt, in, free;
 } X;
 
 #define S(x)							(A(x->ds))
@@ -49,7 +49,7 @@ X* init(B* bl, C sz) {
 	}
 
 	x->tb = 0;
-	x->tk = x->in = x->st = x->err = x->lt = 0;
+	x->in = x->st = x->err = x->lt = 0;
 
 	return x;
 }
@@ -65,15 +65,18 @@ C reverse(C p, C l) { return p ? ({ C t = N(p); D(p) = AS(T(p), l); reverse(t, p
 
 // ERRORS
 
-enum Errors { E_EIB = -10, E_ZLN, E_EL, E_EAA, E_UW, E_NER, E_NEM, E_DBZ, E_UF, E_OF, E_IP = 1 };
+enum Errors { E_EIB = -11, E_ZLN, E_EA, E_EL, E_EAA, E_UW, E_NER, E_NEM, E_DBZ, E_UF, E_OF, E_IP = 1 };
 
 #define OF(x, n)			if (x->free < n) { x->err = E_OF; return; }
 #define UF1(x)				if (S(x) == 0) { x->err = E_UF; return; }
 #define UF2(x)				if (S(x) == 0 || N(S(x)) == 0) { x->err = E_UF; return; }
 #define UF3(x)				if (!S(x) || !N(S(x)) || !N(N(S(x)))) { x->err = E_UF; return; }
 
+#define EA(x)					UF1(x); if (T(S(x)) != ATM) { x->err = E_EA; return; }
 #define EL(x)					UF1(x); if (T(S(x)) != LST) { x->err = E_EL; return; }
 #define EAA(x)				UF2(x); if (T(S(x)) != ATM || T(N(S(x))) != ATM) { x->err = E_EAA; return; }
+
+#define EIB(x)				if (!x->tb) { x->err = E_EIB; return; }
 
 // STACK PRIMITIVES
 
@@ -151,6 +154,18 @@ void branch(X* x) { UF3(x); if (!A(N(N(S(x))))) { swap(x); } drop(x); swap(x); d
 void lbracket(X* x) { x->st = 0; }
 void rbracket(X* x) { x->st = 1; }
 
+// PARSING
+
+#define TC(x)							(*(x->tb + x->in))
+
+#define PARSE(x, cond)		while(TC(x) && cond) { x->in++; }
+void parse(X* x) { EA(x); OF(x, 1); EIB(x);
+	PARSE(x, TC(x) != A(S(x))); A(S(x)) = (C)x->tb; S(x) = cons(x, x->in, AS(ATM, S(x))); x->in++;
+}
+void parse_name(X* x) { OF(x, 2); EIB(x);
+	PARSE(x, isspace(TC(x))); S(x) = cons(x, (C)(x->tb + x->in), AS(ATM, S(x)));
+	PARSE(x, !isspace(TC(x))); S(x) = cons(x, (C)((x->tb + x->in) - A(S(x))) , AS(ATM, S(x)));
+}
 // ----------------------------------------------------------------------------- END OF CORE
 
 void dump_cell(X*, C);

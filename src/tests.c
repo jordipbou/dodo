@@ -169,7 +169,6 @@ void test_X_block_initialization() {
 	TEST_ASSERT_EQUAL_INT(0, x->st);
 
 	TEST_ASSERT_NULL(x->tb);
-	TEST_ASSERT_EQUAL_INT(0, x->tk);
 	TEST_ASSERT_EQUAL_INT(0, x->in);
 }
 
@@ -1352,6 +1351,174 @@ void test_EXEC_exec_i_2() {
 	TEST_ASSERT_EQUAL_INT(7, A(S(x)));
 	TEST_ASSERT_EQUAL_INT(7, A(N(S(x))));
 	TEST_ASSERT_EQUAL_INT(13, A(N(N(S(x)))));
+}
+
+// PARSING
+
+void test_PARSING_parse() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	x->tb = "  parsing \"";
+	S(x) = cons(x, '"', AS(ATM, 0));
+
+	parse(x);
+
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_INT(2, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(10, A(S(x)));
+	TEST_ASSERT_EQUAL_MEMORY("  parsing ", (B*)(A(N(S(x)))), A(S(x)));
+}
+
+void test_PARSING_parse_2() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	x->tb = "";
+	S(x) = cons(x, '"', AS(ATM, 0));
+
+	parse(x);
+
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_INT(2, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
+	TEST_ASSERT_EQUAL_INT((C)x->tb, A(N(S(x))));
+}
+
+void test_PARSING_parse_3() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	x->tb = "\"";
+	S(x) = cons(x, '"', AS(ATM, 0));
+
+	parse(x);
+
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_INT(2, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
+	TEST_ASSERT_EQUAL_INT((C)x->tb, A(N(S(x))));
+	TEST_ASSERT_EQUAL_INT(1, x->in);
+}
+
+void test_PARSING_parse_4() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	x->tb = 0;
+	S(x) = cons(x, '"', AS(ATM, 0));
+
+	parse(x);
+
+	TEST_ASSERT_EQUAL_INT(E_EIB, x->err);
+}
+
+void test_PARSING_parse_name() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	x->tb = 0;
+	
+	parse_name(x);
+
+	TEST_ASSERT_EQUAL_INT(E_EIB, x->err);
+}
+
+void test_PARSING_parse_name_2() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	x->tb = "test";
+	
+	parse_name(x);
+
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_INT(2, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(4, A(S(x)));
+	TEST_ASSERT_EQUAL_INT((C)x->tb, A(N(S(x))));
+	TEST_ASSERT_EQUAL_INT(4, x->in);
+}
+
+void test_PARSING_parse_name_3() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	x->tb = "";
+	
+	parse_name(x);
+
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_INT(2, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
+	TEST_ASSERT_EQUAL_INT((C)x->tb, A(N(S(x))));
+	TEST_ASSERT_EQUAL_INT(0, x->in);
+}
+
+void test_PARSING_parse_name_4() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	x->tb = ": double dup + ;";
+	
+	parse_name(x);
+
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_INT(2, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(1, A(S(x)));
+	TEST_ASSERT_EQUAL_INT((C)x->tb, A(N(S(x))));
+	TEST_ASSERT_EQUAL_INT(1, x->in);
+	TEST_ASSERT_EQUAL_MEMORY(":", A(N(S(x))), A(S(x)));
+
+	parse_name(x);
+
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_INT(4, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(6, A(S(x)));
+	TEST_ASSERT_EQUAL_INT((C)(x->tb + 2), A(N(S(x))));
+	TEST_ASSERT_EQUAL_INT(8, x->in);
+	TEST_ASSERT_EQUAL_MEMORY("double", A(N(S(x))), A(S(x)));
+
+	parse_name(x);
+
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_INT(6, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(3, A(S(x)));
+	TEST_ASSERT_EQUAL_INT((C)(x->tb + 9), A(N(S(x))));
+	TEST_ASSERT_EQUAL_INT(12, x->in);
+	TEST_ASSERT_EQUAL_MEMORY("dup", A(N(S(x))), A(S(x)));
+
+	parse_name(x);
+
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_INT(8, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(1, A(S(x)));
+	TEST_ASSERT_EQUAL_INT((C)(x->tb + 13), A(N(S(x))));
+	TEST_ASSERT_EQUAL_INT(14, x->in);
+	TEST_ASSERT_EQUAL_MEMORY("+", A(N(S(x))), A(S(x)));
+
+	parse_name(x);
+
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_INT(10, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(1, A(S(x)));
+	TEST_ASSERT_EQUAL_INT((C)(x->tb + 15), A(N(S(x))));
+	TEST_ASSERT_EQUAL_INT(16, x->in);
+	TEST_ASSERT_EQUAL_MEMORY(";", A(N(S(x))), A(S(x)));
+
+	parse_name(x);
+
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_INT(12, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
+	TEST_ASSERT_EQUAL_INT((C)(x->tb + 16), A(N(S(x))));
 }
 
 //void test_PARSING_parse_token() {
@@ -3954,7 +4121,15 @@ int main() {
 	RUN_TEST(test_EXEC_exec_i);
 	RUN_TEST(test_EXEC_exec_i_2);
 
-	//// PARSING
+	// PARSING
+	RUN_TEST(test_PARSING_parse);
+	RUN_TEST(test_PARSING_parse_2);
+	RUN_TEST(test_PARSING_parse_3);
+	RUN_TEST(test_PARSING_parse_4);
+	RUN_TEST(test_PARSING_parse_name);
+	RUN_TEST(test_PARSING_parse_name_2);
+	RUN_TEST(test_PARSING_parse_name_3);
+	RUN_TEST(test_PARSING_parse_name_4);
 	//RUN_TEST(test_PARSING_parse_token);
 	//RUN_TEST(test_PARSING_find_token);
 
