@@ -533,7 +533,7 @@ void test_EXEC_exec_i_2() {
 	TEST_ASSERT_EQUAL_INT(13, A(N(N(S(x)))));
 }
 
-// STACK PRMITIVES
+// STACK PRIMITIVES
 
 void test_STACK_duplicate_atom() {
 	C size = 512;

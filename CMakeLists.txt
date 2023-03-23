@@ -40,12 +40,6 @@ add_executable (
 
 target_include_directories (ctests PRIVATE src deps/Unity/src)
 
-add_executable (
-	core2 
-	src/core2.c)
-
-target_include_directories (core PRIVATE src)
-
 # add_executable (
 # 	ctests2
 # 	src/ctests2.c
