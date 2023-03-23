@@ -1521,6 +1521,142 @@ void test_PARSING_parse_name_4() {
 	TEST_ASSERT_EQUAL_INT((C)(x->tb + 16), A(N(S(x))));
 }
 
+// CONTIGUOUS MEMORY PRIMITIVES
+
+void test_MEM_grow() {
+	C size = 4096;
+	B block[size];
+	X* x = init(block, size);
+
+	// Ensure that RESERVED is 0 before the test
+	x->hr = (B*)x->th;
+
+	grow(x);
+
+	TEST_ASSERT_EQUAL_INT(f_nodes(x) - 1, x->free);
+	TEST_ASSERT_EQUAL_INT(sP, RESERVED(x));
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+
+	grow(x);
+
+	TEST_ASSERT_EQUAL_INT(f_nodes(x) - 2, x->free);
+	TEST_ASSERT_EQUAL_INT(2*sP, RESERVED(x));
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+
+	while(x->free) { grow(x); }
+
+	grow(x);
+
+	TEST_ASSERT_EQUAL_INT(E_NEM, x->err);
+}
+
+void test_MEM_shrink() {
+	C size = 4096;
+	B block[size];
+	X* x = init(block, size);
+
+	// Ensure that RESERVED is 0 before the test
+	x->hr = (B*)x->th;
+
+	grow(x);
+	grow(x);
+	shrink(x);
+
+	TEST_ASSERT_EQUAL_INT(f_nodes(x) - 1, x->free);
+	TEST_ASSERT_EQUAL_INT(sP, RESERVED(x));
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+
+	shrink(x);
+
+	TEST_ASSERT_EQUAL_INT(f_nodes(x), x->free);
+	TEST_ASSERT_EQUAL_INT(0, RESERVED(x));
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+
+	shrink(x);
+
+	TEST_ASSERT_EQUAL_INT(E_NER, x->err);
+}
+
+void test_MEM_allot() {
+	C size = 1024;
+	B block[size];
+	X* x = init(block, size);
+
+	B* here = x->hr;
+	S(x) = cons(x, 0, AS(ATM, S(x)));
+	allot(x);
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_INT(here, x->hr);
+
+	S(x) = cons(x, 13, AS(ATM, S(x)));
+	allot(x);
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_INT(here + 13, x->hr);
+
+	C fnodes = x->free;
+	here = x->hr;
+	C reserved = RESERVED(x);
+
+	// Ensure reserved memory is 0 to allow next tests to pass
+	S(x) = cons(x, RESERVED(x), AS(ATM, S(x)));
+	allot(x);
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_PTR(here + reserved, x->hr);
+	TEST_ASSERT_EQUAL_INT(0, RESERVED(x));
+	TEST_ASSERT_EQUAL_INT(fnodes, x->free);
+
+	here = x->hr;
+
+	S(x) = cons(x, 4*sP, AS(ATM, S(x)));
+	allot(x);
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_PTR(here + 4*sP, x->hr);
+	TEST_ASSERT_EQUAL_INT(fnodes - 4, x->free);
+	TEST_ASSERT_EQUAL_INT(0, RESERVED(x));
+
+	here = x->hr;
+
+	S(x) = cons(x, 2*sP - 3, AS(ATM, S(x)));
+	allot(x);
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_PTR(here + 2*sP - 3, x->hr);
+	TEST_ASSERT_EQUAL_INT(fnodes - 6, x->free);
+	TEST_ASSERT_EQUAL_INT(3, RESERVED(x));
+
+	S(x) = cons(x, -(2*sP - 3), AS(ATM, S(x)));
+	allot(x);
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_PTR(here, x->hr);
+	TEST_ASSERT_EQUAL_INT(fnodes - 4, x->free);
+	TEST_ASSERT_EQUAL_INT(0, RESERVED(x));
+
+	S(x) = cons(x, -1, AS(ATM, S(x)));
+	allot(x);
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_PTR(here - 1, x->hr);
+	TEST_ASSERT_EQUAL_INT(fnodes - 4, x->free);
+	TEST_ASSERT_EQUAL_INT(1, RESERVED(x));
+
+	here = x->hr;
+	reserved = RESERVED(x);
+	fnodes = x->free;
+
+	S(x) = cons(x, 2048, AS(ATM, S(x)));
+	allot(x);
+	TEST_ASSERT_EQUAL_INT(E_NEM, x->err);
+	TEST_ASSERT_EQUAL_PTR(here, x->hr);
+	TEST_ASSERT_EQUAL_INT(reserved, RESERVED(x));
+	TEST_ASSERT_EQUAL_INT(fnodes, x->free);
+
+	x->err = 0;
+	S(x) = cons(x, -2048, AS(ATM, S(x)));
+	allot(x);
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_PTR(BOTTOM(x), x->hr);
+	TEST_ASSERT_EQUAL_INT((C)ALIGN(x->hr, sP), x->th);
+	TEST_ASSERT_EQUAL_INT(f_nodes(x), x->free);
+}
+
 //void test_PARSING_parse_token() {
 //	C size = 512;
 //	B block[size];
@@ -1721,125 +1857,6 @@ void test_PARSING_parse_name_4() {
 //	TEST_ASSERT_EQUAL_INT(13, A(S(x)));
 //	TEST_ASSERT_EQUAL_INT(11, A(N(S(x))));
 //	TEST_ASSERT_EQUAL_INT(7, A(N(N(S(x)))));
-//}
-//
-//void test_MEM_grow() {
-//	C size = 4096;
-//	B block[size];
-//	X* x = init(block, size);
-//
-//	// Ensure that RESERVED is 0 before the test
-//	x->here = (B*)ALIGN(x->here, 2*sC);
-//
-//	grow(x);
-//
-//	TEST_ASSERT_EQUAL_INT(f_nodes(x) - 1, FREE(x));
-//	TEST_ASSERT_EQUAL_INT(2*sC, RESERVED(x));
-//
-//	grow(x);
-//
-//	TEST_ASSERT_EQUAL_INT(f_nodes(x) - 2, FREE(x));
-//	TEST_ASSERT_EQUAL_INT(4*sC, RESERVED(x));
-//}
-//
-//void test_MEM_shrink() {
-//	C size = 4096;
-//	B block[size];
-//	X* x = init(block, size);
-//
-//	// Ensure that RESERVED is 0 before the test
-//	x->here = (B*)ALIGN(x->here, 2*sC);
-//
-//	grow(x);
-//	grow(x);
-//	shrink(x);
-//
-//	TEST_ASSERT_EQUAL_INT(f_nodes(x) - 1, FREE(x));
-//	TEST_ASSERT_EQUAL_INT(2*sC, RESERVED(x));
-//
-//	shrink(x);
-//
-//	TEST_ASSERT_EQUAL_INT(f_nodes(x), FREE(x));
-//	TEST_ASSERT_EQUAL_INT(0, RESERVED(x));
-//}
-//
-//void test_MEM_allot() {
-//	C size = 1024;
-//	B block[size];
-//	X* x = init(block, size);
-//
-//	B* here = x->here;
-//	PUSH(x, 0);
-//	C result = allot(x);
-//	TEST_ASSERT_EQUAL_INT(0, result);
-//	TEST_ASSERT_EQUAL_INT(here, x->here);
-//
-//	PUSH(x, 13);
-//	result = allot(x);
-//	TEST_ASSERT_EQUAL_INT(0, result);
-//	TEST_ASSERT_EQUAL_INT(here + 13, x->here);
-//
-//	C fnodes = FREE(x);
-//	here = x->here;
-//	C reserved = RESERVED(x);
-//
-//	// Ensure reserved memory is 0 to allow next tests to pass
-//	PUSH(x, RESERVED(x));
-//	result = allot(x);
-//	TEST_ASSERT_EQUAL_INT(0, result);
-//	TEST_ASSERT_EQUAL_PTR(here + reserved, x->here);
-//	TEST_ASSERT_EQUAL_INT(0, RESERVED(x));
-//	TEST_ASSERT_EQUAL_INT(fnodes, FREE(x));
-//
-//	here = x->here;
-//
-//	PUSH(x, 8*sC);
-//	result = allot(x);
-//	TEST_ASSERT_EQUAL_INT(0, result);
-//	TEST_ASSERT_EQUAL_PTR(here + 8*sC, x->here);
-//	TEST_ASSERT_EQUAL_INT(fnodes - 4, FREE(x));
-//	TEST_ASSERT_EQUAL_INT(0, RESERVED(x));
-//
-//	here = x->here;
-//
-//	PUSH(x, 2*sC - 3);
-//	result = allot(x);
-//	TEST_ASSERT_EQUAL_INT(0, result);
-//	TEST_ASSERT_EQUAL_PTR(here + 2*sC - 3, x->here);
-//	TEST_ASSERT_EQUAL_INT(fnodes - 5, FREE(x));
-//	TEST_ASSERT_EQUAL_INT(3, RESERVED(x));
-//
-//	PUSH(x, -(2*sC - 3));
-//	result = allot(x);
-//	TEST_ASSERT_EQUAL_INT(0, result);
-//	TEST_ASSERT_EQUAL_PTR(here, x->here);
-//	TEST_ASSERT_EQUAL_INT(fnodes - 4, FREE(x));
-//	TEST_ASSERT_EQUAL_INT(0, RESERVED(x));
-//
-//	PUSH(x, -1);
-//	result = allot(x);
-//	TEST_ASSERT_EQUAL_INT(0, result);
-//	TEST_ASSERT_EQUAL_PTR(here - 1, x->here);
-//	TEST_ASSERT_EQUAL_INT(fnodes - 4, FREE(x));
-//	TEST_ASSERT_EQUAL_INT(1, RESERVED(x));
-//
-//	here = x->here;
-//	reserved = RESERVED(x);
-//	fnodes = FREE(x);
-//
-//	PUSH(x, 2048);
-//	result = allot(x);
-//	TEST_ASSERT_EQUAL_INT(ERR_NOT_ENOUGH_MEMORY, result);
-//	TEST_ASSERT_EQUAL_PTR(here, x->here);
-//	TEST_ASSERT_EQUAL_INT(reserved, RESERVED(x));
-//	TEST_ASSERT_EQUAL_INT(fnodes, FREE(x));
-//
-//	PUSH(x, -2048);
-//	result = allot(x);
-//	TEST_ASSERT_EQUAL_INT(0, result);
-//	TEST_ASSERT_EQUAL_PTR(BOTTOM(x), x->here);
-//	TEST_ASSERT_EQUAL_INT((C)ALIGN(x->here, 2*sC), x->there);
-//	TEST_ASSERT_EQUAL_INT(f_nodes(x), FREE(x));
 //}
 //
 //void test_PRMITIVES_zjump() {
@@ -4130,8 +4147,11 @@ int main() {
 	RUN_TEST(test_PARSING_parse_name_2);
 	RUN_TEST(test_PARSING_parse_name_3);
 	RUN_TEST(test_PARSING_parse_name_4);
-	//RUN_TEST(test_PARSING_parse_token);
-	//RUN_TEST(test_PARSING_find_token);
+
+	// MEMORY
+	RUN_TEST(test_MEM_grow);
+	RUN_TEST(test_MEM_shrink);
+	RUN_TEST(test_MEM_allot);
 
 	//// COMPILATION
 	//RUN_TEST(test_COMPILATION_compile_word);
@@ -4139,11 +4159,6 @@ int main() {
 	//// OUTER INTERPRETER
 	//RUN_TEST(test_OUTER_evaluate_numbers);
 	//RUN_TEST(test_OUTER_evaluate_words);
-
-	//// MEMORY
-	//RUN_TEST(test_MEM_grow);
-	//RUN_TEST(test_MEM_shrink);
-	//RUN_TEST(test_MEM_allot);
 
 	//// PRMITIVES
 	//RUN_TEST(test_PRMITIVES_zjump);

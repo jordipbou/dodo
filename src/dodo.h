@@ -67,16 +67,18 @@ C reverse(C p, C l) { return p ? ({ C t = N(p); D(p) = AS(T(p), l); reverse(t, p
 
 enum Errors { E_EIB = -11, E_ZLN, E_EA, E_EL, E_EAA, E_UW, E_NER, E_NEM, E_DBZ, E_UF, E_OF, E_IP = 1 };
 
-#define OF(x, n)			if (x->free < n) { x->err = E_OF; return; }
-#define UF1(x)				if (S(x) == 0) { x->err = E_UF; return; }
-#define UF2(x)				if (S(x) == 0 || N(S(x)) == 0) { x->err = E_UF; return; }
-#define UF3(x)				if (!S(x) || !N(S(x)) || !N(N(S(x)))) { x->err = E_UF; return; }
+#define ERR(x, c, e)	if (c) { x->err = e; return; }
 
-#define EA(x)					UF1(x); if (T(S(x)) != ATM) { x->err = E_EA; return; }
-#define EL(x)					UF1(x); if (T(S(x)) != LST) { x->err = E_EL; return; }
-#define EAA(x)				UF2(x); if (T(S(x)) != ATM || T(N(S(x))) != ATM) { x->err = E_EAA; return; }
+#define OF(x, n)			ERR(x, x->free < n, E_OF)
+#define UF1(x)				ERR(x, S(x) == 0, E_UF)
+#define UF2(x)				ERR(x, S(x) == 0 || N(S(x)) == 0, E_UF)
+#define UF3(x)				ERR(x, !S(x) || !N(S(x)) || !N(N(S(x))), E_UF)
 
-#define EIB(x)				if (!x->tb) { x->err = E_EIB; return; }
+#define EA(x)					UF1(x); ERR(x, T(S(x)) != ATM, E_EA)
+#define EL(x)					UF1(x); ERR(x, T(S(x)) != LST, E_EL)
+#define EAA(x)				UF2(x); ERR(x, T(S(x)) != ATM || T(N(S(x))) != ATM, E_EAA)
+
+#define EIB(x)				ERR(x, !x->tb, E_EIB)
 
 // STACK PRIMITIVES
 
@@ -139,12 +141,12 @@ void inner(X* x) {
 
 // EXECUTION PRIMITIVES
 
-void exec_x(X* x) { 
-	UF1(x); C c = T(S(x)) == LST ? clone(x, A(S(x))) : cons(x, A(S(x)), AS(T(S(x)), 0));
+void exec_x(X* x) { UF1(x); // TODO: Check overflow for clone
+	C c = T(S(x)) == LST ? clone(x, A(S(x))) : cons(x, A(S(x)), AS(T(S(x)), 0));
 	if (R(x)) R(x) = recl(x, R(x)); x->rs = cons(x, c, AS(LST, x->rs)); x->err = 1;
 }
-void exec_i(X* x) { 
-	UF1(x); if (A(S(x)) == 0) { S(x) = recl(x, S(x)); return; }
+void exec_i(X* x) { UF1(x); // TODO: Check overflow
+	if (A(S(x)) == 0) { S(x) = recl(x, S(x)); return; }
 	C t = S(x); S(x) = N(S(x)); R(x) = recl(x, R(x));
 	if (T(t) == LST) { LK(t, x->rs); x->rs = t; x->err = 1; }
 	else { LK(t, 0); x->rs = cons(x, t, AS(LST, 0)); x->err = 1; }
@@ -166,6 +168,26 @@ void parse_name(X* x) { OF(x, 2); EIB(x);
 	PARSE(x, isspace(TC(x))); S(x) = cons(x, (C)(x->tb + x->in), AS(ATM, S(x)));
 	PARSE(x, !isspace(TC(x))); S(x) = cons(x, (C)((x->tb + x->in) - A(S(x))) , AS(ATM, S(x)));
 }
+
+// CONTINUOUS MEMORY PRIMITIVES
+
+#define RESERVED(x)				((x->th) - ((C)x->hr))
+
+void grow(X* x) { ERR(x, A(x->th) != (x->th + sP), E_NEM); x->th += sP; D(x->th) = 0; x->free--; }
+void shrink(X* x) { ERR(x, RESERVED(x) < sP, E_NER); 
+	D(x->th) = x->th - sP; x->th -= sP; A(x->th) = x->th + sP; D(x->th) = 0; x->free++;
+}
+void allot(X* x) { UF1(x);
+	C b = A(S(x)); S(x) = recl(x, S(x));
+	if (b > 0) { ERR(x, b >= (TOP(x) - ((C)x->hr)), E_NEM);
+		while (RESERVED(x) < b) { grow(x); if (x->err) return; }
+		x->hr += b;
+	} else if (b < 0) {
+		x->hr = (b < (BOTTOM(x) - x->hr)) ? BOTTOM(x) : x->hr + b;
+		while (RESERVED(x) >= sP) { shrink(x); if (x->err) return; }
+	}
+}
+
 // ----------------------------------------------------------------------------- END OF CORE
 
 void dump_cell(X*, C);
