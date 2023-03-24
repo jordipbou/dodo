@@ -23,7 +23,7 @@ enum Types { ATM, LST, PRM, WRD };
 #define LK(p, n)					(D(p) = AS(T(p), n))
 
 typedef struct {
-	B *tb, *hr;
+	B *ib, *hr;
 	C th, sz, fr, ds, err, rs, st, lt, in, il, free;
 } X;
 
@@ -48,7 +48,7 @@ X* init(B* bl, C sz) {
 		D(p) = p == x->th ? 0 : p - sP;
 	}
 
-	x->tb = 0;
+	x->ib = 0;
 	x->in = x->il = x->st = x->err = x->lt = 0;
 
 	return x;
@@ -67,7 +67,7 @@ C reverse(C p, C l) { return p ? ({ C t = N(p); D(p) = AS(T(p), l); reverse(t, p
 
 enum Errors { E_EIB = -12, E_ZLN, E_EW, E_EA, E_EL, E_EAA, E_UW, E_NER, E_NEM, E_DBZ, E_UF, E_OF, E_IP = 1 };
 
-#define ERR(x, c, e)	if (c) { x->err = e; return; }
+#define ERR(x, c, ...)	if (c) { x->err = __VA_ARGS__; return; }
 
 #define OF(x, n)			ERR(x, x->free < n, E_OF)
 #define UF1(x)				ERR(x, S(x) == 0, E_UF)
@@ -79,7 +79,7 @@ enum Errors { E_EIB = -12, E_ZLN, E_EW, E_EA, E_EL, E_EAA, E_UW, E_NER, E_NEM, E
 #define EW(x)					UF1(x); ERR(x, T(S(x)) != WRD, E_EW)
 #define EAA(x)				UF2(x); ERR(x, T(S(x)) != ATM || T(N(S(x))) != ATM, E_EAA)
 
-#define EIB(x)				ERR(x, !x->tb, E_EIB)
+#define EIB(x)				ERR(x, !x->ib, E_EIB)
 
 // STACK PRIMITIVES
 
@@ -147,6 +147,7 @@ typedef void (*FUNC)(X*);
 #define CALL(x, l)			(x->rs = cons(x, clone(x, l), AS(LST, x->rs)))
 
 #define STEP(x) ( {\
+	printf("STEP::"); dump_context(x); \
 	if (R(x)) { \
 		switch(T(R(x))) { \
 			case ATM: S(x) = cons(x, A(R(x)), AS(ATM, S(x))); NEXT(x); break; \
@@ -155,19 +156,24 @@ typedef void (*FUNC)(X*);
 			case WRD: CALL(x, XT(A(R(x)))); break; \
 		} \
 	}; \
-	R(x) != 0; })
+	printf("OUT OF STEP::"); dump_context(x); \
+	R(x); })
 
 #define JUMP(x, l) R(x) = clone(x, l)
 
 // EXECUTION PRIMITIVES
 
 void exec_i(X* x) { UF1(x);
+	printf("EXEC_I::"); dump_context(x);
 	switch (T(S(x))) {
 		case ATM: ({ C p = A(S(x)); S(x) = recl(x, S(x)); ((FUNC)p)(x); }); break;
 		case LST: CALL(x, A(S(x))); S(x) = recl(x, S(x)); STEP(x); break;
 		case PRM: ({ C p = A(S(x)); S(x) = recl(x, S(x)); ((FUNC)p)(x); }); break;
-		case WRD: CALL(x, XT(A(S(x)))); STEP(x); break;
+		case WRD: 
+			printf("WORD %s %ld\n", NFA(A(S(x))), XT(A(S(x)))); 
+			({ C r = R(x); CALL(x, XT(A(S(x)))); S(x) = recl(x, S(x)); while(STEP(x) != r); }); break;
 	}
+	printf("OUT OF EXEC_I::"); dump_context(x);
 }
 void exec_x(X* x) { UF1(x); duplicate(x); exec_i(x); }
 void branch(X* x) { UF3(x); if (!A(N(N(S(x))))) { swap(x); } drop(x); swap(x); drop(x); exec_i(x); }
@@ -177,15 +183,15 @@ void rbracket(X* x) { x->st = 1; }
 
 // PARSING
 
-#define TC(x)							(*(x->tb + x->in))
+#define TC(x)							(*(x->ib + x->in))
 
 #define PARSE(x, cond)		while(TC(x) && cond && x->in < x->il) { x->in++; }
 void parse(X* x) { EA(x); OF(x, 1); EIB(x);
-	PARSE(x, TC(x) != A(S(x))); A(S(x)) = (C)x->tb; S(x) = cons(x, x->in, AS(ATM, S(x))); x->in++;
+	PARSE(x, TC(x) != A(S(x))); A(S(x)) = (C)x->ib; S(x) = cons(x, x->in, AS(ATM, S(x))); x->in++;
 }
 void parse_name(X* x) { OF(x, 2); EIB(x);
-	PARSE(x, isspace(TC(x))); S(x) = cons(x, (C)(x->tb + x->in), AS(ATM, S(x)));
-	PARSE(x, !isspace(TC(x))); S(x) = cons(x, (C)((x->tb + x->in) - A(S(x))) , AS(ATM, S(x)));
+	PARSE(x, isspace(TC(x))); S(x) = cons(x, (C)(x->ib + x->in), AS(ATM, S(x)));
+	PARSE(x, !isspace(TC(x))); S(x) = cons(x, (C)((x->ib + x->in) - A(S(x))) , AS(ATM, S(x)));
 }
 
 // CONTINUOUS MEMORY PRIMITIVES
@@ -217,24 +223,27 @@ void find_name(X* x) { UF2(x); ERR(x, A(S(x)) == 0, E_ZLN);
 	else { OF(x, 1); S(x) = cons(x, 0, AS(ATM, S(x))); }
 }
 
-void compile(X* x) { UF1(x); EW(x); A(S(x)) = A(XT(A(S(x)))); D(S(x)) = AS(PRM, N(S(x))); }
+void compile(X* x) { UF1(x); EW(x); 
+	C w = A(S(x)); S(x) = recl(x, S(x));
+	if (PRIMITIVE(w)) S(x) = cons(x, A(XT(w)), AS(PRM, S(x)));
+	else S(x) = cons(x, XT(w), AS(WRD, S(x)));
+}
 
 void outer(X* x) {
 	char *endptr;
 	do {
-		printf("%.*s^%.*s\n", (int)x->in, x->tb, (int)(x->il - x->in), x->tb + x->in);
-		parse_name(x); ERR(x, A(S(x)) == 0, E_EIB);
-		printf("TOKEN: %.*s\n", (int)A(S(x)), (B*)A(N(S(x))));
+		dump_context(x);
+		parse_name(x); ERR(x, A(S(x)) == 0, E_EIB; drop(x); drop(x));
+		dump_context(x);
 		find_name(x);
-		printf("<%ld> ", length(S(x))); dump_stack(x, S(x));
+		dump_context(x);
 		if (A(S(x)) == 0) {
 			C addr = A(N(N(S(x)))); S(x) = recl(x, recl(x, recl(x, S(x))));
 			intmax_t n = strtoimax((B*)addr, &endptr, 10);
 			ERR(x, n == 0 && endptr == (char*)addr, E_UW);
 			S(x) = cons(x, n, AS(ATM, S(x)));
 		} else {
-			// TODO: exec_i can not be called from code !!!!
-			if (x->st == 0) {	exec_i(x); }
+			if (x->st == 0) {	printf("EXECUTING\n"); exec_i(x); ERR(x, x->err < 0, x->err); }
 			else if (NDCS(A(S(x))) && CS(A(S(x))) == 0) { exec_i(x); }
 			/* } else if (NDCS(w)) { Execute custom NDCS xt } */
 			/* } else if ( has code generator ) { execute code generator } */
@@ -244,7 +253,7 @@ void outer(X* x) {
 }
 
 void evaluate(X* x) { UF2(x); 
-	x->in = 0; x->il = A(S(x)); x->tb = (B*)A(N(S(x))); S(x) = recl(x, recl(x, S(x))); 
+	x->in = 0; x->il = A(S(x)); x->ib = (B*)A(N(S(x))); S(x) = recl(x, recl(x, S(x))); 
 	outer(x);
 }
 
@@ -254,22 +263,22 @@ void dump_list(X* x, C l) { while (l) { dump_cell(x, l); l = N(l); } }
 
 void dump_cell(X* x, C c) {
 	switch(T(c)) {
-		case ATM: printf("%ld ", A(c)); break;
+		case ATM: printf("#%ld ", A(c)); break;
 		case LST: printf("{ "); dump_list(x, A(c)); printf("} "); break;
 		case PRM: 
-			if (A(c) == (C)&swap) printf("swap ");
-			else if (A(c) == (C)&duplicate) printf("dup ");
-			else if (A(c) == (C)&gt) printf("> ");
-			else if (A(c) == (C)&sub) printf("- ");
-			else if (A(c) == (C)&add) printf("+ ");
-			else if (A(c) == (C)&rot) printf("rot ");
-			else if (A(c) == (C)&exec_x) printf("x ");
-			else if (A(c) == (C)&exec_i) printf("i ");
-			else if (A(c) == (C)&branch) printf("branch ");
-			else if (A(c) == (C)&drop) printf("drop ");
+			if (A(c) == (C)&swap) printf("P:swap ");
+			else if (A(c) == (C)&duplicate) printf("P:dup ");
+			else if (A(c) == (C)&gt) printf("P:> ");
+			else if (A(c) == (C)&sub) printf("P:- ");
+			else if (A(c) == (C)&add) printf("P:+ ");
+			else if (A(c) == (C)&rot) printf("P:rot ");
+			else if (A(c) == (C)&exec_x) printf("P:x ");
+			else if (A(c) == (C)&exec_i) printf("P:i ");
+			else if (A(c) == (C)&branch) printf("P:branch ");
+			else if (A(c) == (C)&drop) printf("P:drop ");
 			else printf("P:%ld ", A(c));
 			break;
-		case WRD: printf("%s ", (B*)NFA(A(c))); break;
+		case WRD: printf("W:%s ", (B*)NFA(A(c))); break;
 	}
 }
 
@@ -280,6 +289,8 @@ void dump_stack(X* x, C l) {
 }
 
 void dump_context(X* x) {
+	printf("STATE: %ld\n", x->st);
+	printf("%.*s^%.*s", (int)x->in, x->ib, (int)(x->il - x->in), x->ib + x->in);
 	printf("<%ld> ", length(S(x)));
 	dump_stack(x, S(x));
 	printf("‖ ");
@@ -289,45 +300,48 @@ void dump_context(X* x) {
 
 // BOOTSTRAPPING
 
-#define ADD_PRIMITIVE(x, n, f, i) \
-	x->lt = cons(x, cons(x, (C)n, AS(ATM, cons(x, (C)f, AS(PRM, 0)))), AS(i, x->lt));
+#define ADD_PRIMITIVE(x, n, f) \
+	x->lt = cons(x, cons(x, (C)n, AS(ATM, cons(x, (C)f, AS(PRM, 0)))), AS(PRIM, x->lt));
+
+#define ADD_NDCS_PRIM(x, n, f) \
+	x->lt = cons(x, cons(x, (C)n, AS(ATM, cons(x, 0, AS(LST, cons(x, (C)f, AS(PRM, 0)))))), AS(NDCS_PRIM, x->lt));
 
 X* bootstrap(X* x) {
-	ADD_PRIMITIVE(x, "branch", &branch, PRIM);
-	ADD_PRIMITIVE(x, "i", &exec_i, PRIM);
-	ADD_PRIMITIVE(x, "x", &exec_x, PRIM);
+	ADD_PRIMITIVE(x, "branch", &branch);
+	ADD_PRIMITIVE(x, "i", &exec_i);
+	ADD_PRIMITIVE(x, "x", &exec_x);
 
-	ADD_PRIMITIVE(x, "[", &lbracket, NDCS_PRIM);
-	ADD_PRIMITIVE(x, "]", &rbracket, PRIM);
+	ADD_NDCS_PRIM(x, "[", &lbracket);
+	ADD_PRIMITIVE(x, "]", &rbracket);
 
-	ADD_PRIMITIVE(x, "+", &add, PRIM);
-	ADD_PRIMITIVE(x, "-", &sub, PRIM);
-	ADD_PRIMITIVE(x, "*", &mul, PRIM);
-	ADD_PRIMITIVE(x, "/", &division, PRIM);
-	ADD_PRIMITIVE(x, "mod", &mod, PRIM);
+	ADD_PRIMITIVE(x, "+", &add);
+	ADD_PRIMITIVE(x, "-", &sub);
+	ADD_PRIMITIVE(x, "*", &mul);
+	ADD_PRIMITIVE(x, "/", &division);
+	ADD_PRIMITIVE(x, "mod", &mod);
 
-	ADD_PRIMITIVE(x, ">", &gt, PRIM);
-	ADD_PRIMITIVE(x, "<", &lt, PRIM);
-	ADD_PRIMITIVE(x, "=", &eq, PRIM);
-	ADD_PRIMITIVE(x, "<>", &neq, PRIM);
+	ADD_PRIMITIVE(x, ">", &gt);
+	ADD_PRIMITIVE(x, "<", &lt);
+	ADD_PRIMITIVE(x, "=", &eq);
+	ADD_PRIMITIVE(x, "<>", &neq);
 
-	ADD_PRIMITIVE(x, "and", &and, PRIM);
-	ADD_PRIMITIVE(x, "or", &or, PRIM);
-	ADD_PRIMITIVE(x, "invert", &invert, PRIM);
+	ADD_PRIMITIVE(x, "and", &and);
+	ADD_PRIMITIVE(x, "or", &or);
+	ADD_PRIMITIVE(x, "invert", &invert);
 
-	ADD_PRIMITIVE(x, "dup", &duplicate, PRIM);
-	ADD_PRIMITIVE(x, "swap", &swap, PRIM);
-	ADD_PRIMITIVE(x, "drop", &drop, PRIM);
-	ADD_PRIMITIVE(x, "over", &over, PRIM);
-	ADD_PRIMITIVE(x, "rot", &rot, PRIM);
+	ADD_PRIMITIVE(x, "dup", &duplicate);
+	ADD_PRIMITIVE(x, "swap", &swap);
+	ADD_PRIMITIVE(x, "drop", &drop);
+	ADD_PRIMITIVE(x, "over", &over);
+	ADD_PRIMITIVE(x, "rot", &rot);
 
-	ADD_PRIMITIVE(x, "{}", &empty, PRIM);
-	ADD_PRIMITIVE(x, "s>l", &stack_to_list, PRIM);
-	ADD_PRIMITIVE(x, "l>s", &list_to_stack, PRIM);
+	ADD_PRIMITIVE(x, "{}", &empty);
+	ADD_PRIMITIVE(x, "s>l", &stack_to_list);
+	ADD_PRIMITIVE(x, "l>s", &list_to_stack);
 
-	ADD_PRIMITIVE(x, "grow", &grow, PRIM);
-	ADD_PRIMITIVE(x, "shrink", &shrink, PRIM);
-	ADD_PRIMITIVE(x, "allot", &allot, PRIM);
+	ADD_PRIMITIVE(x, "grow", &grow);
+	ADD_PRIMITIVE(x, "shrink", &shrink);
+	ADD_PRIMITIVE(x, "allot", &allot);
 
 	//ADD_PRIMITIVE(x, "latest", &latest, 0);
 	//ADD_PRIMITIVE(x, "here", &here, 0);

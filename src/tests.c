@@ -171,7 +171,7 @@ void test_X_block_initialization() {
 	TEST_ASSERT_EQUAL_INT(0, x->err);
 	TEST_ASSERT_EQUAL_INT(0, x->st);
 
-	TEST_ASSERT_NULL(x->tb);
+	TEST_ASSERT_NULL(x->ib);
 	TEST_ASSERT_EQUAL_INT(0, x->in);
 }
 
@@ -1415,6 +1415,48 @@ void test_INNER_STEP_words_2() {
 	TEST_ASSERT_EQUAL_INT(1, length(x->rs));
 }
 
+void test_INNER_STEP_1() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	C add_ =
+		cons(x,
+			cons(x, (C)"+", AS(ATM,
+			cons(x, (C)&add, AS(PRM, 0)))),
+		AS(PRIM, 0));
+
+	S(x) = cons(x, add_, AS(WRD, cons(x, 2, AS(ATM, cons(x, 1, AS(ATM, 0))))));
+
+	exec_i(x);
+
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(0, length(R(x)));
+	TEST_ASSERT_EQUAL_INT(1, length(x->rs));
+	TEST_ASSERT_EQUAL_INT(3, A(S(x)));
+}
+
+void test_INNER_STEP_2() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	C double_ =
+		cons(x,
+			cons(x, (C)"double", AS(ATM,
+			cons(x, (C)&duplicate, AS(PRM,
+			cons(x, (C)&add, AS(PRM, 0)))))),
+		AS(PRIM, 0));
+
+	S(x) = cons(x, double_, AS(WRD, cons(x, 2, AS(ATM, 0))));
+
+	exec_i(x);
+
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(0, length(R(x)));
+	TEST_ASSERT_EQUAL_INT(1, length(x->rs));
+	TEST_ASSERT_EQUAL_INT(4, A(S(x)));
+}
 
 // EXECUTION PRMITIVEs
 
@@ -1656,7 +1698,7 @@ void test_PARSING_parse() {
 	B block[size];
 	X* x = init(block, size);
 
-	x->tb = "  parsing \""; x->il = strlen(x->tb);
+	x->ib = "  parsing \""; x->il = strlen(x->ib);
 	S(x) = cons(x, '"', AS(ATM, 0));
 
 	parse(x);
@@ -1672,7 +1714,7 @@ void test_PARSING_parse_2() {
 	B block[size];
 	X* x = init(block, size);
 
-	x->tb = ""; x->il = 0;
+	x->ib = ""; x->il = 0;
 	S(x) = cons(x, '"', AS(ATM, 0));
 
 	parse(x);
@@ -1680,7 +1722,7 @@ void test_PARSING_parse_2() {
 	TEST_ASSERT_EQUAL_INT(0, x->err);
 	TEST_ASSERT_EQUAL_INT(2, length(S(x)));
 	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
-	TEST_ASSERT_EQUAL_INT((C)x->tb, A(N(S(x))));
+	TEST_ASSERT_EQUAL_INT((C)x->ib, A(N(S(x))));
 }
 
 void test_PARSING_parse_3() {
@@ -1688,7 +1730,7 @@ void test_PARSING_parse_3() {
 	B block[size];
 	X* x = init(block, size);
 
-	x->tb = "\""; x->il = strlen(x->tb);
+	x->ib = "\""; x->il = strlen(x->ib);
 	S(x) = cons(x, '"', AS(ATM, 0));
 
 	parse(x);
@@ -1696,7 +1738,7 @@ void test_PARSING_parse_3() {
 	TEST_ASSERT_EQUAL_INT(0, x->err);
 	TEST_ASSERT_EQUAL_INT(2, length(S(x)));
 	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
-	TEST_ASSERT_EQUAL_INT((C)x->tb, A(N(S(x))));
+	TEST_ASSERT_EQUAL_INT((C)x->ib, A(N(S(x))));
 	TEST_ASSERT_EQUAL_INT(1, x->in);
 }
 
@@ -1705,7 +1747,7 @@ void test_PARSING_parse_4() {
 	B block[size];
 	X* x = init(block, size);
 
-	x->tb = 0;
+	x->ib = 0;
 	S(x) = cons(x, '"', AS(ATM, 0));
 
 	parse(x);
@@ -1718,7 +1760,7 @@ void test_PARSING_parse_name() {
 	B block[size];
 	X* x = init(block, size);
 
-	x->tb = 0;
+	x->ib = 0;
 	
 	parse_name(x);
 
@@ -1730,14 +1772,14 @@ void test_PARSING_parse_name_2() {
 	B block[size];
 	X* x = init(block, size);
 
-	x->tb = "test"; x->il = strlen(x->tb);
+	x->ib = "test"; x->il = strlen(x->ib);
 	
 	parse_name(x);
 
 	TEST_ASSERT_EQUAL_INT(0, x->err);
 	TEST_ASSERT_EQUAL_INT(2, length(S(x)));
 	TEST_ASSERT_EQUAL_INT(4, A(S(x)));
-	TEST_ASSERT_EQUAL_INT((C)x->tb, A(N(S(x))));
+	TEST_ASSERT_EQUAL_INT((C)x->ib, A(N(S(x))));
 	TEST_ASSERT_EQUAL_INT(4, x->in);
 }
 
@@ -1746,14 +1788,14 @@ void test_PARSING_parse_name_3() {
 	B block[size];
 	X* x = init(block, size);
 
-	x->tb = ""; x->il = 0;
+	x->ib = ""; x->il = 0;
 	
 	parse_name(x);
 
 	TEST_ASSERT_EQUAL_INT(0, x->err);
 	TEST_ASSERT_EQUAL_INT(2, length(S(x)));
 	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
-	TEST_ASSERT_EQUAL_INT((C)x->tb, A(N(S(x))));
+	TEST_ASSERT_EQUAL_INT((C)x->ib, A(N(S(x))));
 	TEST_ASSERT_EQUAL_INT(0, x->in);
 }
 
@@ -1762,14 +1804,14 @@ void test_PARSING_parse_name_4() {
 	B block[size];
 	X* x = init(block, size);
 
-	x->tb = ": double dup + ;"; x->il = strlen(x->tb);
+	x->ib = ": double dup + ;"; x->il = strlen(x->ib);
 	
 	parse_name(x);
 
 	TEST_ASSERT_EQUAL_INT(0, x->err);
 	TEST_ASSERT_EQUAL_INT(2, length(S(x)));
 	TEST_ASSERT_EQUAL_INT(1, A(S(x)));
-	TEST_ASSERT_EQUAL_INT((C)x->tb, A(N(S(x))));
+	TEST_ASSERT_EQUAL_INT((C)x->ib, A(N(S(x))));
 	TEST_ASSERT_EQUAL_INT(1, x->in);
 	TEST_ASSERT_EQUAL_MEMORY(":", A(N(S(x))), A(S(x)));
 
@@ -1778,7 +1820,7 @@ void test_PARSING_parse_name_4() {
 	TEST_ASSERT_EQUAL_INT(0, x->err);
 	TEST_ASSERT_EQUAL_INT(4, length(S(x)));
 	TEST_ASSERT_EQUAL_INT(6, A(S(x)));
-	TEST_ASSERT_EQUAL_INT((C)(x->tb + 2), A(N(S(x))));
+	TEST_ASSERT_EQUAL_INT((C)(x->ib + 2), A(N(S(x))));
 	TEST_ASSERT_EQUAL_INT(8, x->in);
 	TEST_ASSERT_EQUAL_MEMORY("double", A(N(S(x))), A(S(x)));
 
@@ -1787,7 +1829,7 @@ void test_PARSING_parse_name_4() {
 	TEST_ASSERT_EQUAL_INT(0, x->err);
 	TEST_ASSERT_EQUAL_INT(6, length(S(x)));
 	TEST_ASSERT_EQUAL_INT(3, A(S(x)));
-	TEST_ASSERT_EQUAL_INT((C)(x->tb + 9), A(N(S(x))));
+	TEST_ASSERT_EQUAL_INT((C)(x->ib + 9), A(N(S(x))));
 	TEST_ASSERT_EQUAL_INT(12, x->in);
 	TEST_ASSERT_EQUAL_MEMORY("dup", A(N(S(x))), A(S(x)));
 
@@ -1796,7 +1838,7 @@ void test_PARSING_parse_name_4() {
 	TEST_ASSERT_EQUAL_INT(0, x->err);
 	TEST_ASSERT_EQUAL_INT(8, length(S(x)));
 	TEST_ASSERT_EQUAL_INT(1, A(S(x)));
-	TEST_ASSERT_EQUAL_INT((C)(x->tb + 13), A(N(S(x))));
+	TEST_ASSERT_EQUAL_INT((C)(x->ib + 13), A(N(S(x))));
 	TEST_ASSERT_EQUAL_INT(14, x->in);
 	TEST_ASSERT_EQUAL_MEMORY("+", A(N(S(x))), A(S(x)));
 
@@ -1805,7 +1847,7 @@ void test_PARSING_parse_name_4() {
 	TEST_ASSERT_EQUAL_INT(0, x->err);
 	TEST_ASSERT_EQUAL_INT(10, length(S(x)));
 	TEST_ASSERT_EQUAL_INT(1, A(S(x)));
-	TEST_ASSERT_EQUAL_INT((C)(x->tb + 15), A(N(S(x))));
+	TEST_ASSERT_EQUAL_INT((C)(x->ib + 15), A(N(S(x))));
 	TEST_ASSERT_EQUAL_INT(16, x->in);
 	TEST_ASSERT_EQUAL_MEMORY(";", A(N(S(x))), A(S(x)));
 
@@ -1814,7 +1856,7 @@ void test_PARSING_parse_name_4() {
 	TEST_ASSERT_EQUAL_INT(0, x->err);
 	TEST_ASSERT_EQUAL_INT(12, length(S(x)));
 	TEST_ASSERT_EQUAL_INT(0, A(S(x)));
-	TEST_ASSERT_EQUAL_INT((C)(x->tb + 16), A(N(S(x))));
+	TEST_ASSERT_EQUAL_INT((C)(x->ib + 16), A(N(S(x))));
 }
 
 // CONTIGUOUS MEMORY PRIMITIVES
@@ -1966,7 +2008,7 @@ void test_DICT_find_name() {
 		cons(x, cons(x, (C)"dup", AS(ATM, cons(x, (C)&duplicate, AS(PRM, 0)))), AS(PRIM,
 		cons(x, cons(x, (C)"test", AS(ATM, cons(x, (C)&add, AS(PRM, 0)))), AS(NDCS_PRIM, 0))))))));
 
-	x->tb = "";
+	x->ib = "";
 	
 	parse_name(x);
 	find_name(x);
@@ -1977,7 +2019,7 @@ void test_DICT_find_name() {
 	TEST_ASSERT_EQUAL_INT(E_ZLN, x->err);
 
 	x->err = 0;
-	x->tb = "dup"; x->il = strlen(x->tb);
+	x->ib = "dup"; x->il = strlen(x->ib);
 	x->in = 0;
 
 	parse_name(x);
@@ -1987,7 +2029,7 @@ void test_DICT_find_name() {
 	TEST_ASSERT_NOT_EQUAL_INT(0, w);
 	TEST_ASSERT_EQUAL_INT(N(N(x->lt)), w);
 
-	x->tb = "   join  "; x->il = strlen(x->tb);
+	x->ib = "   join  "; x->il = strlen(x->ib);
 	x->in = 0;
 
 	parse_name(x);
@@ -1997,7 +2039,7 @@ void test_DICT_find_name() {
 	TEST_ASSERT_NOT_EQUAL_INT(0, w);
 	TEST_ASSERT_EQUAL_INT(N(x->lt), w);
 
-	x->tb = "test"; x->il = strlen(x->tb);
+	x->ib = "test"; x->il = strlen(x->ib);
 	x->in = 0;
 
 	parse_name(x);
@@ -2015,68 +2057,68 @@ void test_DICT_find_name() {
 //	X* x = init(block, size);
 //	B* str = "   test  ";
 //
-//	x->tb = str;
+//	x->ib = str;
 //	x->token = 0;
 //	x->in = 0;
 //
 //	parse_token(x);
 //
 //	TEST_ASSERT_EQUAL_INT(4, x->in - x->token);
-//	TEST_ASSERT_EQUAL_INT((C)str + 3, x->tb + x->token);
+//	TEST_ASSERT_EQUAL_INT((C)str + 3, x->ib + x->token);
 //
 //	parse_token(x);
 //
 //	TEST_ASSERT_EQUAL_INT(0, x->in - x->token);
-//	TEST_ASSERT_EQUAL_INT((C)str + 9, x->tb + x->token);
+//	TEST_ASSERT_EQUAL_INT((C)str + 9, x->ib + x->token);
 //
 //	B* str2 = "";
-//	x->tb = str2;
+//	x->ib = str2;
 //	x->token = 0;
 //	x->in = 0;
 //
 //	parse_token(x);
 //
 //	TEST_ASSERT_EQUAL_INT(0, x->in - x->token);
-//	TEST_ASSERT_EQUAL_INT((C)str2, x->tb + x->token);
+//	TEST_ASSERT_EQUAL_INT((C)str2, x->ib + x->token);
 //
 //	B* str3 = ": name    word1 ;";
-//	x->tb = str3;
+//	x->ib = str3;
 //	x->token = 0;
 //	x->in = 0;
 //
 //	parse_token(x);
 //
 //	TEST_ASSERT_EQUAL_INT(1, x->in - x->token);
-//	TEST_ASSERT(!strncmp(":", x->tb + x->token, x->in - x->token));
-//	TEST_ASSERT_EQUAL_INT((C)str3, x->tb + x->token);
+//	TEST_ASSERT(!strncmp(":", x->ib + x->token, x->in - x->token));
+//	TEST_ASSERT_EQUAL_INT((C)str3, x->ib + x->token);
 //
 //	parse_token(x);
 //
 //	TEST_ASSERT_EQUAL_INT(4, x->in - x->token);
-//	TEST_ASSERT(!strncmp("name", x->tb + x->token, x->in - x->token));
-//	TEST_ASSERT_EQUAL_INT((C)str3 + 2, x->tb + x->token);
+//	TEST_ASSERT(!strncmp("name", x->ib + x->token, x->in - x->token));
+//	TEST_ASSERT_EQUAL_INT((C)str3 + 2, x->ib + x->token);
 //
 //	parse_token(x);
 //
 //	TEST_ASSERT_EQUAL_INT(5, x->in - x->token);
-//	TEST_ASSERT(!strncmp("word1", x->tb + x->token, x->in - x->token));
-//	TEST_ASSERT_EQUAL_INT((C)str3 + 10, x->tb + x->token);
+//	TEST_ASSERT(!strncmp("word1", x->ib + x->token, x->in - x->token));
+//	TEST_ASSERT_EQUAL_INT((C)str3 + 10, x->ib + x->token);
 //
 //	parse_token(x);
 //
 //	TEST_ASSERT_EQUAL_INT(1, x->in - x->token);
-//	TEST_ASSERT(!strncmp(";", x->tb + x->token, x->in - x->token));
-//	TEST_ASSERT_EQUAL_INT((C)str3 + 16, x->tb + x->token);
+//	TEST_ASSERT(!strncmp(";", x->ib + x->token, x->in - x->token));
+//	TEST_ASSERT_EQUAL_INT((C)str3 + 16, x->ib + x->token);
 //
 //	parse_token(x);
 //
 //	TEST_ASSERT_EQUAL_INT(0, x->in - x->token);
-//	TEST_ASSERT_EQUAL_INT((C)str3 + 17, x->tb + x->token);
+//	TEST_ASSERT_EQUAL_INT((C)str3 + 17, x->ib + x->token);
 //
 //	parse_token(x);
 //
 //	TEST_ASSERT_EQUAL_INT(0, x->in - x->token);
-//	TEST_ASSERT_EQUAL_INT((C)str3 + 17, x->tb + x->token);
+//	TEST_ASSERT_EQUAL_INT((C)str3 + 17, x->ib + x->token);
 //}
 //
 //void test_PARSING_find_name() {
@@ -2090,7 +2132,7 @@ void test_DICT_find_name() {
 //		cons(x, cons(x, (C)"join", AS(ATM, 0)), AS(LST,
 //		cons(x, cons(x, (C)"test", AS(ATM, 0)), AS(LST, 0))))))));
 //
-//	x->tb = "dup";
+//	x->ib = "dup";
 //	x->token = 0;
 //	x->in = 3;
 //
@@ -2100,7 +2142,7 @@ void test_DICT_find_name() {
 //	TEST_ASSERT_EQUAL_INT(1, IMMEDIATE(word));
 //	TEST_ASSERT_EQUAL_INT(N(x->latest), word);
 //
-//	x->tb = "   join  ";
+//	x->ib = "   join  ";
 //	x->token = 0;
 //	x->in = 0;
 //
@@ -2110,7 +2152,7 @@ void test_DICT_find_name() {
 //	TEST_ASSERT_EQUAL_INT(0, IMMEDIATE(word));
 //	TEST_ASSERT_EQUAL_INT(N(N(x->latest)), word);
 //
-//	x->tb = "test";
+//	x->ib = "test";
 //	x->token = 0;
 //	x->in = 0;
 //
@@ -3344,7 +3386,7 @@ void test_DICT_find_name() {
 //
 //	C result;
 //
-//	x->tb = " test string\"  ";
+//	x->ib = " test string\"  ";
 //	x->in = 0;
 //	result = compile_str(x);
 //
@@ -4486,6 +4528,8 @@ int main() {
 	RUN_TEST(test_INNER_STEP_word);
 	RUN_TEST(test_INNER_STEP_words);
 	RUN_TEST(test_INNER_STEP_words_2);
+	RUN_TEST(test_INNER_STEP_1);
+	RUN_TEST(test_INNER_STEP_2);
 
 	// EXECUTION PRMITIVES
 	RUN_TEST(test_EXEC_exec_i);
