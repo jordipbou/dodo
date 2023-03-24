@@ -1,3 +1,6 @@
+// TODO: Idea::use strings to compare context results
+// TODO: Idea::use diff between context to see changes
+
 #include<stdlib.h>
 #include "dodo.h"
 #include "unity.h"
@@ -1066,24 +1069,101 @@ void test_LIST_stack_to_list_3() {
 
 // INNER INTERPRETER
 
-void test_INNER_execute_atom() {
+void test_INNER_NEXT_1() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	R(x) = 0;
+
+	NEXT(x);
+
+	TEST_ASSERT_EQUAL_INT(0, R(x));
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+}
+
+void test_INNER_NEXT_2() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	C i1 = cons(x, 11, AS(ATM, 0));
+	C i2 = cons(x, 7, AS(ATM, i1));
+
+	R(x) = i2;
+
+	NEXT(x);
+
+	TEST_ASSERT_EQUAL_INT(i1, R(x));
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+
+	NEXT(x);
+
+	TEST_ASSERT_EQUAL_INT(0, R(x));
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+}
+
+void test_INNER_NEXT_3() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	C i1 = cons(x, 11, AS(ATM, 0));
+	C i2 = cons(x, 7, AS(ATM, i1));
+
+	R(x) = i2;
+
+	x->rs = cons(x, 0, AS(LST, x->rs));
+
+	NEXT(x);
+
+	// First item on previous stack represents word called and is removed after
+	// deleting top stack.
+
+	TEST_ASSERT_EQUAL_INT(i1, R(x));
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+	TEST_ASSERT_EQUAL_INT(1, length(x->rs));
+
+	NEXT(x);
+
+	TEST_ASSERT_EQUAL_INT(0, R(x));
+	TEST_ASSERT_EQUAL_INT(0, x->err);
+}
+
+void test_INNER_STEP_nothing() {
+	//TEST_IGNORE();
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	STEP(x);
+
+	TEST_ASSERT_EQUAL_INT(0, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(0, length(R(x)));
+}
+
+void test_INNER_STEP_atom() {
 	C size = 512;
 	B block[size];
 	X* x = init(block, size);
 
 	R(x) = cons(x, 13, AS(ATM, cons(x, 7, AS(ATM, 0))));
-	inner(x);
+
+	STEP(x); 
+
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(1, length(R(x)));
+	TEST_ASSERT_EQUAL_INT(13, A(S(x)));
+
+	STEP(x);
 
 	TEST_ASSERT_EQUAL_INT(2, length(S(x)));
-	TEST_ASSERT_EQUAL_INT(1, length(x->ds));
 	TEST_ASSERT_EQUAL_INT(0, length(R(x)));
-	TEST_ASSERT_EQUAL_INT(1, length(x->rs));
-
 	TEST_ASSERT_EQUAL_INT(7, A(S(x)));
 	TEST_ASSERT_EQUAL_INT(13, A(N(S(x))));
 }
 
-void test_INNER_execute_list() {
+void test_INNER_STEP_list() {
 	C size = 512;
 	B block[size];
 	X* x = init(block, size);
@@ -1095,7 +1175,7 @@ void test_INNER_execute_list() {
 			cons(x, 13, AS(ATM, 0)))))), 
 		AS(LST, 0));
 
-	inner(x);
+	STEP(x);
 
 	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
 	TEST_ASSERT_EQUAL_INT(1, length(x->ds));
@@ -1109,7 +1189,8 @@ void test_INNER_execute_list() {
 	TEST_ASSERT_EQUAL_INT(13, A(N(N(A(S(x))))));
 }
 
-void test_INNER_execute_list_2() {
+void test_INNER_STEP_list_2() {
+	//TEST_IGNORE();
 	C size = 512;
 	B block[size];
 	X* x = init(block, size);
@@ -1122,14 +1203,14 @@ void test_INNER_execute_list_2() {
 		AS(LST, 
 		cons(x, 17, AS(ATM, 0))));
 
-	inner(x);
+	while(STEP(x));
 
 	TEST_ASSERT_EQUAL_INT(2, length(S(x)));
 	TEST_ASSERT_EQUAL_INT(17, A(S(x)));
 	TEST_ASSERT_EQUAL(LST, T(N(S(x))));
 }
 
-void test_INNER_execute_primitive() {
+void test_INNER_STEP_primitive() {
 	C size = 512;
 	B block[size];
 	X* x = init(block, size);
@@ -1140,79 +1221,306 @@ void test_INNER_execute_primitive() {
 		cons(x, (C)&add, AS(PRM, 
 		cons(x, (C)&duplicate, AS(PRM, 0))))))));
 
-	inner(x);
+	STEP(x);
+
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(13, A(S(x)));
+
+	STEP(x);
+
+	TEST_ASSERT_EQUAL_INT(2, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(7, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(13, A(N(S(x))));
+
+	STEP(x);
+
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(20, A(S(x)));
+
+	STEP(x);
 
 	TEST_ASSERT_EQUAL_INT(2, length(S(x)));
 	TEST_ASSERT_EQUAL_INT(20, A(S(x)));
 	TEST_ASSERT_EQUAL_INT(20, A(N(S(x))));
 }
 
-//void test_INNER_execute_word() {
-//	C size = 512;
-//	B block[size];
-//	X* x = init(block, size);
-//
-//	C word = 
-//		cons(x, 
-//			cons(x, (C)"test_word", AS(ATM,
-//			cons(x, (C)&test_dup_t, AS(PRM, 
-//			cons(x, (C)&test_add_t, AS(PRM, 0)))))),
-//		AS(LST, 0));
-//	C call = cons(x, word, AS(WRD, 0));
-//
-//	PUSH(x, 5);
-//
-//	execute(x, call);
-//
-//	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-//	TEST_ASSERT_EQUAL_INT(10, A(S(x)));
-//
-//	call = cons(x, word, AS(WRD, cons(x, 13, AS(ATM, 0))));
-//
-//	execute(x, call);
-//
-//	TEST_ASSERT_EQUAL_INT(2, length(S(x)));
-//	TEST_ASSERT_EQUAL_INT(13, A(S(x)));
-//	TEST_ASSERT_EQUAL_INT(20, A(N(S(x))));
-//}
-//
-//void test_INNER_execute_words() {
-//	C size = 512;
-//	B block[size];
-//	X* x = init(block, size);
-//
-//	C dup_ = 
-//		cons(x,
-//			cons(x, (C)"dup", AS(ATM,
-//			cons(x, (C)&test_dup_t, AS(PRM, 0)))),
-//		AS(LST, 0));
-//
-//	C add_ =
-//		cons(x,
-//			cons(x, (C)"+", AS(ATM,
-//			cons(x, (C)&test_add_t, AS(PRM, 0)))),
-//		AS(LST, 0));
-//
-//	C double_ =
-//		cons(x,
-//			cons(x, (C)"double", AS(ATM,
-//			cons(x, dup_, AS(WRD,
-//			cons(x, add_, AS(WRD, 0)))))),
-//		AS(LST, 0));
-//
-//	C call = cons(x, double_, AS(WRD, 0));
-//
-//	PUSH(x, 7);
-//
-//	execute(x, call);
-//
-//	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
-//	TEST_ASSERT_EQUAL_INT(14, A(S(x)));
-//}
-//
+void test_INNER_CALL_word() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	C word = 
+		cons(x, 
+			cons(x, (C)"test_word", AS(ATM,
+			cons(x, (C)&duplicate, AS(PRM, 
+			cons(x, (C)&add, AS(PRM, 0)))))),
+		AS(LST, 0));
+
+	CALL(x, XT(word));	
+
+	TEST_ASSERT_EQUAL_INT(2, length(x->rs));
+	TEST_ASSERT_EQUAL_INT(2, length(R(x)));
+	TEST_ASSERT_EQUAL_INT(PRM, T(R(x)));
+	TEST_ASSERT_EQUAL_INT((C)&duplicate, A(R(x)));
+	TEST_ASSERT_EQUAL_INT(PRM, T(N(R(x))));
+	TEST_ASSERT_EQUAL_INT((C)&add, A(N(R(x))));
+}
+
+void test_INNER_STEP_word() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	C word = 
+		cons(x, 
+			cons(x, (C)"test_word", AS(ATM,
+			cons(x, (C)&duplicate, AS(PRM, 
+			cons(x, (C)&add, AS(PRM, 0)))))),
+		AS(LST, 0));
+
+	R(x) = cons(x, word, AS(WRD, 0));
+
+	S(x) = cons(x, 5, AS(ATM, 0));
+
+	STEP(x);
+
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(5, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(2, length(x->rs));
+	TEST_ASSERT_EQUAL_INT(2, length(R(x)));
+	TEST_ASSERT_EQUAL_INT(1, length(A(N(x->rs))));
+	TEST_ASSERT_EQUAL_INT(WRD, T(A(N(x->rs))));
+	TEST_ASSERT_EQUAL_INT(word, A(A(N(x->rs))));
+	TEST_ASSERT_EQUAL_INT(PRM, T(R(x)));
+	TEST_ASSERT_EQUAL_INT((C)&duplicate, A(R(x)));
+	TEST_ASSERT_EQUAL_INT(PRM, T(N(R(x))));
+	TEST_ASSERT_EQUAL_INT((C)&add, A(N(R(x))));
+
+	STEP(x);
+
+	TEST_ASSERT_EQUAL_INT(2, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(5, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(5, A(N(S(x))));
+	TEST_ASSERT_EQUAL_INT(2, length(x->rs));
+	TEST_ASSERT_EQUAL_INT(1, length(R(x)));
+	TEST_ASSERT_EQUAL_INT((C)&add, A(R(x)));
+	TEST_ASSERT_EQUAL_INT(word, A(A(N(x->rs))));
+
+	STEP(x);
+
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(10, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(0, length(R(x)));
+	TEST_ASSERT_EQUAL_INT(1, length(x->rs));
+}
+
+void test_INNER_STEP_words() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	C dup_ = 
+		cons(x,
+			cons(x, (C)"dup", AS(ATM,
+			cons(x, (C)&duplicate, AS(PRM, 0)))),
+		AS(LST, 0));
+
+	C add_ =
+		cons(x,
+			cons(x, (C)"+", AS(ATM,
+			cons(x, (C)&add, AS(PRM, 0)))),
+		AS(LST, 0));
+
+	C double_ =
+		cons(x,
+			cons(x, (C)"double", AS(ATM,
+			cons(x, dup_, AS(WRD,
+			cons(x, add_, AS(WRD, 0)))))),
+		AS(LST, 0));
+
+	R(x) = cons(x, double_, AS(WRD, 0));
+
+	S(x) = cons(x, 7, AS(ATM, 0));
+
+	STEP(x);
+
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(7, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(2, length(x->rs));
+	TEST_ASSERT_EQUAL_INT(1, length(N(x->rs)));
+	TEST_ASSERT_EQUAL_INT(double_, A(A(N(x->rs))));
+	TEST_ASSERT_EQUAL_INT(2, length(R(x)));
+
+	STEP(x);
+
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(7, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(3, length(x->rs));
+	TEST_ASSERT_EQUAL_INT(1, length(R(x)));
+
+	STEP(x);
+
+	TEST_ASSERT_EQUAL_INT(2, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(7, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(7, A(N(S(x))));
+	TEST_ASSERT_EQUAL_INT(2, length(x->rs));
+	TEST_ASSERT_EQUAL_INT(1, length(R(x)));
+	
+	STEP(x);
+
+	TEST_ASSERT_EQUAL_INT(2, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(3, length(x->rs));
+
+	STEP(x);
+
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(14, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(0, length(R(x)));
+	TEST_ASSERT_EQUAL_INT(1, length(x->rs));
+}
+
+void test_INNER_STEP_words_2() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	C dup_ = 
+		cons(x,
+			cons(x, (C)"dup", AS(ATM,
+			cons(x, (C)&duplicate, AS(PRM, 0)))),
+		AS(LST, 0));
+
+	C add_ =
+		cons(x,
+			cons(x, (C)"+", AS(ATM,
+			cons(x, (C)&add, AS(PRM, 0)))),
+		AS(LST, 0));
+
+	C double_ =
+		cons(x,
+			cons(x, (C)"double", AS(ATM,
+			cons(x, dup_, AS(WRD,
+			cons(x, add_, AS(WRD, 0)))))),
+		AS(LST, 0));
+
+	R(x) = cons(x, double_, AS(WRD, 0));
+
+	S(x) = cons(x, 7, AS(ATM, 0));
+
+	while(STEP(x));
+
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(14, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(0, length(R(x)));
+	TEST_ASSERT_EQUAL_INT(1, length(x->rs));
+}
+
+
 // EXECUTION PRMITIVEs
 
+void test_EXEC_exec_i() {
+	//TEST_IGNORE();
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	S(x) = cons(x, (C)&duplicate, AS(PRM, cons(x, 7, AS(ATM, cons(x, 13, AS(ATM, 0))))));
+
+	exec_i(x);
+
+	TEST_ASSERT_EQUAL_INT(3, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(7, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(7, A(N(S(x))));
+	TEST_ASSERT_EQUAL_INT(13, A(N(N(S(x)))));
+}
+
+void test_EXEC_exec_i_2() {
+	//TEST_IGNORE();
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	S(x) = cons(x, cons(x, (C)&duplicate, AS(PRM, 0)), AS(LST, cons(x, 7, AS(ATM, cons(x, 13, AS(ATM, 0))))));
+
+	exec_i(x);
+
+	TEST_ASSERT_EQUAL_INT(3, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(7, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(7, A(N(S(x))));
+	TEST_ASSERT_EQUAL_INT(13, A(N(N(S(x)))));
+}
+
+void test_EXEC_exec_i_3() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	S(x) = cons(x, (C)&duplicate, AS(PRM, cons(x, 7, AS(ATM, cons(x, 13, AS(ATM, 0))))));
+	R(x) = cons(x, (C)&exec_i, AS(PRM, 0));
+
+	while(STEP(x));
+
+	TEST_ASSERT_EQUAL_INT(3, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(7, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(7, A(N(S(x))));
+	TEST_ASSERT_EQUAL_INT(13, A(N(N(S(x)))));
+}
+
+void test_EXEC_exec_i_4() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	S(x) = cons(x, cons(x, (C)&duplicate, AS(PRM, 0)), AS(LST, cons(x, 7, AS(ATM, cons(x, 13, AS(ATM, 0))))));
+	R(x) = cons(x, (C)&exec_i, AS(PRM, 0));
+
+	while(STEP(x));
+
+	TEST_ASSERT_EQUAL_INT(3, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(7, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(7, A(N(S(x))));
+	TEST_ASSERT_EQUAL_INT(13, A(N(N(S(x)))));
+}
+
 void test_EXEC_branch() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	R(x) = 
+		cons(x, 1, AS(ATM,
+		cons(x, cons(x, 7, AS(ATM, 0)), AS(LST,
+		cons(x, cons(x, 11, AS(ATM, 0)), AS(LST,
+		cons(x, (C)&branch, AS(PRM, 0))))))));
+
+	while(STEP(x));
+
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(7, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(1, length(x->rs));
+	TEST_ASSERT_EQUAL_INT(0, length(R(x)));
+}
+
+void test_EXEC_branch_2() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
+	R(x) = 
+		cons(x, 0, AS(ATM,
+		cons(x, cons(x, 7, AS(ATM, 0)), AS(LST,
+		cons(x, cons(x, 11, AS(ATM, 0)), AS(LST,
+		cons(x, (C)&branch, AS(PRM, 0))))))));
+
+	while(STEP(x));
+
+	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(11, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(1, length(x->rs));
+	TEST_ASSERT_EQUAL_INT(0, length(R(x)));
+}
+
+void test_EXEC_branch_3() {
 	C size = 512;
 	B block[size];
 	X* x = init(block, size);
@@ -1224,7 +1532,7 @@ void test_EXEC_branch() {
 		cons(x, (C)&branch, AS(PRM,
 		cons(x, 13, AS(ATM, 0))))))))));
 
-	inner(x);
+	while(STEP(x));
 
 	TEST_ASSERT_EQUAL_INT(2, length(S(x)));
 	TEST_ASSERT_EQUAL_INT(13, A(S(x)));
@@ -1238,7 +1546,7 @@ void test_EXEC_branch() {
 		cons(x, cons(x, 11, AS(ATM, 0)), AS(LST, 
 		cons(x, (C)&branch, AS(PRM, 0))))))));
 
-	inner(x);
+	while(STEP(x));
 
 	TEST_ASSERT_EQUAL_INT(1, length(S(x)));
 	TEST_ASSERT_EQUAL_INT(11, A(S(x)));
@@ -1290,10 +1598,30 @@ void test_EXEC_exec_x() {
 	B block[size];
 	X* x = init(block, size);
 
+	S(x) = cons(x, (C)&duplicate, AS(PRM, cons(x, 7, AS(ATM, cons(x, 11, AS(ATM, 0))))));
+
+	exec_x(x);
+
+	TEST_ASSERT_EQUAL_INT(4, length(S(x)));
+	TEST_ASSERT_EQUAL_INT(PRM, T(S(x)));
+	TEST_ASSERT_EQUAL_INT((C)&duplicate, A(S(x)));
+	TEST_ASSERT_EQUAL_INT(PRM, T(N(S(x))));
+	TEST_ASSERT_EQUAL_INT((C)&duplicate, A(N(S(x))));
+	TEST_ASSERT_EQUAL_INT(ATM, T(N(N(S(x)))));
+	TEST_ASSERT_EQUAL_INT(7, A(N(N(S(x)))));
+	TEST_ASSERT_EQUAL_INT(ATM, T(N(N(N(S(x))))));
+	TEST_ASSERT_EQUAL_INT(11, A(N(N(N(S(x))))));
+}
+
+void test_EXEC_exec_x_2() {
+	C size = 512;
+	B block[size];
+	X* x = init(block, size);
+
 	S(x) = cons(x, (C)&duplicate, AS(PRM, cons(x, 7, AS(ATM, cons(x, 13, AS(ATM, 0))))));
 	R(x) = cons(x, (C)&exec_x, AS(PRM, 0));
 
-	inner(x);
+	while(STEP(x));
 
 	TEST_ASSERT_EQUAL_INT(4, length(S(x)));
 	TEST_ASSERT_EQUAL_INT(PRM, T(S(x)));
@@ -1302,7 +1630,7 @@ void test_EXEC_exec_x() {
 	TEST_ASSERT_EQUAL_INT((C)&duplicate, A(N(S(x))));
 }
 
-void test_EXEC_exec_x_2() {
+void test_EXEC_exec_x_3() {
 	C size = 512;
 	B block[size];
 	X* x = init(block, size);
@@ -1310,7 +1638,7 @@ void test_EXEC_exec_x_2() {
 	S(x) = cons(x, cons(x, (C)&duplicate, AS(PRM, 0)), AS(LST, cons(x, 7, AS(ATM, cons(x, 13, AS(ATM, 0))))));
 	R(x) = cons(x, (C)&exec_x, AS(PRM, 0));
 
-	inner(x);
+	while(STEP(x));
 
 	TEST_ASSERT_EQUAL_INT(4, length(S(x)));
 	TEST_ASSERT_EQUAL_INT(LST, T(S(x)));
@@ -1319,68 +1647,6 @@ void test_EXEC_exec_x_2() {
 	TEST_ASSERT_EQUAL_INT(LST, T(N(S(x))));
 	TEST_ASSERT_EQUAL_INT(1, length(A(N(S(x)))));
 	TEST_ASSERT_EQUAL_INT((C)&duplicate, A(A(N(S(x)))));
-}
-
-void test_EXEC_exec_i() {
-	C size = 512;
-	B block[size];
-	X* x = init(block, size);
-
-	S(x) = cons(x, (C)&duplicate, AS(PRM, cons(x, 7, AS(ATM, cons(x, 13, AS(ATM, 0))))));
-
-	exec_i(x);
-
-	TEST_ASSERT_EQUAL_INT(3, length(S(x)));
-	TEST_ASSERT_EQUAL_INT(7, A(S(x)));
-	TEST_ASSERT_EQUAL_INT(7, A(N(S(x))));
-	TEST_ASSERT_EQUAL_INT(13, A(N(N(S(x)))));
-}
-
-void test_EXEC_exec_i_2() {
-	C size = 512;
-	B block[size];
-	X* x = init(block, size);
-
-	S(x) = cons(x, cons(x, (C)&duplicate, AS(PRM, 0)), AS(LST, cons(x, 7, AS(ATM, cons(x, 13, AS(ATM, 0))))));
-
-	exec_i(x);
-
-	TEST_ASSERT_EQUAL_INT(3, length(S(x)));
-	TEST_ASSERT_EQUAL_INT(7, A(S(x)));
-	TEST_ASSERT_EQUAL_INT(7, A(N(S(x))));
-	TEST_ASSERT_EQUAL_INT(13, A(N(N(S(x)))));
-}
-
-void test_EXEC_exec_i_3() {
-	C size = 512;
-	B block[size];
-	X* x = init(block, size);
-
-	S(x) = cons(x, (C)&duplicate, AS(PRM, cons(x, 7, AS(ATM, cons(x, 13, AS(ATM, 0))))));
-	R(x) = cons(x, (C)&exec_i, AS(PRM, 0));
-
-	inner(x);
-
-	TEST_ASSERT_EQUAL_INT(3, length(S(x)));
-	TEST_ASSERT_EQUAL_INT(7, A(S(x)));
-	TEST_ASSERT_EQUAL_INT(7, A(N(S(x))));
-	TEST_ASSERT_EQUAL_INT(13, A(N(N(S(x)))));
-}
-
-void test_EXEC_exec_i_4() {
-	C size = 512;
-	B block[size];
-	X* x = init(block, size);
-
-	S(x) = cons(x, cons(x, (C)&duplicate, AS(PRM, 0)), AS(LST, cons(x, 7, AS(ATM, cons(x, 13, AS(ATM, 0))))));
-	R(x) = cons(x, (C)&exec_i, AS(PRM, 0));
-
-	inner(x);
-
-	TEST_ASSERT_EQUAL_INT(3, length(S(x)));
-	TEST_ASSERT_EQUAL_INT(7, A(S(x)));
-	TEST_ASSERT_EQUAL_INT(7, A(N(S(x))));
-	TEST_ASSERT_EQUAL_INT(13, A(N(N(S(x)))));
 }
 
 // PARSING
@@ -4123,7 +4389,7 @@ void test_DICT_find_name() {
 ////////////////		x->dictstack = cons(x, 6, ATM, 0);
 ////////////////		x->rstack = cons(x, (C)x->ip, T_WRD, 0);
 ////////////////
-////////////////		inner(x);
+////////////////		while(STEP(x));
 ////////////////
 ////////////////		//printf("%ld\n", x->dictstack->value);
 ////////////////}
@@ -4208,23 +4474,31 @@ int main() {
 	RUN_TEST(test_LIST_stack_to_list_3);
 
 	// INNER INTERPRETER
-	RUN_TEST(test_INNER_execute_atom);
-	RUN_TEST(test_INNER_execute_list);
-	RUN_TEST(test_INNER_execute_list_2);
-	RUN_TEST(test_INNER_execute_primitive);
-	//RUN_TEST(test_INNER_execute_word);
-	//RUN_TEST(test_INNER_execute_words);
+	RUN_TEST(test_INNER_NEXT_1);
+	RUN_TEST(test_INNER_NEXT_2);
+	RUN_TEST(test_INNER_NEXT_3);
+	RUN_TEST(test_INNER_STEP_nothing);
+	RUN_TEST(test_INNER_STEP_atom);
+	RUN_TEST(test_INNER_STEP_list);
+	RUN_TEST(test_INNER_STEP_list_2);
+	RUN_TEST(test_INNER_STEP_primitive);
+	RUN_TEST(test_INNER_CALL_word);
+	RUN_TEST(test_INNER_STEP_word);
+	RUN_TEST(test_INNER_STEP_words);
+	RUN_TEST(test_INNER_STEP_words_2);
 
 	// EXECUTION PRMITIVES
-	RUN_TEST(test_EXEC_branch);
-	//RUN_TEST(test_EXEC_zjump);
-	//RUN_TEST(test_EXEC_jump);
-	RUN_TEST(test_EXEC_exec_x);
-	RUN_TEST(test_EXEC_exec_x_2);
 	RUN_TEST(test_EXEC_exec_i);
 	RUN_TEST(test_EXEC_exec_i_2);
 	RUN_TEST(test_EXEC_exec_i_3);
 	RUN_TEST(test_EXEC_exec_i_4);
+	RUN_TEST(test_EXEC_exec_x);
+	RUN_TEST(test_EXEC_exec_x_2);
+	RUN_TEST(test_EXEC_branch);
+	RUN_TEST(test_EXEC_branch_2);
+	RUN_TEST(test_EXEC_branch_3);
+	//RUN_TEST(test_EXEC_zjump);
+	//RUN_TEST(test_EXEC_jump);
 
 	// PARSING
 	RUN_TEST(test_PARSING_parse);

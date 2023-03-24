@@ -15,7 +15,8 @@ char *strlwr(char *str)
   return str;
 }
 
-// TEST: 6.33s
+// CURRENT: 16s
+// TEST: 6.33s (Before using execution pile of stacks)
 void fib(X* x) {
 	R(x) =
 		cons(x, 36, AS(ATM,
@@ -45,7 +46,8 @@ void fib(X* x) {
 		cons(x, (C)&swap, AS(PRM,
 		cons(x, (C)&drop, AS(PRM, 0))))))))));
 
-	inner(x);
+	//inner(x);
+	while(STEP(x));
 
 	printf("<%ld> %ld\n", length(S(x)), A(S(x)));
 }
@@ -80,34 +82,34 @@ void main(int argc, char *argv[]) {
 	B bk[sz];
 	X* x = bootstrap(init(bk, sz));
 
-	//fib(x);
+	fib(x);
 	//fibN(x);
 	//printf("%d\n", fibC(36));
 
-	FILE *fptr;
-	B buf[255];
-	C result;
-	if (argc == 2) {
-		fptr = fopen(argv[1], "r");
-		while (fgets(buf, 255, fptr)) {
-			S(x) = cons(x, strlen(buf), AS(ATM, cons(x, (C)buf, AS(ATM, S(x)))));
-			evaluate(x);
-			if (x->err != 0 && x->err != E_EIB) {
-					printf("ERROR: %ld\n", result);
-					return;
-			}
-			x->err = 0;
-		}
-	} else {
-		do {
-			fgets(buf, 255, stdin);
-			S(x) = cons(x, strlen(buf), AS(ATM, cons(x, (C)buf, AS(ATM, S(x)))));
-			evaluate(x);
-			if (x->err != 0 && x->err != E_EIB) {
-					printf("ERROR: %ld\n", result);
-					return;
-			}
-			x->err = 0;
-		} while(1);
-	}
+	//FILE *fptr;
+	//B buf[255];
+	//C result;
+	//if (argc == 2) {
+	//	fptr = fopen(argv[1], "r");
+	//	while (fgets(buf, 255, fptr)) {
+	//		S(x) = cons(x, strlen(buf), AS(ATM, cons(x, (C)buf, AS(ATM, S(x)))));
+	//		evaluate(x);
+	//		if (x->err != 0 && x->err != E_EIB) {
+	//				printf("ERROR: %ld\n", result);
+	//				return;
+	//		}
+	//		x->err = 0;
+	//	}
+	//} else {
+	//	do {
+	//		fgets(buf, 255, stdin);
+	//		S(x) = cons(x, strlen(buf), AS(ATM, cons(x, (C)buf, AS(ATM, S(x)))));
+	//		evaluate(x);
+	//		if (x->err != 0 && x->err != E_EIB) {
+	//				printf("ERROR: %ld\n", result);
+	//				return;
+	//		}
+	//		x->err = 0;
+	//	} while(1);
+	//}
 }
