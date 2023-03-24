@@ -15,11 +15,8 @@ char *strlwr(char *str)
   return str;
 }
 
-void main(int argc, char *argv[]) {
-	C sz = 16384;
-	B bk[sz];
-	X* x = init(bk, sz);
-
+// TEST: 6.33s
+void fib(X* x) {
 	R(x) =
 		cons(x, 36, AS(ATM,
 		cons(x,
@@ -51,45 +48,66 @@ void main(int argc, char *argv[]) {
 	inner(x);
 
 	printf("<%ld> %ld\n", length(S(x)), A(S(x)));
-	//CELL size = 1638400;
-	//BYTE block[size];
-	//CTX* ctx = bootstrap(init(block, size));
+}
 
-	//ADD_PRIMITIVE(ctx, ".s", &dump_stack, 0);
-	//ADD_PRIMITIVE(ctx, "words", &words, 0);
-	//ADD_PRIMITIVE(ctx, "see", &see, 0);
-	//ADD_PRIMITIVE(ctx, "nfa", &nfa, 0);
-	//ADD_PRIMITIVE(ctx, "xt", &xt, 0);
-	//ADD_PRIMITIVE(ctx, "pair", &pair, 0);
-	//ADD_PRIMITIVE(ctx, "next", &next, 0);
-	//ADD_PRIMITIVE(ctx, "sp@", &sp_fetch, 0);
-	//ADD_PRIMITIVE(ctx, "carcdr", &carcdr, 0);
+// TEST: 0.22s
+void fibR(X* x) {
+	if (A(S(x)) > 1) {
+		A(S(x)) -= 1;
+		duplicate(x);
+		A(S(x)) -= 1;
+		fibR(x);
+		swap(x);
+		fibR(x);
+		add(x);
+	}
+}
 
-	//ADD_PRIMITIVE(ctx, "x", &dbg_exec_x, 0);
+// TEST: 0.04s
+void fibN(X* x) {
+	S(x) = cons(x, 36, AS(ATM, 0));
+	fibR(x);
+	printf("<%ld> %ld\n", length(S(x)), A(S(x)));
+}
 
-	//FILE *fptr;
-	//BYTE buf[255];
-	//CELL result;
-	//if (argc == 2) {
-	//	fptr = fopen(argv[1], "r");
-	//	while (fgets(buf, 255, fptr)) {
-	//		//result = dbg_evaluate(ctx, strlwr(buf));
-	//		//result = evaluate(ctx, strlwr(buf));
-	//		result = evaluate(ctx, buf);
-	//		if (result != 0) {
-	//				printf("ERROR: %ld\n", result);
-	//				return;
-	//		}
-	//	}
-	//} else {
-	//	do {
-	//		fgets(buf, 255, stdin);
-	//		//result = dbg_evaluate(ctx, buf);
-	//		result = evaluate(ctx, buf);
-	//		if (result != 0) {
-	//			printf("ERROR: %ld\n", result);
-	//			return;
-	//		}
-	//	} while(1);
-	//}
+int fibC(int n) {
+	if (n > 1) return fibC(n - 1) + fibC(n - 2);
+	else return n;
+}
+
+void main(int argc, char *argv[]) {
+	C sz = 16384;
+	B bk[sz];
+	X* x = bootstrap(init(bk, sz));
+
+	//fib(x);
+	//fibN(x);
+	//printf("%d\n", fibC(36));
+
+	FILE *fptr;
+	B buf[255];
+	C result;
+	if (argc == 2) {
+		fptr = fopen(argv[1], "r");
+		while (fgets(buf, 255, fptr)) {
+			S(x) = cons(x, strlen(buf), AS(ATM, cons(x, (C)buf, AS(ATM, S(x)))));
+			evaluate(x);
+			if (x->err != 0 && x->err != E_EIB) {
+					printf("ERROR: %ld\n", result);
+					return;
+			}
+			x->err = 0;
+		}
+	} else {
+		do {
+			fgets(buf, 255, stdin);
+			S(x) = cons(x, strlen(buf), AS(ATM, cons(x, (C)buf, AS(ATM, S(x)))));
+			evaluate(x);
+			if (x->err != 0 && x->err != E_EIB) {
+					printf("ERROR: %ld\n", result);
+					return;
+			}
+			x->err = 0;
+		} while(1);
+	}
 }

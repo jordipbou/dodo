@@ -24,7 +24,7 @@ enum Types { ATM, LST, PRM, WRD };
 
 typedef struct {
 	B *tb, *hr;
-	C th, sz, fr, ds, err, rs, st, lt, in, free;
+	C th, sz, fr, ds, err, rs, st, lt, in, il, free;
 } X;
 
 #define S(x)							(A(x->ds))
@@ -49,7 +49,7 @@ X* init(B* bl, C sz) {
 	}
 
 	x->tb = 0;
-	x->in = x->st = x->err = x->lt = 0;
+	x->in = x->il = x->st = x->err = x->lt = 0;
 
 	return x;
 }
@@ -65,7 +65,7 @@ C reverse(C p, C l) { return p ? ({ C t = N(p); D(p) = AS(T(p), l); reverse(t, p
 
 // ERRORS
 
-enum Errors { E_EIB = -11, E_ZLN, E_EA, E_EL, E_EAA, E_UW, E_NER, E_NEM, E_DBZ, E_UF, E_OF, E_IP = 1 };
+enum Errors { E_EIB = -12, E_ZLN, E_EW, E_EA, E_EL, E_EAA, E_UW, E_NER, E_NEM, E_DBZ, E_UF, E_OF, E_IP = 1 };
 
 #define ERR(x, c, e)	if (c) { x->err = e; return; }
 
@@ -76,6 +76,7 @@ enum Errors { E_EIB = -11, E_ZLN, E_EA, E_EL, E_EAA, E_UW, E_NER, E_NEM, E_DBZ, 
 
 #define EA(x)					UF1(x); ERR(x, T(S(x)) != ATM, E_EA)
 #define EL(x)					UF1(x); ERR(x, T(S(x)) != LST, E_EL)
+#define EW(x)					UF1(x); ERR(x, T(S(x)) != WRD, E_EW)
 #define EAA(x)				UF2(x); ERR(x, T(S(x)) != ATM || T(N(S(x))) != ATM, E_EAA)
 
 #define EIB(x)				ERR(x, !x->tb, E_EIB)
@@ -125,17 +126,36 @@ void stack_to_list(X* x) {
 
 typedef void (*FUNC)(X*);
 
+enum Words { PRIM, DEF, NDCS_PRIM, NDCS_DEF };
+
+#define PRIMITIVE(w)	(T(w) == PRIM || T(w) == NDCS_PRIM)
+#define NDCS(w)				(T(w) == NDCS_PRIM || T(w) == NDCS_DEF)
+
+#define NFA(w)				((B*)A(A(w)))
+#define CS(w)					(A(N(A(w))))
+#define XT(w)					(NDCS(w) ? N(N(A(w))) : N(A(w)))
+
+void dump_cell(X*, C);
+void dump_list(X* x, C l);
+void dump_stack(X* x, C l);
+
 void inner(X* x) {
 	C t;
 	do {
 		while (!R(x) && N(x->rs)) { x->rs = recl(x, x->rs); }
 		if (!R(x)) return;
+		//printf("<%ld> ", length(x->ds));
+		//dump_stack(x, S(x));
+		//printf("‖ ");
+		//dump_list(x, R(x));
+		//printf("<%ld>\n", length(x->rs));
 		switch (T(R(x))) {
 			case ATM: t = R(x); R(x) = N(R(x)); LK(t, S(x)); S(x) = t; break;
 			case LST: t = R(x); R(x) = N(R(x)); LK(t, S(x)); S(x) = t; break;
 			case PRM: ((FUNC)A(R(x)))(x); if (!x->err) R(x) = recl(x, R(x)); else x->err = 0; break;
-			case WRD: /* Push word list into return stack */ break;
+			case WRD: t = A(R(x)); R(x) = recl(x, R(x)); x->rs = cons(x, clone(x, XT(t)), AS(LST, x->rs)); break;
 		}
+		//getchar();
 	} while(1);
 }
 
@@ -160,7 +180,7 @@ void rbracket(X* x) { x->st = 1; }
 
 #define TC(x)							(*(x->tb + x->in))
 
-#define PARSE(x, cond)		while(TC(x) && cond) { x->in++; }
+#define PARSE(x, cond)		while(TC(x) && cond && x->in < x->il) { x->in++; }
 void parse(X* x) { EA(x); OF(x, 1); EIB(x);
 	PARSE(x, TC(x) != A(S(x))); A(S(x)) = (C)x->tb; S(x) = cons(x, x->in, AS(ATM, S(x))); x->in++;
 }
@@ -188,9 +208,48 @@ void allot(X* x) { UF1(x);
 	}
 }
 
-// ----------------------------------------------------------------------------- END OF CORE
+// OUTER INTERPRETER
 
-void dump_cell(X*, C);
+#define FOUND(w, a, u)	(strlen(NFA(w)) == u && !strncmp(NFA(w), (B*)a, u))
+void find_name(X* x) { UF2(x); ERR(x, A(S(x)) == 0, E_ZLN);
+	C w = x->lt; 
+	while(w && !FOUND(w, A(N(S(x))), A(S(x)))) { w = N(w); }
+	if (w) { S(x) = recl(x, S(x)); A(S(x)) = w; D(S(x)) = AS(WRD, N(S(x))); }
+	else { OF(x, 1); S(x) = cons(x, 0, AS(ATM, S(x))); }
+}
+
+void compile(X* x) { UF1(x); EW(x); A(S(x)) = A(XT(A(S(x)))); D(S(x)) = AS(PRM, N(S(x))); }
+
+void outer(X* x) {
+	char *endptr;
+	do {
+		printf("%.*s^%.*s\n", x->in, x->tb, x->il - x->in, x->tb + x->in);
+		parse_name(x); ERR(x, A(S(x)) == 0, E_EIB);
+		printf("TOKEN: %.*s\n", A(S(x)), (B*)A(N(S(x))));
+		find_name(x);
+		printf("<%ld> ", length(S(x))); dump_stack(x, S(x));
+		if (A(S(x)) == 0) {
+			C addr = A(N(N(S(x)))); S(x) = recl(x, recl(x, recl(x, S(x))));
+			intmax_t n = strtoimax((B*)addr, &endptr, 10);
+			ERR(x, n == 0 && endptr == (char*)addr, E_UW);
+			S(x) = cons(x, n, AS(ATM, S(x)));
+		} else {
+			// TODO: exec_i can not be called from code !!!!
+			if (x->st == 0) {	exec_i(x); }
+			else if (NDCS(A(S(x))) && CS(A(S(x))) == 0) { exec_i(x); }
+			/* } else if (NDCS(w)) { Execute custom NDCS xt } */
+			/* } else if ( has code generator ) { execute code generator } */
+			else { compile(x); }
+		}
+	} while(1);
+}
+
+void evaluate(X* x) { UF2(x); 
+	x->in = 0; x->il = A(S(x)); x->tb = (B*)A(N(S(x))); S(x) = recl(x, recl(x, S(x))); 
+	outer(x);
+}
+
+// ----------------------------------------------------------------------------- END OF CORE
 
 void dump_list(X* x, C l) { while (l) { dump_cell(x, l); l = N(l); } }
 
@@ -211,7 +270,7 @@ void dump_cell(X* x, C c) {
 			else if (A(c) == (C)&drop) printf("drop ");
 			else printf("P:%ld ", A(c));
 			break;
-		case WRD: break;
+		case WRD: printf("%s ", (B*)NFA(A(c))); break;
 	}
 }
 
@@ -221,25 +280,62 @@ void dump_stack(X* x, C l) {
 	else dump_cell(x, l);
 }
 
-void innerdbg(X* x) {
-	C t;
-	do {
-		while (!R(x) && N(x->rs)) { x->rs = recl(x, x->rs); }
-		if (!R(x)) return;
-		printf("<%ld> ", length(x->ds));
-		dump_stack(x, S(x));
-		printf("█ ");
-		dump_list(x, R(x));
-		printf("<%ld>\n", length(x->rs));
-		switch (T(R(x))) {
-			case ATM: t = R(x); R(x) = N(R(x)); LK(t, S(x)); S(x) = t; break;
-			case LST: t = R(x); R(x) = N(R(x)); LK(t, S(x)); S(x) = t; break;
-			case PRM: ((FUNC)A(R(x)))(x); if (!x->err) R(x) = recl(x, R(x)); else x->err = 0; break;
-			case WRD: /* Push word list into return stack */ break;
-		}
-		getchar();
-	} while(1);
+// BOOTSTRAPPING
+
+#define ADD_PRIMITIVE(x, n, f, i) \
+	x->lt = cons(x, cons(x, (C)n, AS(ATM, cons(x, (C)f, AS(PRM, 0)))), AS(i, x->lt));
+
+X* bootstrap(X* x) {
+	ADD_PRIMITIVE(x, "branch", &branch, PRIM);
+	ADD_PRIMITIVE(x, "i", &exec_i, PRIM);
+	ADD_PRIMITIVE(x, "x", &exec_x, PRIM);
+
+	ADD_PRIMITIVE(x, "[", &lbracket, NDCS_PRIM);
+	ADD_PRIMITIVE(x, "]", &rbracket, PRIM);
+
+	ADD_PRIMITIVE(x, "+", &add, PRIM);
+	ADD_PRIMITIVE(x, "-", &sub, PRIM);
+	ADD_PRIMITIVE(x, "*", &mul, PRIM);
+	ADD_PRIMITIVE(x, "/", &division, PRIM);
+	ADD_PRIMITIVE(x, "mod", &mod, PRIM);
+
+	ADD_PRIMITIVE(x, ">", &gt, PRIM);
+	ADD_PRIMITIVE(x, "<", &lt, PRIM);
+	ADD_PRIMITIVE(x, "=", &eq, PRIM);
+	ADD_PRIMITIVE(x, "<>", &neq, PRIM);
+
+	ADD_PRIMITIVE(x, "and", &and, PRIM);
+	ADD_PRIMITIVE(x, "or", &or, PRIM);
+	ADD_PRIMITIVE(x, "invert", &invert, PRIM);
+
+	ADD_PRIMITIVE(x, "dup", &duplicate, PRIM);
+	ADD_PRIMITIVE(x, "swap", &swap, PRIM);
+	ADD_PRIMITIVE(x, "drop", &drop, PRIM);
+	ADD_PRIMITIVE(x, "over", &over, PRIM);
+	ADD_PRIMITIVE(x, "rot", &rot, PRIM);
+
+	ADD_PRIMITIVE(x, "{}", &empty, PRIM);
+	ADD_PRIMITIVE(x, "s>l", &stack_to_list, PRIM);
+	ADD_PRIMITIVE(x, "l>s", &list_to_stack, PRIM);
+
+	ADD_PRIMITIVE(x, "grow", &grow, PRIM);
+	ADD_PRIMITIVE(x, "shrink", &shrink, PRIM);
+	ADD_PRIMITIVE(x, "allot", &allot, PRIM);
+
+	//ADD_PRIMITIVE(x, "latest", &latest, 0);
+	//ADD_PRIMITIVE(x, "here", &here, 0);
+
+	//ADD_PRIMITIVE(x, "!", &store, 0);
+	//ADD_PRIMITIVE(x, "@", &fetch, 0);
+	//ADD_PRIMITIVE(x, "b!", &bstore, 0);
+	//ADD_PRIMITIVE(x, "b@", &bfetch, 0);
+
+	//ADD_PRIMITIVE(x, "key", &key, 0);
+	//ADD_PRIMITIVE(x, "emit", &emit, 0);
+
+	return x;
 }
+
 
 #endif
 
