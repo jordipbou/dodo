@@ -24,7 +24,7 @@ enum Types { ATM, LST, PRM, WRD };
 
 typedef struct {
 	B *ib, *hr;
-	C th, sz, fr, ds, err, rs, st, lt, in, il, free;
+	C th, sz, fr, ds, err, rs, st, lt, in, il, free, total;
 } X;
 
 #define S(x)							(A(x->ds))
@@ -48,6 +48,7 @@ X* init(B* bl, C sz) {
 		D(p) = p == x->th ? 0 : p - sP;
 	}
 
+	x->total = x->free;
 	x->ib = 0;
 	x->in = x->il = x->st = x->err = x->lt = 0;
 
@@ -225,18 +226,16 @@ void compile(X* x) { UF1(x); EW(x);
 void outer(X* x) {
 	char *endptr;
 	do {
-		dump_context(x);
 		parse_name(x); ERR(x, A(S(x)) == 0, E_EIB; drop(x); drop(x));
-		dump_context(x);
 		find_name(x);
-		dump_context(x);
 		if (A(S(x)) == 0) {
 			C addr = A(N(N(S(x)))); S(x) = recl(x, recl(x, recl(x, S(x))));
 			intmax_t n = strtoimax((B*)addr, &endptr, 10);
 			ERR(x, n == 0 && endptr == (char*)addr, E_UW);
 			S(x) = cons(x, n, AS(ATM, S(x)));
+			dump_context(x);
 		} else {
-			if (x->st == 0) {	//printf("EXECUTING\n"); exec_i(x); ERR(x, x->err < 0, x->err); }
+			if (x->st == 0) {
 				C t = S(x); S(x) = N(S(x));
 				LK(t, R(x)); R(x) = t;
 				dump_context(x);
@@ -258,12 +257,6 @@ void evaluate(X* x) { UF2(x);
 
 void dump_cell(X* x, C c, C d);
 
-//void dump_list(X* x, C l) { while (l) { dump_cell(x, l); l = N(l); } }
-//void dump_reversed_list(X* x, C l) { 
-//	if (!l) return; 
-//	if (N(l)) { dump_reversed_list(x, N(l)); } 
-//	dump_cell(x, l); 
-//}
 void dump_list(X* x, C l, C d) {
 	if (!l) return;
 	if (!d) { while (l) { dump_cell(x, l, d); l = N(l); } }
@@ -278,7 +271,7 @@ void dump_cell(X* x, C c, C d) {
 	switch(T(c)) {
 		case ATM: printf("#%ld ", A(c)); break;
 		case LST: printf("{ "); dump_list(x, A(c), d); printf("} "); break;
-		case PRM: 
+		case PRM:  // This should use find_primitive
 			if (A(c) == (C)&swap) printf("P:swap ");
 			else if (A(c) == (C)&duplicate) printf("P:dup ");
 			else if (A(c) == (C)&gt) printf("P:> ");
@@ -301,14 +294,13 @@ void dump_cell(X* x, C c, C d) {
 }
 
 void dump_context(X* x) {
+	printf("%c[%ld:%ld]", x->st ? 'C' : 'I', x->total, x->free);
 	if (x->ib) {
 		if ((x->ib + x->in)[x->il - x->in] == 0) {
-			printf("%c'%.*s^%.*s'", x->st ? 'C' : 'I', (int)x->in, x->ib, (int)(x->il - x->in - 1), x->ib + x->in);
+			printf("'%.*s^%.*s'", (int)x->in, x->ib, (int)(x->il - x->in - 1), x->ib + x->in);
 		} else {
-			printf("%c'%.*s^%.*s'", x->st ? 'C' : 'I', (int)x->in, x->ib, (int)(x->il - x->in), x->ib + x->in);
+			printf("'%.*s^%.*s'", (int)x->in, x->ib, (int)(x->il - x->in), x->ib + x->in);
 		}
-	} else {
-		printf("%c'^'", x->st ? 'C' : 'I');
 	}
 	dump_list(x, x->ds, 1);
 	printf("‖ ");
@@ -371,6 +363,8 @@ X* bootstrap(X* x) {
 
 	//ADD_PRIMITIVE(x, "key", &key, 0);
 	//ADD_PRIMITIVE(x, "emit", &emit, 0);
+
+	x->total = x->free;
 
 	return x;
 }
