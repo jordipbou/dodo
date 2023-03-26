@@ -82,6 +82,8 @@ void main(int argc, char *argv[]) {
 	B bk[sz];
 	X* x = bootstrap(init(bk, sz));
 
+	dump_context(x);
+
 	//fib(x);
 	//fibN(x);
 	//printf("%d\n", fibC(36));

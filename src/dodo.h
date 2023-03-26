@@ -133,9 +133,6 @@ enum Words { PRIM, DEF, NDCS_PRIM, NDCS_DEF };
 #define CS(w)					(A(N(A(w))))
 #define XT(w)					(NDCS(w) ? N(N(A(w))) : N(A(w)))
 
-void dump_cell(X* x, C c);
-void dump_list(X* x, C l);
-void dump_stack(X* x, C s);
 void dump_context(X* x);
 
 typedef void (*FUNC)(X*);
@@ -147,7 +144,6 @@ typedef void (*FUNC)(X*);
 #define CALL(x, l)			(x->rs = cons(x, clone(x, l), AS(LST, x->rs)))
 
 #define STEP(x) ( {\
-	printf("STEP::"); dump_context(x); \
 	if (R(x)) { \
 		switch(T(R(x))) { \
 			case ATM: S(x) = cons(x, A(R(x)), AS(ATM, S(x))); NEXT(x); break; \
@@ -156,7 +152,7 @@ typedef void (*FUNC)(X*);
 			case WRD: CALL(x, XT(A(R(x)))); break; \
 		} \
 	}; \
-	printf("OUT OF STEP::"); dump_context(x); \
+	dump_context(x); \
 	R(x); })
 
 #define JUMP(x, l) R(x) = clone(x, l)
@@ -164,16 +160,13 @@ typedef void (*FUNC)(X*);
 // EXECUTION PRIMITIVES
 
 void exec_i(X* x) { UF1(x);
-	printf("EXEC_I::"); dump_context(x);
 	switch (T(S(x))) {
 		case ATM: ({ C p = A(S(x)); S(x) = recl(x, S(x)); ((FUNC)p)(x); }); break;
 		case LST: CALL(x, A(S(x))); S(x) = recl(x, S(x)); STEP(x); break;
 		case PRM: ({ C p = A(S(x)); S(x) = recl(x, S(x)); ((FUNC)p)(x); }); break;
 		case WRD: 
-			printf("WORD %s %ld\n", NFA(A(S(x))), XT(A(S(x)))); 
 			({ C r = R(x); CALL(x, XT(A(S(x)))); S(x) = recl(x, S(x)); while(STEP(x) != r); }); break;
 	}
-	printf("OUT OF EXEC_I::"); dump_context(x);
 }
 void exec_x(X* x) { UF1(x); duplicate(x); exec_i(x); }
 void branch(X* x) { UF3(x); if (!A(N(N(S(x))))) { swap(x); } drop(x); swap(x); drop(x); exec_i(x); }
@@ -243,8 +236,12 @@ void outer(X* x) {
 			ERR(x, n == 0 && endptr == (char*)addr, E_UW);
 			S(x) = cons(x, n, AS(ATM, S(x)));
 		} else {
-			if (x->st == 0) {	printf("EXECUTING\n"); exec_i(x); ERR(x, x->err < 0, x->err); }
-			else if (NDCS(A(S(x))) && CS(A(S(x))) == 0) { exec_i(x); }
+			if (x->st == 0) {	//printf("EXECUTING\n"); exec_i(x); ERR(x, x->err < 0, x->err); }
+				C t = S(x); S(x) = N(S(x));
+				LK(t, R(x)); R(x) = t;
+				dump_context(x);
+				while(STEP(x));
+			} else if (NDCS(A(S(x))) && CS(A(S(x))) == 0) { exec_i(x); }
 			/* } else if (NDCS(w)) { Execute custom NDCS xt } */
 			/* } else if ( has code generator ) { execute code generator } */
 			else { compile(x); }
@@ -259,12 +256,28 @@ void evaluate(X* x) { UF2(x);
 
 // ----------------------------------------------------------------------------- END OF CORE
 
-void dump_list(X* x, C l) { while (l) { dump_cell(x, l); l = N(l); } }
+void dump_cell(X* x, C c, C d);
 
-void dump_cell(X* x, C c) {
+//void dump_list(X* x, C l) { while (l) { dump_cell(x, l); l = N(l); } }
+//void dump_reversed_list(X* x, C l) { 
+//	if (!l) return; 
+//	if (N(l)) { dump_reversed_list(x, N(l)); } 
+//	dump_cell(x, l); 
+//}
+void dump_list(X* x, C l, C d) {
+	if (!l) return;
+	if (!d) { while (l) { dump_cell(x, l, d); l = N(l); } }
+	else {
+		if (N(l)) { dump_list(x, N(l), d); }
+		dump_cell(x, l, d);
+	}
+}
+
+void dump_cell(X* x, C c, C d) {
+	if (!c) return;
 	switch(T(c)) {
 		case ATM: printf("#%ld ", A(c)); break;
-		case LST: printf("{ "); dump_list(x, A(c)); printf("} "); break;
+		case LST: printf("{ "); dump_list(x, A(c), d); printf("} "); break;
 		case PRM: 
 			if (A(c) == (C)&swap) printf("P:swap ");
 			else if (A(c) == (C)&duplicate) printf("P:dup ");
@@ -276,25 +289,30 @@ void dump_cell(X* x, C c) {
 			else if (A(c) == (C)&exec_i) printf("P:i ");
 			else if (A(c) == (C)&branch) printf("P:branch ");
 			else if (A(c) == (C)&drop) printf("P:drop ");
+			else if (A(c) == (C)&list_to_stack) printf("P:l>s ");
+			else if (A(c) == (C)&stack_to_list) printf("P:s>l ");
+			else if (A(c) == (C)&empty) printf("P:{} ");
+			else if (A(c) == (C)&mul) printf("P:* ");
+			else if (A(c) == (C)&div) printf("P:/ ");
 			else printf("P:%ld ", A(c));
 			break;
 		case WRD: printf("W:%s ", (B*)NFA(A(c))); break;
 	}
 }
 
-void dump_stack(X* x, C l) {
-	if (!l) return;
-	if (N(l)) { dump_stack(x, N(l)); dump_cell(x, l); }
-	else dump_cell(x, l);
-}
-
 void dump_context(X* x) {
-	printf("STATE: %ld\n", x->st);
-	printf("%.*s^%.*s", (int)x->in, x->ib, (int)(x->il - x->in), x->ib + x->in);
-	printf("<%ld> ", length(S(x)));
-	dump_stack(x, S(x));
+	if (x->ib) {
+		if ((x->ib + x->in)[x->il - x->in] == 0) {
+			printf("%c'%.*s^%.*s'", x->st ? 'C' : 'I', (int)x->in, x->ib, (int)(x->il - x->in - 1), x->ib + x->in);
+		} else {
+			printf("%c'%.*s^%.*s'", x->st ? 'C' : 'I', (int)x->in, x->ib, (int)(x->il - x->in), x->ib + x->in);
+		}
+	} else {
+		printf("%c'^'", x->st ? 'C' : 'I');
+	}
+	dump_list(x, x->ds, 1);
 	printf("‖ ");
-	C p = x->rs; while (p) { dump_list(x, A(p)); printf("| "); p = N(p); }
+	dump_list(x, x->rs, 0);
 	printf("\n");
 }
 
