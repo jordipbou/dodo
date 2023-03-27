@@ -115,4 +115,6 @@ void main(int argc, char *argv[]) {
 			x->err = 0;
 		} while(1);
 	}
+
+	dump_context(x);
 }

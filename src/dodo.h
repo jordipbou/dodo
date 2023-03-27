@@ -153,7 +153,7 @@ typedef void (*FUNC)(X*);
 			case WRD: CALL(x, XT(A(R(x)))); break; \
 		} \
 	}; \
-	dump_context(x); \
+	/*dump_context(x);*/ \
 	R(x); })
 
 #define JUMP(x, l) R(x) = clone(x, l)
@@ -233,12 +233,12 @@ void outer(X* x) {
 			intmax_t n = strtoimax((B*)addr, &endptr, 10);
 			ERR(x, n == 0 && endptr == (char*)addr, E_UW);
 			S(x) = cons(x, n, AS(ATM, S(x)));
-			dump_context(x);
+			/*dump_context(x);*/
 		} else {
 			if (x->st == 0) {
 				C t = S(x); S(x) = N(S(x));
 				LK(t, R(x)); R(x) = t;
-				dump_context(x);
+				/*dump_context(x);*/
 				while(STEP(x));
 			} else if (NDCS(A(S(x))) && CS(A(S(x))) == 0) { exec_i(x); }
 			/* } else if (NDCS(w)) { Execute custom NDCS xt } */
