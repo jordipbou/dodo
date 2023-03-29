@@ -23,6 +23,7 @@ void error(CTX* ctx) {
 			((FUNC)CAR(NEXT(CAR(handler))))(ctx);
 			if (ctx->err == 0) return;
 		}
+		handler = NEXT(handler);
 	}
 }
 
@@ -37,13 +38,8 @@ void error(CTX* ctx) {
 })
 
 #define OF(ctx, n)		ERR(ctx, ctx->free < n, ERR_STACK_OVERFLOW)
-#define UF1(ctx)			ERR(ctx, !TOS(ctx), ERR_STACK_UNDERFLOW)
-#define UF2(ctx)			UF1(ctx); ERR(ctx, !NEXT(TOS(ctx)), ERR_STACK_UNDERFLOW)
-#define UF3(ctx)			UF2(ctx); ERR(ctx, !NEXT(NEXT(TOS(ctx))), ERR_STACK_UNDERFLOW)
-
-#define EA(ctx)				UF1(ctx); ERR(ctx, TYPE(TOS(ctx)) != ATOM, ERR_EXPECTED_ATOM)
-#define EL(ctx)				UF1(ctx); ERR(ctx, TYPE(TOS(ctx)) != LIST, ERR_EXPECTED_LIST)
-#define EW(ctx)				UF1(ctx); ERR(ctx, TYPE(TOS(ctx)) != WORD, ERR_EXPECTED_WORD)
-#define E2A(ctx)			UF2(ctx); ERR(ctx, TYPE(TOS(ctx)) != ATOM || TYPE(NEXT(TOS(ctx))) != ATOM, ERR_EXPECTED_2_ATOMS)
+#define UF1(ctx)			ERR(ctx, TOS(ctx) == 0, ERR_STACK_UNDERFLOW)
+#define UF2(ctx)			ERR(ctx, TOS(ctx) == 0 || NEXT(TOS(ctx)) == 0, ERR_STACK_UNDERFLOW)
+#define UF3(ctx)			ERR(ctx, TOS(ctx) == 0 || NEXT(TOS(ctx)) == 0 || NEXT(NEXT(TOS(ctx))) == 0, ERR_STACK_UNDERFLOW)
 
 #endif

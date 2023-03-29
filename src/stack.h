@@ -1,7 +1,6 @@
 #ifndef __DODO_STACK__
 #define __DODO_STACK__
 
-#include "types.h"
 #include "core.h"
 
 void dupl(CTX* ctx) { /* ( n -- n n ) */

@@ -39,4 +39,10 @@ target_include_directories (stack_tests PRIVATE src deps/Unity/src)
 add_executable (error_tests src/error_tests.c deps/Unity/src/unity.c)
 target_include_directories (error_tests PRIVATE src deps/Unity/src)
 
+add_executable (comparison_tests src/comparison_tests.c deps/Unity/src/unity.c)
+target_include_directories (comparison_tests PRIVATE src deps/Unity/src)
+
+add_executable (arithmetic_tests src/arithmetic_tests.c deps/Unity/src/unity.c)
+target_include_directories (arithmetic_tests PRIVATE src deps/Unity/src)
+
 # add_subdirectory(c_examples)
