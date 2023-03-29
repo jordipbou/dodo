@@ -27,24 +27,16 @@ add_executable (
 
 target_include_directories (tests PRIVATE src deps/Unity/src)
 
-add_executable (
-	core 
-	src/core.c)
+add_executable (lists_tests src/lists_tests.c deps/Unity/src/unity.c)
+target_include_directories (lists_tests PRIVATE src deps/Unity/src)
 
-target_include_directories (core PRIVATE src)
+add_executable (core_tests src/core_tests.c deps/Unity/src/unity.c)
+target_include_directories (core_tests PRIVATE src deps/Unity/src)
 
-add_executable (
-	ctests
-	src/ctests.c
-	deps/Unity/src/unity.c)
+add_executable (stack_tests src/stack_tests.c deps/Unity/src/unity.c)
+target_include_directories (stack_tests PRIVATE src deps/Unity/src)
 
-target_include_directories (ctests PRIVATE src deps/Unity/src)
-
-# add_executable (
-# 	ctests2
-# 	src/ctests2.c
-# 	deps/Unity/src/unity.c)
-# 
-# target_include_directories (ctests2 PRIVATE src deps/Unity/src)
+add_executable (error_tests src/error_tests.c deps/Unity/src/unity.c)
+target_include_directories (error_tests PRIVATE src deps/Unity/src)
 
 # add_subdirectory(c_examples)
