@@ -2,7 +2,7 @@
 #define __DODO_CORE__
 
 #include "types.h"
-#include "lists.h"
+#include "pairs.h"
 
 #define ALIGN(addr, bound)	((((CELL)addr) + (bound - 1)) & ~(bound - 1))
 #define BOTTOM(ctx)					(((BYTE*)ctx) + sizeof(CTX))

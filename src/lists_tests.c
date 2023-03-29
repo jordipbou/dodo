@@ -7,101 +7,131 @@ void setUp() {}
 
 void tearDown() {}
 
-void test_LISTS_pairs() {
-	CELL pair = (CELL)malloc(2*sizeof(CELL));
+void test_LISTS_empty() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
 
-	CAR(pair) = 7;	
-	CDR(pair) = AS(ATOM, 8);
-	TEST_ASSERT_EQUAL_INT(7, CAR(pair));
-	TEST_ASSERT_EQUAL_INT(8, NEXT(pair));
-	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(pair));
-	TEST_ASSERT_NOT_EQUAL_INT(LIST, TYPE(pair));
-	TEST_ASSERT_NOT_EQUAL_INT(PRIM, TYPE(pair));
-	TEST_ASSERT_NOT_EQUAL_INT(WORD, TYPE(pair));
-	CDR(pair) = AS(LIST, 16);
-	TEST_ASSERT_EQUAL_INT(7, CAR(pair));
-	TEST_ASSERT_EQUAL_INT(16, NEXT(pair));
-	TEST_ASSERT_NOT_EQUAL_INT(ATOM, TYPE(pair));
-	TEST_ASSERT_EQUAL_INT(LIST, TYPE(pair));
-	TEST_ASSERT_NOT_EQUAL_INT(PRIM, TYPE(pair));
-	TEST_ASSERT_NOT_EQUAL_INT(WORD, TYPE(pair));
-	CDR(pair) = AS(PRIM, 24);
-	TEST_ASSERT_EQUAL_INT(7, CAR(pair));
-	TEST_ASSERT_EQUAL_INT(24, NEXT(pair));
-	TEST_ASSERT_NOT_EQUAL_INT(ATOM, TYPE(pair));
-	TEST_ASSERT_NOT_EQUAL_INT(LIST, TYPE(pair));
-	TEST_ASSERT_EQUAL_INT(PRIM, TYPE(pair));
-	TEST_ASSERT_NOT_EQUAL_INT(WORD, TYPE(pair));
-	CDR(pair) = AS(WORD, 32);
-	TEST_ASSERT_EQUAL_INT(7, CAR(pair));
-	TEST_ASSERT_EQUAL_INT(32, NEXT(pair));
-	TEST_ASSERT_NOT_EQUAL_INT(ATOM, TYPE(pair));
-	TEST_ASSERT_NOT_EQUAL_INT(LIST, TYPE(pair));
-	TEST_ASSERT_NOT_EQUAL_INT(PRIM, TYPE(pair));
-	TEST_ASSERT_EQUAL_INT(WORD, TYPE(pair));
+	empty(ctx);
+
+	TEST_ASSERT_EQUAL_INT(1, length(TOS(ctx)));
+	TEST_ASSERT_EQUAL_INT(LIST, TYPE(TOS(ctx)));
+	TEST_ASSERT_EQUAL_INT(0, length(CAR(TOS(ctx))));
 }
 
-void test_LISTS_link_pairs() {
-	CELL pair = (CELL)malloc(sizeof(CELL) * 2);
+void test_LISTS_list_to_stack() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
 
-	CAR(pair) = 7;
-	CDR(pair) = AS(ATOM, 16);
+	list_to_stack(ctx);
 
-	TEST_ASSERT_EQUAL_INT(7, CAR(pair));
-	TEST_ASSERT_EQUAL_INT(16, NEXT(pair));
-	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(pair));
-	TEST_ASSERT_NOT_EQUAL_INT(LIST, TYPE(pair));
-	TEST_ASSERT_NOT_EQUAL_INT(PRIM, TYPE(pair));
-	TEST_ASSERT_NOT_EQUAL_INT(WORD, TYPE(pair));
-	
-	LINK(pair, 32);
+	TEST_ASSERT_EQUAL_INT(ERR_STACK_UNDERFLOW, ctx->err);
+	TEST_ASSERT_EQUAL_INT(0, length(TOS(ctx)));
+	TEST_ASSERT_EQUAL_INT(1, length(ctx->dstack));
 
-	TEST_ASSERT_EQUAL_INT(7, CAR(pair));
-	TEST_ASSERT_EQUAL_INT(32, NEXT(pair));
-	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(pair));
-	TEST_ASSERT_NOT_EQUAL_INT(LIST, TYPE(pair));
-	TEST_ASSERT_NOT_EQUAL_INT(PRIM, TYPE(pair));
-	TEST_ASSERT_NOT_EQUAL_INT(WORD, TYPE(pair));
+	ctx->err = 0;
+
+	TOS(ctx) = cons(ctx, 0, AS(ATOM, 0));
+
+	list_to_stack(ctx);
+
+	TEST_ASSERT_EQUAL_INT(ERR_EXPECTED_LIST, ctx->err);
+	TEST_ASSERT_EQUAL_INT(1, length(TOS(ctx)));
+	TEST_ASSERT_EQUAL_INT(1, length(ctx->dstack));
 }
 
-void test_LISTS_length() {
-	CELL p1 = (CELL)malloc(2*sizeof(CELL));
-	CELL p2 = (CELL)malloc(2*sizeof(CELL));
-	CELL p3 = (CELL)malloc(2*sizeof(CELL));
+void test_LISTS_list_to_stack_2() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
 
-	CDR(p1) = AS(ATOM, p2);
-	CDR(p2) = p3;
-	CDR(p3) = 0;
+	empty(ctx);
 
-	TEST_ASSERT_EQUAL_INT(0, length(0));
-	TEST_ASSERT_EQUAL_INT(1, length(p3));
-	TEST_ASSERT_EQUAL_INT(2, length(p2));
-	TEST_ASSERT_EQUAL_INT(3, length(p1));
+	list_to_stack(ctx);
+
+	TEST_ASSERT_EQUAL_INT(0, ctx->err);
+	TEST_ASSERT_EQUAL_INT(0, length(TOS(ctx)));
+	TEST_ASSERT_EQUAL_INT(2, length(ctx->dstack));
 }
 
-void test_LISTS_reverse() {
-	CELL p1 = (CELL)malloc(2*sizeof(CELL));
-	CELL p2 = (CELL)malloc(2*sizeof(CELL));
-	CELL p3 = (CELL)malloc(2*sizeof(CELL));
-	
-	CDR(p1) = p2;
-	CDR(p2) = p3;
-	CDR(p3) = 0;
+void test_LISTS_list_to_stack_3() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
 
-	CELL r = reverse(p1, 0);
+	TOS(ctx) = cons(ctx, cons(ctx, 7, AS(ATOM, cons(ctx, 11, AS(ATOM, 0)))), AS(LIST, 0));
 
-	TEST_ASSERT_EQUAL_INT(p3, r);
-	TEST_ASSERT_EQUAL_INT(p2, NEXT(r));
-	TEST_ASSERT_EQUAL_INT(p1, NEXT(NEXT(r)));
+	list_to_stack(ctx);
+
+	TEST_ASSERT_EQUAL_INT(0, ctx->err);
+	TEST_ASSERT_EQUAL_INT(2, length(TOS(ctx)));
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(TOS(ctx)));
+	TEST_ASSERT_EQUAL_INT(7, CAR(TOS(ctx)));
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(NEXT(TOS(ctx))));
+	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(TOS(ctx))));
+	TEST_ASSERT_EQUAL_INT(2, length(ctx->dstack));
+}
+
+void test_LISTS_stack_to_list() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	stack_to_list(ctx);
+
+	TEST_ASSERT_EQUAL_INT(0, ctx->err);
+	TEST_ASSERT_EQUAL_INT(1, length(ctx->dstack));
+	TEST_ASSERT_EQUAL_INT(1, length(TOS(ctx)));
+	TEST_ASSERT_EQUAL_INT(LIST, TYPE(TOS(ctx)));
+	TEST_ASSERT_EQUAL_INT(0, length(CAR(TOS(ctx))));
+}
+
+void test_LISTS_stack_to_list_2() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	empty(ctx);
+	list_to_stack(ctx);
+	stack_to_list(ctx);
+
+	TEST_ASSERT_EQUAL_INT(0, ctx->err);
+	TEST_ASSERT_EQUAL_INT(1, length(ctx->dstack));
+	TEST_ASSERT_EQUAL_INT(1, length(TOS(ctx)));
+	TEST_ASSERT_EQUAL_INT(LIST, TYPE(TOS(ctx)));
+	TEST_ASSERT_EQUAL_INT(0, length(CAR(TOS(ctx))));
+}
+
+void test_LISTS_stack_to_list_3() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	empty(ctx);
+	list_to_stack(ctx);
+	TOS(ctx) = cons(ctx, 7, AS(ATOM, cons(ctx, 11, AS(ATOM, 0))));
+	stack_to_list(ctx);
+
+	TEST_ASSERT_EQUAL_INT(0, ctx->err);
+	TEST_ASSERT_EQUAL_INT(1, length(ctx->dstack));
+	TEST_ASSERT_EQUAL_INT(1, length(TOS(ctx)));
+	TEST_ASSERT_EQUAL_INT(LIST, TYPE(TOS(ctx)));
+	TEST_ASSERT_EQUAL_INT(2, length(CAR(TOS(ctx))));
+	TEST_ASSERT_EQUAL_INT(11, CAR(CAR(TOS(ctx))));
+	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(CAR(TOS(ctx)))));
 }
 
 int main() {
 	UNITY_BEGIN();
 
-	RUN_TEST(test_LISTS_pairs);
-	RUN_TEST(test_LISTS_link_pairs);
-	RUN_TEST(test_LISTS_length);
-	RUN_TEST(test_LISTS_reverse);
+	RUN_TEST(test_LISTS_empty);
+	RUN_TEST(test_LISTS_list_to_stack);
+	RUN_TEST(test_LISTS_list_to_stack_2);
+	RUN_TEST(test_LISTS_list_to_stack_3);
+	RUN_TEST(test_LISTS_stack_to_list);
+	RUN_TEST(test_LISTS_stack_to_list_2);
+	RUN_TEST(test_LISTS_stack_to_list_3);
 
 	return UNITY_END();
 }

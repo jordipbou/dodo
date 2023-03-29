@@ -14,6 +14,22 @@ void error_handler(CTX* ctx) {
 	ctx->err = 0;
 }
 
+void test_ERROR_no_handler_found() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	ctx->xstack = 
+		cons(ctx,
+			cons(ctx, ERR_STACK_UNDERFLOW, AS(ATOM,
+			cons(ctx, (CELL)&error_handler, AS(PRIM, 0)))),
+		AS(LIST, 0));
+
+	// It should just return and not get stuck in an infinite loop.
+
+	ERR(ctx, 1, ERR_STACK_OVERFLOW);	
+}
+
 void test_ERROR_stack_overflow() {
 	CELL size = 512;
 	BYTE block[size];
@@ -101,28 +117,46 @@ void test_ERROR_stack_underflow() {
 	TEST_ASSERT_EQUAL_INT(0, error_var);
 }
 
-void test_ERROR_no_handler_found() {
+void test_ERROR_expected_list() {
 	CELL size = 512;
 	BYTE block[size];
 	CTX* ctx = init(block, size);
 
-		ctx->xstack = 
+	ctx->xstack = 
 		cons(ctx,
-			cons(ctx, ERR_STACK_UNDERFLOW, AS(ATOM,
+			cons(ctx, 0, AS(ATOM,
 			cons(ctx, (CELL)&error_handler, AS(PRIM, 0)))),
 		AS(LIST, 0));
 
-	// It should just return and not get stuck in an infinite loop.
+	TOS(ctx) = 0;
 
-	ERR(ctx, 1, ERR_STACK_OVERFLOW);	
+	error_var = 0;
+	EL(ctx);
+
+	TEST_ASSERT_EQUAL_INT(ERR_STACK_UNDERFLOW, error_var);
+
+	TOS(ctx) = cons(ctx, 7, AS(ATOM, 0));
+
+	error_var = 0;
+	EL(ctx);
+
+	TEST_ASSERT_EQUAL_INT(ERR_EXPECTED_LIST, error_var);
+
+	TOS(ctx) = cons(ctx, 7, AS(LIST, 0));
+
+	error_var = 0;
+	EL(ctx);
+
+	TEST_ASSERT_EQUAL_INT(0, error_var);
 }
 
 int main() {
 	UNITY_BEGIN();
 
+	RUN_TEST(test_ERROR_no_handler_found);
 	RUN_TEST(test_ERROR_stack_overflow);
 	RUN_TEST(test_ERROR_stack_underflow);
-	RUN_TEST(test_ERROR_no_handler_found);
+	RUN_TEST(test_ERROR_expected_list);
 
 	return UNITY_END();
 }
