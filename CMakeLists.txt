@@ -27,28 +27,7 @@ add_executable (
 
 target_include_directories (tests PRIVATE src deps/Unity/src)
 
-add_executable (pairs_tests src/pairs_tests.c deps/Unity/src/unity.c)
-target_include_directories (pairs_tests PRIVATE src deps/Unity/src)
-
 add_executable (core_tests src/core_tests.c deps/Unity/src/unity.c)
 target_include_directories (core_tests PRIVATE src deps/Unity/src)
-
-add_executable (stack_tests src/stack_tests.c deps/Unity/src/unity.c)
-target_include_directories (stack_tests PRIVATE src deps/Unity/src)
-
-add_executable (error_tests src/error_tests.c deps/Unity/src/unity.c)
-target_include_directories (error_tests PRIVATE src deps/Unity/src)
-
-add_executable (comparison_tests src/comparison_tests.c deps/Unity/src/unity.c)
-target_include_directories (comparison_tests PRIVATE src deps/Unity/src)
-
-add_executable (arithmetic_tests src/arithmetic_tests.c deps/Unity/src/unity.c)
-target_include_directories (arithmetic_tests PRIVATE src deps/Unity/src)
-
-add_executable (bit_tests src/bit_tests.c deps/Unity/src/unity.c)
-target_include_directories (bit_tests PRIVATE src deps/Unity/src)
-
-add_executable (lists_tests src/lists_tests.c deps/Unity/src/unity.c)
-target_include_directories (lists_tests PRIVATE src deps/Unity/src)
 
 # add_subdirectory(c_examples)

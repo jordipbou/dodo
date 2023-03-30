@@ -82,6 +82,8 @@ enum Errors { E_EIB = -12, E_ZLN, E_EW, E_EA, E_EL, E_EAA, E_UW, E_NER, E_NEM, E
 
 #define EIB(x)				ERR(x, !x->ib, E_EIB)
 
+#define E(x, p)				({ p(x); if(x->err) { return; } })
+
 // STACK PRIMITIVES
 
 void duplicate(X* x) { UF1(x); OF(x, 1); S(x) = cons(x, T(S(x)) == LST ? clone(x, A(S(x))) : A(S(x)), AS(T(S(x)), S(x))); }
@@ -153,7 +155,7 @@ typedef void (*FUNC)(X*);
 			case WRD: CALL(x, XT(A(R(x)))); break; \
 		} \
 	}; \
-	/*dump_context(x);*/ \
+	dump_context(x); \
 	R(x); })
 
 #define JUMP(x, l) R(x) = clone(x, l)
@@ -166,7 +168,7 @@ void exec_i(X* x) { UF1(x);
 		case LST: CALL(x, A(S(x))); S(x) = recl(x, S(x)); STEP(x); break;
 		case PRM: ({ C p = A(S(x)); S(x) = recl(x, S(x)); ((FUNC)p)(x); }); break;
 		case WRD: 
-			({ C r = R(x); CALL(x, XT(A(S(x)))); S(x) = recl(x, S(x)); while(STEP(x) != r); }); break;
+			({ C r = R(x); CALL(x, XT(A(S(x)))); S(x) = recl(x, S(x)); STEP(x); }); break;
 	}
 }
 void exec_x(X* x) { UF1(x); duplicate(x); exec_i(x); }
@@ -207,6 +209,67 @@ void allot(X* x) { UF1(x);
 	}
 }
 
+void header(X* x) {
+	parse_name(x); ERR(x, A(S(x)) == 0, E_ZLN);
+	C u = A(S(x)); B* addr = (B*)A(N(S(x)));
+	A(S(x))++;
+	B* hr = x->hr;
+	allot(x);
+	C i; for (i = 0; i < u; i++) { hr[i] = addr[i]; } hr[u] = 0;
+	A(S(x)) = (C)hr;
+	S(x) = cons(x, 0, AS(WRD, S(x)));
+	swap(x);
+}
+
+void type(X* x) {
+	C u = A(S(x)); B* addr = (B*)A(N(S(x))); S(x) = recl(x, recl(x, S(x)));
+	printf("%.*s", (int)u, addr);
+}
+
+void stack_to_word(X* x) {
+	C l = S(x);
+	S(x) = 0;
+	x->ds = recl(x, x->ds);
+	l = reverse(l, 0);
+	A(l) = N(l);
+	D(l) = AS(DEF, x->lt);
+	x->lt = l;
+
+}
+
+void words(X* x) {
+	printf("\n");
+	C w = x->lt;
+	while (w) {
+		printf("%s ", NFA(w));
+		w = N(w);
+	}
+	printf("\n");
+}
+
+void see(X* x) {
+	C w = A(N(S(x)));
+	printf(": %s ", NFA(w)); dump_list(x, XT(w), 0);
+}
+
+void colon(X* x) {
+	E(x, empty);
+	E(x, list_to_stack);
+	E(x, header);
+	E(x, rbracket);
+}
+
+void semicolon(X* x) {
+	E(x, lbracket);
+	E(x, stack_to_word);
+}
+
+void immediate(X* x) {
+	if (T(x->lt) == DEF) {
+		D(x->lt) = AS(NDCS_DEF, N(x->lt));
+	}
+}
+
 // OUTER INTERPRETER
 
 #define FOUND(w, a, u)	(strlen(NFA(w)) == u && !strncmp(NFA(w), (B*)a, u))
@@ -220,7 +283,13 @@ void find_name(X* x) { UF2(x); ERR(x, A(S(x)) == 0, E_ZLN);
 void compile(X* x) { UF1(x); EW(x); 
 	C w = A(S(x)); S(x) = recl(x, S(x));
 	if (PRIMITIVE(w)) S(x) = cons(x, A(XT(w)), AS(PRM, S(x)));
-	else S(x) = cons(x, XT(w), AS(WRD, S(x)));
+	else S(x) = cons(x, w, AS(WRD, S(x)));
+}
+
+void postpone(X* x) {
+	parse_name(x);
+	find_name(x);
+	compile(x);
 }
 
 void outer(X* x) {
@@ -287,14 +356,24 @@ void dump_cell(X* x, C c, C d) {
 			else if (A(c) == (C)&empty) printf("P:{} ");
 			else if (A(c) == (C)&mul) printf("P:* ");
 			else if (A(c) == (C)&div) printf("P:/ ");
+			else if (A(c) == (C)&lbracket) printf("P:[ ");
+			else if (A(c) == (C)&rbracket) printf("P:] ");
 			else printf("P:%ld ", A(c));
 			break;
-		case WRD: printf("W:%s ", (B*)NFA(A(c))); break;
+		case WRD: 
+			if (c != 0) {
+				if (A(c) != 0) {
+					printf("W:%s ", (B*)NFA(A(c)));
+				} else {
+					printf("HEADER ");
+				}
+			}
+			break;
 	}
 }
 
 void dump_context(X* x) {
-	printf("%c[%ld:%ld]", x->st ? 'C' : 'I', x->total, x->free);
+	printf("%c/%ld/[%ld:%ld]", x->st ? 'C' : 'I', x->err, x->total, x->free);
 	if (x->ib) {
 		if ((x->ib + x->in)[x->il - x->in] == 0) {
 			printf("'%.*s^%.*s'", (int)x->in, x->ib, (int)(x->il - x->in - 1), x->ib + x->in);
@@ -352,6 +431,18 @@ X* bootstrap(X* x) {
 	ADD_PRIMITIVE(x, "grow", &grow);
 	ADD_PRIMITIVE(x, "shrink", &shrink);
 	ADD_PRIMITIVE(x, "allot", &allot);
+
+	ADD_PRIMITIVE(x, "header", &header);
+	ADD_PRIMITIVE(x, "type", &type);
+	ADD_PRIMITIVE(x, "s>w", &stack_to_word);
+	ADD_PRIMITIVE(x, "words", &words);
+	ADD_PRIMITIVE(x, "see", &see);
+
+	ADD_PRIMITIVE(x, ":", &colon);
+	ADD_NDCS_PRIM(x, ";", &semicolon);
+
+	ADD_PRIMITIVE(x, "immediate", &immediate);
+	ADD_PRIMITIVE(x, "postpone", &postpone);
 
 	//ADD_PRIMITIVE(x, "latest", &latest, 0);
 	//ADD_PRIMITIVE(x, "here", &here, 0);

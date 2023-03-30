@@ -82,11 +82,14 @@ void main(int argc, char *argv[]) {
 	B bk[sz];
 	X* x = bootstrap(init(bk, sz));
 
-	dump_context(x);
+	//dump_context(x);
 
 	//fib(x);
 	//fibN(x);
+	//S(x) = cons(x, 36, AS(ATM, S(x)));
+	//fibR(x);
 	//printf("%d\n", fibC(36));
+	//printf("%ld\n", A(S(x)));
 
 	FILE *fptr;
 	B buf[255];
