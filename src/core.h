@@ -149,6 +149,7 @@ CELL clone(CTX* ctx, CELL pair) {
 #define ERR_ZERO_LENGTH_NAME		-8
 #define ERR_NO_INPUT_SOURCE			-9
 #define ERR_END_OF_INPUT_SOURCE	-10
+#define ERR_HEADER_NOT_FOUND		-11
 
 void error(CTX* ctx) {
 	CELL handler = ctx->xstack;
@@ -178,7 +179,14 @@ void error(CTX* ctx) {
 
 #define EL(ctx)				UF1(ctx); ERR(ctx, TYPE(TOS(ctx)) != LIST, ERR_EXPECTED_LIST)
 
-#define DO(ctx, primitive)		(primitive(ctx); if (ctx->err < 0) { return; })
+#define DO(ctx, primitive)		({ primitive(ctx); if (ctx->err < 0) { return; }; })
+
+// CONTEXT PRIMITIVES
+
+void latest(CTX* ctx) {
+	OF(ctx, 1);
+	TOS(ctx) = cons(ctx, ctx->latest, AS(LIST, TOS(ctx)));
+}
 
 // STACK PRIMITIVES
 
@@ -225,10 +233,20 @@ void add(CTX* ctx) {	/* ( n2 n1 -- n:(n2 + n1) ) */
 	TOS(ctx) = reclaim(ctx, TOS(ctx));
 }
 
+void incr(CTX* ctx) {	/* ( n -- n:(n + 1) ) */
+	UF1(ctx);
+	CAR(TOS(ctx))++;
+}
+
 void sub(CTX* ctx) {	/* ( n2 n1 -- n:(n2 - n1) ) */
 	UF2(ctx);
 	CAR(NEXT(TOS(ctx))) = CAR(NEXT(TOS(ctx))) - CAR(TOS(ctx));
 	TOS(ctx) = reclaim(ctx, TOS(ctx));
+}
+
+void decr(CTX* ctx) {	/* ( n -- n:(n - 1) ) */
+	UF1(ctx);
+	CAR(TOS(ctx))--;
 }
 
 void mul(CTX* ctx) {	/* ( n2 n1 -- n:(n2 * n1) ) */
@@ -330,6 +348,14 @@ void carcdr(CTX* ctx) { /* ( l -- h t ) */
 	CAR(TOS(ctx)) = tail;
 	LINK(head, TOS(ctx));
 	TOS(ctx) = head;
+}
+
+void append(CTX* ctx) { /* ( i l -- l:(i ..l) ) */
+	UF2(ctx);
+	CELL i = NEXT(TOS(ctx));
+	LINK(TOS(ctx), NEXT(NEXT(TOS(ctx))));
+	LINK(i, CAR(TOS(ctx)));
+	CAR(TOS(ctx)) = i;
 }
 
 // MEMORY
@@ -508,6 +534,7 @@ void exec_i(CTX* ctx) { /* ( xt -- ) */
 	UF1(ctx);
 	switch (TYPE(TOS(ctx))) {
 		case ATOM: 
+			// This executes to be compatible with Forth, is it correct?
 			p = CAR(TOS(ctx)); 
 			TOS(ctx) = reclaim(ctx, TOS(ctx)); 
 			((FUNC)p)(ctx);
@@ -565,11 +592,11 @@ void compile(CTX* ctx) {
 	}
 }
 
-void postpone(CTX* ctx) {
-	parse_name(ctx); if (ctx->err < 0) return;
-	find_name(ctx); if (ctx->err < 0) return;
-	compile(ctx);
-}
+//void postpone(CTX* ctx) {
+//	parse_name(ctx); if (ctx->err < 0) return;
+//	find_name(ctx); if (ctx->err < 0) return;
+//	compile(ctx);
+//}
 
 void lbracket(CTX* ctx) {
 	ctx->status = 0;
@@ -618,6 +645,69 @@ void evaluate(CTX* ctx) {
 	outer(ctx);
 }
 
+// TODO: Organize
+
+void sliteral(CTX* ctx) {
+	// TODO: Should a string literal have a count?
+	CELL u = CAR(TOS(ctx));
+	BYTE* addr = (BYTE*)CAR(NEXT(TOS(ctx)));
+	DO(ctx, incr);
+	BYTE* here = ctx->here;
+	DO(ctx, allot);
+	CELL i;
+	for (i = 0; i < u; i++) {
+		here[i] = addr[i];
+	}
+	here[u] = 0;
+	CAR(TOS(ctx)) = (CELL)here;
+	TOS(ctx) = cons(ctx, u, AS(ATOM, TOS(ctx)));
+}
+
+void header(CTX* ctx) {
+	DO(ctx, parse_name);
+	DO(ctx, sliteral);
+	DO(ctx, drop);
+	TOS(ctx) = cons(ctx, 0, AS(WORD, TOS(ctx)));
+	DO(ctx, swap);
+}
+
+void recurse(CTX* ctx) {
+	OF(ctx, 1);
+	CELL s = ctx->dstack;
+	while (s != 0) {
+		CELL i = CAR(s);
+		while (i && !(TYPE(i) == WORD && CAR(i) == 0)) {
+			i = NEXT(i);
+		}
+		if (i) {
+			TOS(ctx) = cons(ctx, i, AS(WORD, TOS(ctx)));
+			return;
+		}
+		s = NEXT(s);
+	}
+	printf("not found...\n");
+	ctx->err = ERR_HEADER_NOT_FOUND;
+}
+
+void reveal(CTX* ctx) {
+	UF1(ctx);
+	EL(ctx);
+	CELL w = CAR(TOS(ctx));
+	CAR(TOS(ctx)) = 0;
+	TOS(ctx) = reclaim(ctx, TOS(ctx));
+	CAR(w) = NEXT(w);
+	LINK(w, ctx->latest);
+	ctx->latest = w;
+}
+
+void type(CTX* ctx) {
+	UF2(ctx);
+	CELL u = CAR(TOS(ctx));
+	BYTE* addr = (BYTE*)CAR(NEXT(TOS(ctx)));
+	TOS(ctx) = reclaim(ctx, reclaim(ctx, TOS(ctx)));
+	printf("%.*s", (int)u, addr);
+}
+
 // BOOTSTRAPING
 
 #define ADD_PRIMITIVE(ctx, name, func) \
@@ -635,6 +725,8 @@ void evaluate(CTX* ctx) {
 		AS(LIST, ctx->latest));
 
 CTX* bootstrap(CTX* ctx) {
+	ADD_PRIMITIVE(ctx, "latest", (CELL)&latest);
+
 	ADD_PRIMITIVE(ctx, "dup", (CELL)&duplicate);
 	ADD_PRIMITIVE(ctx, "swap", (CELL)&swap);
 	ADD_PRIMITIVE(ctx, "drop", (CELL)&drop);
@@ -642,7 +734,9 @@ CTX* bootstrap(CTX* ctx) {
 	ADD_PRIMITIVE(ctx, "rot", (CELL)&rot);
 
 	ADD_PRIMITIVE(ctx, "+", (CELL)&add);
+	ADD_PRIMITIVE(ctx, "1+", (CELL)&incr);
 	ADD_PRIMITIVE(ctx, "-", (CELL)&sub);
+	ADD_PRIMITIVE(ctx, "1-", (CELL)&decr);
 	ADD_PRIMITIVE(ctx, "*", (CELL)&mul);
 	ADD_PRIMITIVE(ctx, "/", (CELL)&div);
 	ADD_PRIMITIVE(ctx, "mod", (CELL)&mod);
@@ -660,6 +754,7 @@ CTX* bootstrap(CTX* ctx) {
 	ADD_PRIMITIVE(ctx, "l>s", (CELL)&list_to_stack);
 	ADD_PRIMITIVE(ctx, "s>l", (CELL)&stack_to_list);
 	ADD_PRIMITIVE(ctx, "carcdr", (CELL)&carcdr);
+	ADD_PRIMITIVE(ctx, "append", (CELL)&append);
 
 	ADD_PRIMITIVE(ctx, "@", (CELL)&fetch);
 	ADD_PRIMITIVE(ctx, "!", (CELL)&store);
@@ -680,11 +775,20 @@ CTX* bootstrap(CTX* ctx) {
 	ADD_PRIMITIVE(ctx, "branch", (CELL)&branch);
 
 	ADD_PRIMITIVE(ctx, "compile,", (CELL)&compile);
-	ADD_IMMEDIATE(ctx, "postpone", (CELL)&postpone);
+	//ADD_IMMEDIATE(ctx, "postpone", (CELL)&postpone);
 	ADD_IMMEDIATE(ctx, "[", (CELL)&lbracket);
 	ADD_PRIMITIVE(ctx, "]", (CELL)&rbracket);
 
 	ADD_PRIMITIVE(ctx, "evaluate", (CELL)&evaluate);
+
+	ADD_PRIMITIVE(ctx, "sliteral", (CELL)&sliteral);
+	ADD_PRIMITIVE(ctx, "header", (CELL)&header);
+	ADD_PRIMITIVE(ctx, "reveal", (CELL)&reveal);
+	ADD_PRIMITIVE(ctx, "recurse", (CELL)&recurse);
+
+	ADD_PRIMITIVE(ctx, "type", (CELL)&type);
+
+	ADD_PRIMITIVE(ctx, ".c", (CELL)&dump_context);
 
 	ctx->fmax = ctx->ftotal - ctx->free;
 
@@ -756,7 +860,7 @@ void dump_cell(CTX* ctx, CELL cell, CELL direction) {
 			else if (CAR(cell) == (CELL)&exec_x) printf("P:x ");
 			else if (CAR(cell) == (CELL)&branch) printf("P:branch ");
 			else if (CAR(cell) == (CELL)&compile) printf("P:compile, ");
-			else if (CAR(cell) == (CELL)&postpone) printf("P:postpone ");
+			//else if (CAR(cell) == (CELL)&postpone) printf("P:postpone ");
 			else if (CAR(cell) == (CELL)&lbracket) printf("P:[ ");
 			else if (CAR(cell) == (CELL)&rbracket) printf("P:] ");
 			else if (CAR(cell) == (CELL)&carcdr) printf("P:carcdr ");
@@ -765,7 +869,11 @@ void dump_cell(CTX* ctx, CELL cell, CELL direction) {
 		case WORD: 
 			if (cell != 0) {
 				if (CAR(cell) != 0) {
-					printf("W:%s ", (BYTE*)NFA(CAR(cell)));
+					if (CAR(CAR(cell)) != 0) {
+						printf("W:%s ", (BYTE*)NFA(CAR(cell)));
+					} else {
+						printf("W:RECURSE ");
+					}
 				} else {
 					printf("HEADER ");
 				}
