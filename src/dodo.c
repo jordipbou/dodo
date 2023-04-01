@@ -1,7 +1,7 @@
 #include<stdlib.h>
 #include<stdio.h>
 #include<ctype.h>
-#include"core.h"
+#include"dodo.h"
 
 char *strlwr(char *str)
 {
