@@ -129,7 +129,7 @@ void test_CONTEXT_init() {
 	TEST_ASSERT_EQUAL_INT(0, TOS(ctx));
 	//TEST_ASSERT_EQUAL_INT(0, R(ctx));
 	TEST_ASSERT_EQUAL_INT(0, ctx->err);
-	TEST_ASSERT_EQUAL_INT(0, ctx->status);
+	TEST_ASSERT_EQUAL_INT(0, ctx->state);
 
 	TEST_ASSERT_NULL(ctx->ibuf);
 	TEST_ASSERT_EQUAL_INT(0, ctx->ipos);
@@ -1366,6 +1366,56 @@ void test_PARSING_parse_name_4() {
 
 // DICTIONARY
 
+void test_DICTIONARY_primitive() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	ADD_PRIMITIVE(ctx, "+", (CELL)&add);
+
+	TEST_ASSERT_EQUAL_INT(NEXT(REF(ctx->latest)), XT(ctx, ctx->latest));
+	TEST_ASSERT_EQUAL_INT(1, IS_PRIMITIVE(ctx, ctx->latest));
+	//ADD_DUAL_PRIMITIVE(ctx, "+", (CELL)&add, (CELL)&add);
+
+	//TEST_ASSERT_EQUAL_INT(NEXT(NEXT(REF(ctx->latest))), XT(ctx, ctx->latest));
+
+	//ctx->state = 1;
+
+	//TEST_ASSERT_EQUAL_INT(CAR(NEXT(REF(ctx->latest))), XT(ctx, ctx->latest));
+}
+
+//void test_DICTIONARY_is_primitive() {
+//	CELL size = 512;
+//	BYTE block[size];
+//	CTX* ctx = init(block, size);
+//
+//	ADD_PRIMITIVE(ctx, "+", (CELL)&add);
+//
+//	TEST_ASSERT_EQUAL_INT(1, IS_PRIMITIVE(ctx, ctx->latest));
+//
+//	ADD_DUAL_PRIMITIVE(ctx, "+", (CELL)&add, (CELL)&add);
+//
+//	TEST_ASSERT_EQUAL_INT(1, IS_PRIMITIVE(ctx, ctx->latest));
+//}
+
+void test_DICTIONARY_dual_primitive() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	ADD_DUAL_PRIMITIVE(ctx, "[", (CELL)&lbracket, (CELL)&lbracket);
+
+	TEST_ASSERT_EQUAL_INT(WORD, TYPE(ctx->latest));
+	TEST_ASSERT_EQUAL_INT(DNN, SUBTYPE(ctx->latest));
+	TEST_ASSERT_EQUAL_INT(1, IS_DUAL(ctx->latest));
+
+	TEST_ASSERT_EQUAL_INT(NEXT(NEXT(REF(ctx->latest))), XT(ctx, ctx->latest));
+
+	ctx->state = 1;
+
+	TEST_ASSERT_EQUAL_INT(CAR(NEXT(REF(ctx->latest))), XT(ctx, ctx->latest));
+}
+
 void test_DICTIONARY_find_name() {
 	CELL size = 4096;
 	BYTE block[size];
@@ -1618,7 +1668,7 @@ void test_EXEC_CALL_word() {
 			cons(ctx, (CELL)&add, AS(PRIM, 0)))))),
 		AS(LIST, 0));
 
-	CALL(ctx, XT(word));	
+	CALL(ctx, XT(ctx, word));	
 
 	TEST_ASSERT_EQUAL_INT(2, length(ctx->rstack));
 	TEST_ASSERT_EQUAL_INT(2, length(TOR(ctx)));
@@ -2090,7 +2140,7 @@ int main() {
 	RUN_TEST(test_STACK_over);
 	RUN_TEST(test_STACK_rot);
 
-	// ARITHMETICELL PRIMITIVES
+	// ARITHMETIC PRIMITIVES
 	RUN_TEST(test_ARITHMETIC_add);
 	RUN_TEST(test_ARITHMETIC_sub);
 	RUN_TEST(test_ARITHMETIC_mul);
@@ -2138,6 +2188,8 @@ int main() {
 	RUN_TEST(test_PARSING_parse_name_4);
 
 	// DICTIONARY
+	RUN_TEST(test_DICTIONARY_primitive);
+	RUN_TEST(test_DICTIONARY_dual_primitive);
 	RUN_TEST(test_DICTIONARY_find_name);
 
 	// INNER INTERPRETER

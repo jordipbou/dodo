@@ -1,3 +1,6 @@
+// TODO: Modificate IMMEDIATE / XT etc to take into account REF and SUBTYPE for words
+// TODO: Use REF and SUBTYPE for words and lists (lists also?)
+
 #ifndef __DODO_CORE__
 #define __DODO_CORE__
 
@@ -15,7 +18,7 @@ typedef struct {
 	BYTE *ibuf, *here;
 	CELL there, size;
 	CELL fstack, dstack, rstack, xstack;
-	CELL ip, err, status, latest;
+	CELL ip, err, state, latest;
 	CELL ipos, ilen;
 	CELL free, ftotal, fmax;
 } CTX;
@@ -29,6 +32,8 @@ typedef void (*FUNC)(CTX*);
 #define TYPE(pair)					(CDR(pair) & 3)
 
 #define CAR(pair)						(*(((CELL*)pair) + 1))
+#define REF(pair)						(CAR(pair) & -4)
+#define SUBTYPE(pair)				(CAR(pair) & 3)
 
 #define AS(type, next)			((next & -4) | type)
 #define LINK(pair, next)		(CDR(pair) = AS(TYPE(pair), next))
@@ -89,7 +94,7 @@ CTX* init(BYTE* block, CELL size) {
 	ctx->fmax = 0;
 	ctx->ftotal = ctx->free;
 	ctx->ibuf = 0;
-	ctx->ipos = ctx->ilen = ctx->status = ctx->err = ctx->latest = 0;
+	ctx->ipos = ctx->ilen = ctx->state = ctx->err = ctx->latest = 0;
 	ctx->ip = 0;
 
 	return ctx;
@@ -448,12 +453,48 @@ void parse_name(CTX* ctx) {
 
 // DICTIONARY
 
-#define IMMEDIATE(word)		(TYPE(word) == LIST)
+// A word is always represented with a type WORD. It has two flags, DUAL and CNS (custom
+// namespace)
+// Those flags are represented as a subtype of a word type.
 
-#define NFA(word)					((BYTE*)CAR(CAR(word)))
-#define XT(word)					(NEXT(CAR(word)))
+enum WordSubtypes { NDNN, DNN, NDN, DN };
 
-#define PRIMITIVE(word)		(length(XT(word)) == 1 && TYPE(XT(word)) == PRIM)
+#define NFA(word)							((BYTE*)CAR(REF(word)))
+
+#define IS_DUAL(word)					(TYPE(word) == WORD && (SUBTYPE(word) == DNN || SUBTYPE(word) == DN))
+#define IS_IMMEDIATE(word)		(IS_DUAL(word) && CT(word) == IT(word))
+#define HAS_NAMESPACE(word)		(TYPE(word) == WORD && (SUBTYPE(word) == NDN || SUBTYPE(word) == DN))
+
+CELL XT(CTX* ctx, CELL word) {
+	if (IS_DUAL(word)) {
+		if (ctx->state) {
+			return CAR(NEXT(REF(word)));
+		} else {
+			return NEXT(NEXT(REF(word)));
+		}
+	} else {
+		return NEXT(REF(word));
+	}
+}
+
+#define IS_PRIMITIVE(ctx, word)	(length(XT(ctx, word)) == 1 && TYPE(XT(ctx, word)) == PRIM)
+
+#define ADD_PRIMITIVE(ctx, name, func) \
+	ctx->latest = \
+		cons(ctx, AS(NDNN, \
+			cons(ctx, (CELL)name, AS(ATOM, \
+			cons(ctx, (CELL)func, AS(PRIM, 0))))), \
+		AS(WORD, ctx->latest));
+
+#define ADD_DUAL_PRIMITIVE(ctx, name, cfunc, ifunc) \
+	ctx->latest = \
+		cons(ctx, AS(DNN, \
+			cons(ctx, (CELL)name, AS(ATOM, \
+			cons(ctx, \
+				cons(ctx, (CELL)cfunc, AS(PRIM, 0)), \
+			AS(LIST, \
+			cons(ctx, (CELL)ifunc, AS(PRIM, 0))))))), \
+		AS(WORD, ctx->latest));
 
 void find_name(CTX* ctx) {
 	UF2(ctx);
@@ -514,7 +555,7 @@ CELL step(CTX* ctx) {
 				}
 				break;
 			case WORD:
-				CALL(ctx, XT(CAR(TOR(ctx))));
+				CALL(ctx, XT(ctx, CAR(TOR(ctx))));
 				break;
 		}
 	}
@@ -552,7 +593,7 @@ void exec_i(CTX* ctx) { /* ( xt -- ) */
 			break;
 		case WORD: 
 			p = TOR(ctx); 
-			CALL(ctx, XT(CAR(TOS(ctx)))); 
+			CALL(ctx, XT(ctx, CAR(TOS(ctx)))); 
 			TOS(ctx) = reclaim(ctx, TOS(ctx)); 
 			while(step(ctx) != p);
 			break;
@@ -582,25 +623,25 @@ void compile(CTX* ctx) {
 	UF1(ctx);
 	CELL word = CAR(TOS(ctx));
 	TOS(ctx) = reclaim(ctx, TOS(ctx));
-	if (PRIMITIVE(word)) {
-		TOS(ctx) = cons(ctx, CAR(XT(word)), AS(PRIM, TOS(ctx)));
+	if (IS_PRIMITIVE(ctx, word)) {
+		TOS(ctx) = cons(ctx, CAR(XT(ctx, word)), AS(PRIM, TOS(ctx)));
 	} else {
 		TOS(ctx) = cons(ctx, word, AS(WORD, TOS(ctx)));
 	}
 }
 
-//void postpone(CTX* ctx) {
-//	parse_name(ctx); if (ctx->err < 0) return;
-//	find_name(ctx); if (ctx->err < 0) return;
-//	compile(ctx);
-//}
+void postpone(CTX* ctx) {
+	DO(ctx, parse_name);
+	DO(ctx, find_name);
+	compile(ctx);
+}
 
 void lbracket(CTX* ctx) {
-	ctx->status = 0;
+	ctx->state = 0;
 }
 
 void rbracket(CTX* ctx) {
-	ctx->status = 1;
+	ctx->state = 1;
 }
 
 // OUTER INTERPRETER
@@ -608,6 +649,7 @@ void rbracket(CTX* ctx) {
 void outer(CTX* ctx) {
 	char *endptr;
 	do {
+		//dump_context(ctx);
 		parse_name(ctx); ERR(ctx, CAR(TOS(ctx)) == 0, ERR_END_OF_INPUT_SOURCE; drop(ctx); drop(ctx));
 		find_name(ctx); if (ctx->err < 0) return;
 		if (CAR(TOS(ctx)) == 0) {
@@ -617,11 +659,7 @@ void outer(CTX* ctx) {
 			ERR(ctx, n == 0 && endptr == (char*)addr, ERR_UNDEFINED_WORD);
 			TOS(ctx) = cons(ctx, n, AS(ATOM, TOS(ctx)));
 		} else {
-			//compile(ctx); if (ctx->err < 0) return;
-			//if (ctx->status == 0 || IMMEDIATE(CAR(TOS(ctx)))) {
-			//	exec_i(ctx); if (ctx->err < 0) return;
-			//}
-			if (ctx->status == 0 || IMMEDIATE(CAR(TOS(ctx)))) {
+			if (ctx->state == 0 || IS_DUAL(REF(TOS(ctx)))) {
 				exec_i(ctx);
 			} else {
 				compile(ctx);
@@ -682,7 +720,6 @@ void recurse(CTX* ctx) {
 		}
 		s = NEXT(s);
 	}
-	printf("not found...\n");
 	ctx->err = ERR_HEADER_NOT_FOUND;
 }
 
@@ -706,20 +743,6 @@ void type(CTX* ctx) {
 }
 
 // BOOTSTRAPING
-
-#define ADD_PRIMITIVE(ctx, name, func) \
-	ctx->latest = \
-		cons(ctx, \
-			cons(ctx, (CELL)name, AS(ATOM, \
-			cons(ctx, (CELL)func, AS(PRIM, 0)))), \
-		AS(WORD, ctx->latest));
-
-#define ADD_IMMEDIATE(ctx, name, func) \
-	ctx->latest = \
-		cons(ctx, \
-			cons(ctx, (CELL)name, AS(ATOM, \
-			cons(ctx, (CELL)func, AS(PRIM, 0)))), \
-		AS(LIST, ctx->latest));
 
 CTX* bootstrap(CTX* ctx) {
 	ADD_PRIMITIVE(ctx, "latest", (CELL)&latest);
@@ -772,8 +795,8 @@ CTX* bootstrap(CTX* ctx) {
 	ADD_PRIMITIVE(ctx, "branch", (CELL)&branch);
 
 	ADD_PRIMITIVE(ctx, "compile,", (CELL)&compile);
-	//ADD_IMMEDIATE(ctx, "postpone", (CELL)&postpone);
-	ADD_IMMEDIATE(ctx, "[", (CELL)&lbracket);
+	ADD_DUAL_PRIMITIVE(ctx, "postpone", (CELL)&postpone, (CELL)&postpone);
+	ADD_DUAL_PRIMITIVE(ctx, "[", (CELL)&lbracket, (CELL)&lbracket);
 	ADD_PRIMITIVE(ctx, "]", (CELL)&rbracket);
 
 	ADD_PRIMITIVE(ctx, "evaluate", (CELL)&evaluate);
@@ -881,7 +904,7 @@ void dump_cell(CTX* ctx, CELL cell, CELL direction) {
 
 void dump_context(CTX* ctx) {
 	CELL i;
-	printf("%c/%ld/[%ld:%ld(%ld)]", ctx->status ? 'C' : 'I', ctx->err, ctx->ftotal, ctx->free, ctx->fmax);
+	printf("%c/%ld/[%ld:%ld(%ld)]", ctx->state ? 'C' : 'I', ctx->err, ctx->ftotal, ctx->free, ctx->fmax);
 	if (ctx->ibuf) {
 		printf("'");
 		for (i = 0; i < ctx->ipos; i++) {
