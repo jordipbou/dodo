@@ -1549,6 +1549,20 @@ void test_DICTIONARY_find_name() {
 	TEST_ASSERT_EQUAL_INT(NEXT(NEXT(NEXT(ctx->latest))), w);
 }
 
+void test_DICTIONARY_immediate() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	ADD_PRIMITIVE(ctx, "+", (CELL)&add);
+
+	TEST_ASSERT_FALSE(IS_DUAL(ctx->latest));
+
+	immediate(ctx);
+
+	TEST_ASSERT_TRUE(IS_DUAL(ctx->latest));
+}
+
 // INNER INTERPRETER
 
 void test_EXEC_next_1() {
@@ -2265,6 +2279,7 @@ int main() {
 	RUN_TEST(test_DICTIONARY_primitive);
 	RUN_TEST(test_DICTIONARY_dual_primitive);
 	RUN_TEST(test_DICTIONARY_find_name);
+	RUN_TEST(test_DICTIONARY_immediate);
 
 	// INNER INTERPRETER
 	RUN_TEST(test_EXEC_next_1);

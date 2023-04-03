@@ -1,0 +1,2 @@
+{} l>s header : ] header ] [ s>l reveal
+{} l>s header ; ] postpone [ s>l reveal [ s>l reveal immediate

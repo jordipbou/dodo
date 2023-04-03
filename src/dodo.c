@@ -93,7 +93,7 @@ void main(int argc, char *argv[]) {
 
 	FILE *fptr;
 	BYTE buf[255];
-	if (argc == 2) {
+	if (argc == 2 || argc == 3) {
 		fptr = fopen(argv[1], "r");
 		while (fgets(buf, 255, fptr)) {
 			TOS(ctx) = cons(ctx, strlen(buf), AS(ATOM, cons(ctx, (CELL)buf, AS(ATOM, TOS(ctx)))));
@@ -106,7 +106,9 @@ void main(int argc, char *argv[]) {
 			ctx->err = 0;
 			//dump_context(ctx);
 		}
-	} else {
+	}
+
+	if (argc == 1 || argc == 3) {
 		do {
 			fgets(buf, 255, stdin);
 			TOS(ctx) = cons(ctx, strlen(buf), AS(ATOM, cons(ctx, (CELL)buf, AS(ATOM, TOS(ctx)))));

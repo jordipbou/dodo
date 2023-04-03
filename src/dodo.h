@@ -718,6 +718,18 @@ void reveal(CTX* ctx) {
 	ctx->latest = w;
 }
 
+void immediate(CTX* ctx) {
+	if (SUBTYPE(ctx->latest) == NDNN) {
+		CELL xt = NEXT(CAR(ctx->latest));
+		LINK(CAR(ctx->latest), cons(ctx, clone(ctx, xt), AS(LIST, xt)));
+		CAR(ctx->latest) = AS(DNN, REF(ctx->latest));
+	} else if (SUBTYPE(ctx->latest) == NDN) {
+		CELL xt = NEXT(CAR(ctx->latest));
+		LINK(CAR(ctx->latest), cons(ctx, clone(ctx, xt), AS(LIST, xt)));
+		CAR(ctx->latest) = AS(DN, REF(ctx->latest));
+	}
+}
+
 void type(CTX* ctx) {
 	UF2(ctx);
 	CELL u = CAR(TOS(ctx));
@@ -726,9 +738,48 @@ void type(CTX* ctx) {
 	printf("%.*s", (int)u, addr);
 }
 
+// INSPECTION
+
+void _next(CTX* ctx) {
+	UF1(ctx);
+	CAR(TOS(ctx)) = NEXT(CAR(TOS(ctx)));
+}
+
+void _type(CTX* ctx) {
+	UF1(ctx);
+	printf("\nTYPE: ");
+	switch (TYPE(CAR(TOS(ctx)))) {
+		case ATOM: printf("ATOM\n"); break;
+		case LIST: printf("LIST\n"); break;
+		case PRIM: printf("PRIM\n"); break;
+		case WORD: printf("WORD\n"); break;
+	}
+}
+
+void _subtype(CTX* ctx) {
+	UF1(ctx);
+	printf("\nSUBTYPE: ");
+	switch (SUBTYPE(CAR(TOS(ctx)))) {
+		case NDNN: printf("NDNN\n"); break;
+		case DNN: printf("DNN\n"); break;
+		case NDN: printf("NDN\n"); break;
+		case DN: printf("DN\n"); break;
+	}
+}
+
+void _latest(CTX* ctx) {
+	OF(ctx, 1);
+	TOS(ctx) = cons(ctx, ctx->latest, AS(WORD, TOS(ctx)));
+}
+
 // BOOTSTRAPING
 
 CTX* bootstrap(CTX* ctx) {
+	ADD_PRIMITIVE(ctx, "latest", (CELL)&_latest);
+	ADD_PRIMITIVE(ctx, "T", (CELL)&_type);
+	ADD_PRIMITIVE(ctx, "N", (CELL)&_next);
+	ADD_PRIMITIVE(ctx, "ST", (CELL)&_subtype);
+
 	ADD_PRIMITIVE(ctx, "dup", (CELL)&duplicate);
 	ADD_PRIMITIVE(ctx, "swap", (CELL)&swap);
 	ADD_PRIMITIVE(ctx, "drop", (CELL)&drop);
@@ -787,6 +838,7 @@ CTX* bootstrap(CTX* ctx) {
 	ADD_PRIMITIVE(ctx, "header", (CELL)&header);
 	ADD_PRIMITIVE(ctx, "reveal", (CELL)&reveal);
 	ADD_PRIMITIVE(ctx, "recurse", (CELL)&recurse);
+	ADD_PRIMITIVE(ctx, "immediate", (CELL)&immediate);
 
 	ADD_PRIMITIVE(ctx, "type", (CELL)&type);
 
