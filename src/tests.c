@@ -42,6 +42,31 @@ void test_PAIRS_pairs() {
 	TEST_ASSERT_NOT_EQUAL_INT(LIST, TYPE(pair));
 	TEST_ASSERT_NOT_EQUAL_INT(PRIM, TYPE(pair));
 	TEST_ASSERT_EQUAL_INT(WORD, TYPE(pair));
+
+	CAR(pair) = AS(NDNN, 8);
+	TEST_ASSERT_EQUAL_INT(8, REF(pair));
+	TEST_ASSERT_EQUAL_INT(NDNN, SUBTYPE(pair));
+	TEST_ASSERT_NOT_EQUAL_INT(DNN, SUBTYPE(pair));
+	TEST_ASSERT_NOT_EQUAL_INT(NDN, SUBTYPE(pair));
+	TEST_ASSERT_NOT_EQUAL_INT(DN, SUBTYPE(pair));
+	CAR(pair) = AS(DNN, 16);
+	TEST_ASSERT_EQUAL_INT(16, REF(pair));
+	TEST_ASSERT_NOT_EQUAL_INT(NDNN, SUBTYPE(pair));
+	TEST_ASSERT_EQUAL_INT(DNN, SUBTYPE(pair));
+	TEST_ASSERT_NOT_EQUAL_INT(NDN, SUBTYPE(pair));
+	TEST_ASSERT_NOT_EQUAL_INT(DN, SUBTYPE(pair));
+	CAR(pair) = AS(NDN, 24);
+	TEST_ASSERT_EQUAL_INT(24, REF(pair));
+	TEST_ASSERT_NOT_EQUAL_INT(NDNN, SUBTYPE(pair));
+	TEST_ASSERT_NOT_EQUAL_INT(DNN, SUBTYPE(pair));
+	TEST_ASSERT_EQUAL_INT(NDN, SUBTYPE(pair));
+	TEST_ASSERT_NOT_EQUAL_INT(DN, SUBTYPE(pair));
+	CAR(pair) = AS(DN, 32);
+	TEST_ASSERT_EQUAL_INT(32, REF(pair));
+	TEST_ASSERT_NOT_EQUAL_INT(NDNN, SUBTYPE(pair));
+	TEST_ASSERT_NOT_EQUAL_INT(DNN, SUBTYPE(pair));
+	TEST_ASSERT_NOT_EQUAL_INT(NDN, SUBTYPE(pair));
+	TEST_ASSERT_EQUAL_INT(DN, SUBTYPE(pair));
 }
 
 void test_PAIRS_link_pairs() {
@@ -647,6 +672,16 @@ void test_ARITHMETIC_add() {
 	TEST_ASSERT_EQUAL_INT(18, CAR(TOS(ctx)));
 }
 
+void test_ARITHMETIC_incr() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	TOS(ctx) = cons(ctx, 7, AS(ATOM, 0));
+	incr(ctx);
+	TEST_ASSERT_EQUAL_INT(8, CAR(TOS(ctx)));
+}
+
 void test_ARITHMETIC_sub() {
 	CELL size = 512;
 	BYTE block[size];
@@ -656,6 +691,16 @@ void test_ARITHMETIC_sub() {
 	sub(ctx);
 	TEST_ASSERT_EQUAL_INT(1, length(TOS(ctx)));
 	TEST_ASSERT_EQUAL_INT(4, CAR(TOS(ctx)));
+}
+
+void test_ARITHMETIC_decr() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	TOS(ctx) = cons(ctx, 7, AS(ATOM, 0));
+	decr(ctx);
+	TEST_ASSERT_EQUAL_INT(6, CAR(TOS(ctx)));
 }
 
 void test_ARITHMETIC_mul() {
@@ -991,6 +1036,52 @@ void test_LISTS_stack_to_list_3() {
 	TEST_ASSERT_EQUAL_INT(2, length(CAR(TOS(ctx))));
 	TEST_ASSERT_EQUAL_INT(11, CAR(CAR(TOS(ctx))));
 	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(CAR(TOS(ctx)))));
+}
+
+void test_LISTS_carcdr() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	TOS(ctx) =
+		cons(ctx,
+			cons(ctx, 7, AS(ATOM,
+			cons(ctx, 11, AS(ATOM,
+			cons(ctx, 13, AS(ATOM, 0)))))),
+		AS(LIST, 0));
+
+	carcdr(ctx);
+
+	TEST_ASSERT_EQUAL_INT(2, length(TOS(ctx)));
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(TOS(ctx)));
+	TEST_ASSERT_EQUAL_INT(7, CAR(TOS(ctx)));
+	TEST_ASSERT_EQUAL_INT(LIST, TYPE(NEXT(TOS(ctx))));
+	TEST_ASSERT_EQUAL_INT(2, length(CAR(NEXT(TOS(ctx)))));
+	TEST_ASSERT_EQUAL_INT(11, CAR(CAR(NEXT(TOS(ctx)))));
+	TEST_ASSERT_EQUAL_INT(13, CAR(NEXT(CAR(NEXT(TOS(ctx))))));
+}
+
+void test_LISTS_append() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	TOS(ctx) =
+		cons(ctx,
+			cons(ctx, 7, AS(ATOM,
+			cons(ctx, 11, AS(ATOM,
+			cons(ctx, 13, AS(ATOM, 0)))))),
+		AS(LIST, 0));
+
+	carcdr(ctx);
+	append(ctx);
+
+	TEST_ASSERT_EQUAL_INT(1, length(TOS(ctx)));
+	TEST_ASSERT_EQUAL_INT(LIST, TYPE(TOS(ctx)));
+	TEST_ASSERT_EQUAL_INT(3, length(CAR(TOS(ctx))));
+	TEST_ASSERT_EQUAL_INT(7, CAR(CAR(TOS(ctx))));
+	TEST_ASSERT_EQUAL_INT(11, CAR(NEXT(CAR(TOS(ctx)))));
+	TEST_ASSERT_EQUAL_INT(13, CAR(NEXT(NEXT(CAR(TOS(ctx))))));
 }
 
 // MEMORY
@@ -1375,28 +1466,7 @@ void test_DICTIONARY_primitive() {
 
 	TEST_ASSERT_EQUAL_INT(NEXT(REF(ctx->latest)), XT(ctx, ctx->latest));
 	TEST_ASSERT_EQUAL_INT(1, IS_PRIMITIVE(ctx, ctx->latest));
-	//ADD_DUAL_PRIMITIVE(ctx, "+", (CELL)&add, (CELL)&add);
-
-	//TEST_ASSERT_EQUAL_INT(NEXT(NEXT(REF(ctx->latest))), XT(ctx, ctx->latest));
-
-	//ctx->state = 1;
-
-	//TEST_ASSERT_EQUAL_INT(CAR(NEXT(REF(ctx->latest))), XT(ctx, ctx->latest));
 }
-
-//void test_DICTIONARY_is_primitive() {
-//	CELL size = 512;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//
-//	ADD_PRIMITIVE(ctx, "+", (CELL)&add);
-//
-//	TEST_ASSERT_EQUAL_INT(1, IS_PRIMITIVE(ctx, ctx->latest));
-//
-//	ADD_DUAL_PRIMITIVE(ctx, "+", (CELL)&add, (CELL)&add);
-//
-//	TEST_ASSERT_EQUAL_INT(1, IS_PRIMITIVE(ctx, ctx->latest));
-//}
 
 void test_DICTIONARY_dual_primitive() {
 	CELL size = 512;
@@ -2142,7 +2212,9 @@ int main() {
 
 	// ARITHMETIC PRIMITIVES
 	RUN_TEST(test_ARITHMETIC_add);
+	RUN_TEST(test_ARITHMETIC_incr);
 	RUN_TEST(test_ARITHMETIC_sub);
+	RUN_TEST(test_ARITHMETIC_decr);
 	RUN_TEST(test_ARITHMETIC_mul);
 	RUN_TEST(test_ARITHMETIC_division);
 	RUN_TEST(test_ARITHMETIC_division_by_zero);
@@ -2167,6 +2239,8 @@ int main() {
 	RUN_TEST(test_LISTS_stack_to_list);
 	RUN_TEST(test_LISTS_stack_to_list_2);
 	RUN_TEST(test_LISTS_stack_to_list_3);
+	RUN_TEST(test_LISTS_carcdr);
+	RUN_TEST(test_LISTS_append);
 
 	// MEMORY
 	RUN_TEST(test_MEMORY_fetch);

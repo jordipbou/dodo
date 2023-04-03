@@ -1,6 +1,3 @@
-// TODO: Modificate IMMEDIATE / XT etc to take into account REF and SUBTYPE for words
-// TODO: Use REF and SUBTYPE for words and lists (lists also?)
-
 #ifndef __DODO_CORE__
 #define __DODO_CORE__
 
@@ -183,13 +180,6 @@ void error(CTX* ctx) {
 
 #define DO(ctx, primitive)		({ primitive(ctx); if (ctx->err < 0) { return; }; })
 
-// CONTEXT PRIMITIVES
-
-void latest(CTX* ctx) {
-	OF(ctx, 1);
-	TOS(ctx) = cons(ctx, ctx->latest, AS(LIST, TOS(ctx)));
-}
-
 // STACK PRIMITIVES
 
 void duplicate(CTX* ctx) { /* ( n -- n n ) */
@@ -268,8 +258,6 @@ void mod(CTX* ctx) {	/* ( n2 n1 -- n:(n2 mod n1) ) */
 	CAR(NEXT(TOS(ctx))) = CAR(NEXT(TOS(ctx))) % CAR(TOS(ctx));
 	TOS(ctx) = reclaim(ctx, TOS(ctx));
 }
-
-// TODO: Add inc and dec
 
 // COMPARISON PRIMITIVES
 
@@ -352,10 +340,10 @@ void carcdr(CTX* ctx) { /* ( l -- h t ) */
 	TOS(ctx) = head;
 }
 
-void append(CTX* ctx) { /* ( i l -- l:(i ..l) ) */
+void append(CTX* ctx) { /* ( l i -- l:(i ..l) ) */
 	UF2(ctx);
-	CELL i = NEXT(TOS(ctx));
-	LINK(TOS(ctx), NEXT(NEXT(TOS(ctx))));
+	CELL i = TOS(ctx);
+	TOS(ctx) = NEXT(TOS(ctx));
 	LINK(i, CAR(TOS(ctx)));
 	CAR(TOS(ctx)) = i;
 }
@@ -452,10 +440,6 @@ void parse_name(CTX* ctx) {
 }
 
 // DICTIONARY
-
-// A word is always represented with a type WORD. It has two flags, DUAL and CNS (custom
-// namespace)
-// Those flags are represented as a subtype of a word type.
 
 enum WordSubtypes { NDNN, DNN, NDN, DN };
 
@@ -745,8 +729,6 @@ void type(CTX* ctx) {
 // BOOTSTRAPING
 
 CTX* bootstrap(CTX* ctx) {
-	ADD_PRIMITIVE(ctx, "latest", (CELL)&latest);
-
 	ADD_PRIMITIVE(ctx, "dup", (CELL)&duplicate);
 	ADD_PRIMITIVE(ctx, "swap", (CELL)&swap);
 	ADD_PRIMITIVE(ctx, "drop", (CELL)&drop);
