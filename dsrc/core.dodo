@@ -1,2 +1,5 @@
 {} l>s header : ] header ] [ s>l reveal
 {} l>s header ; ] postpone [ s>l reveal [ s>l reveal immediate
+
+: { {} l>s ; immediate
+: } s>l ; immediate

@@ -78,7 +78,7 @@ char *strlwr(char *str)
 //}
 
 void main(int argc, char *argv[]) {
-	CELL sz = 16384;
+	CELL sz = 30000;
 	BYTE bk[sz];
 	CTX* ctx = bootstrap(init(bk, sz));
 

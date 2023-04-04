@@ -54,8 +54,6 @@ CELL reverse(CELL list, CELL acc) {
 	}
 }
 
-// TODO: depth
-
 // CONTEXT
 
 #define ALIGN(addr, bound)	((((CELL)addr) + (bound - 1)) & ~(bound - 1))
@@ -64,7 +62,7 @@ CELL reverse(CELL list, CELL acc) {
 #define RESERVED(ctx)				((CELL)(((BYTE*)ctx->there) - ctx->here))
 
 #define TOS(ctx)						(CAR(ctx->dstack))
-#define TOR(ctx)						(CAR(ctx->rstack))
+//#define TOR(ctx)						(CAR(ctx->rstack))
 
 CTX* init(BYTE* block, CELL size) {
 	CELL pair;
@@ -77,8 +75,10 @@ CTX* init(BYTE* block, CELL size) {
 	ctx->there = ALIGN(BOTTOM(ctx), 2*sizeof(CELL));
 
 	ctx->dstack = TOP(ctx); CAR(ctx->dstack) = 0; CDR(ctx->dstack) = AS(LIST, 0);
-	ctx->rstack = ctx->dstack - 2*sizeof(CELL); CAR(ctx->rstack) = 0; CDR(ctx->rstack) = AS(LIST, 0);
-	ctx->fstack = ctx->rstack - 2*sizeof(CELL);
+	//ctx->rstack = ctx->dstack - 2*sizeof(CELL); CAR(ctx->rstack) = 0; CDR(ctx->rstack) = AS(LIST, 0);
+	//ctx->fstack = ctx->rstack - 2*sizeof(CELL);
+	ctx->fstack = ctx->dstack - 2*sizeof(CELL);
+	ctx->rstack = 0;
 	ctx->xstack = 0;
 
 	ctx->free = -1;
@@ -99,6 +99,8 @@ CTX* init(BYTE* block, CELL size) {
 
 CELL cons(CTX* ctx, CELL car, CELL cdr) {
 	CELL pair;
+
+	if (ctx->free == 0) return 0;
 
 	ctx->free--;
 	pair = ctx->fstack;
@@ -450,14 +452,18 @@ enum WordSubtypes { NDNN, DNN, NDN, DN };
 #define HAS_NAMESPACE(word)		(TYPE(word) == WORD && (SUBTYPE(word) == NDN || SUBTYPE(word) == DN))
 
 CELL XT(CTX* ctx, CELL word) {
-	if (IS_DUAL(word)) {
-		if (ctx->state) {
-			return CAR(NEXT(REF(word)));
+	if (TYPE(word) == LIST) {
+		return CAR(word);
+	} else if (TYPE(word) == WORD) {
+		if (IS_DUAL(word)) {
+			if (ctx->state) {
+				return CAR(NEXT(REF(word)));
+			} else {
+				return NEXT(NEXT(REF(word)));
+			}
 		} else {
-			return NEXT(NEXT(REF(word)));
+			return NEXT(REF(word));
 		}
-	} else {
-		return NEXT(REF(word));
 	}
 }
 
@@ -502,44 +508,53 @@ void find_name(CTX* ctx) {
 
 // INNER INTERPRETER
 
+#define IP(ctx)				(ctx->ip)
+//#define IP(x)				(TOR(ctx))
+
 void next(CTX* ctx) {
-	if (TOR(ctx)) { 
-		TOR(ctx) = reclaim(ctx, TOR(ctx)); 
+	if (IP(ctx)) {
+		IP(ctx) = NEXT(IP(ctx));
 	}
-	while (!TOR(ctx) && NEXT(ctx->rstack)) { 
-		ctx->rstack = reclaim(ctx, ctx->rstack); 
-		if (TOR(ctx)) { 
-			TOR(ctx) = reclaim(ctx, TOR(ctx)); 
-		} 
+	while (!IP(ctx) && ctx->rstack) {
+		if (TYPE(ctx->rstack) == ATOM) {
+			IP(ctx) = NEXT(CAR(ctx->rstack));
+		}
+		ctx->rstack = reclaim(ctx, ctx->rstack);
 	}
 }
 
-#define JUMP(ctx, list)		(TOR(x) = clone(ctx, list))
-#define CALL(ctx, list)		(ctx->rstack = cons(ctx, clone(ctx, list), AS(LIST, ctx->rstack)))
+#define JUMP(ctx, list)			(ctx->ip = list)
+#define CALL(ctx, ip) \
+	({ \
+		if (IP(ctx)) { \
+			ctx->rstack = cons(ctx, IP(ctx), AS(ATOM, ctx->rstack)); \
+		} \
+		IP(ctx) = ip; \
+	})
 
 void dump_context(CTX* ctx);
 
 CELL step(CTX* ctx) {
 	CELL r;
-	if (TOR(ctx)) {
-		switch (TYPE(TOR(ctx))) {
+	if (IP(ctx)) {
+		switch (TYPE(IP(ctx))) {
 			case ATOM:
-				TOS(ctx) = cons(ctx, CAR(TOR(ctx)), AS(ATOM, TOS(ctx)));
+				TOS(ctx) = cons(ctx, CAR(IP(ctx)), AS(ATOM, TOS(ctx)));
 				next(ctx);
 				break;
 			case LIST:
-				TOS(ctx) = cons(ctx, clone(ctx, CAR(TOR(ctx))), AS(LIST, TOS(ctx)));
+				TOS(ctx) = cons(ctx, clone(ctx, CAR(IP(ctx))), AS(LIST, TOS(ctx)));
 				next(ctx);
 				break;
 			case PRIM:
-				r = TOR(ctx);
-				((FUNC)CAR(TOR(ctx)))(ctx);
-				if (r == TOR(ctx)) {
+				r = IP(ctx);
+				((FUNC)CAR(IP(ctx)))(ctx);
+				if (r == IP(ctx)) {
 					next(ctx);
 				}
 				break;
 			case WORD:
-				CALL(ctx, XT(ctx, CAR(TOR(ctx))));
+				CALL(ctx, XT(ctx, REF(IP(ctx))));
 				break;
 		}
 	}
@@ -548,7 +563,7 @@ CELL step(CTX* ctx) {
 	}
 	//dump_context(ctx);
 	//getchar();
-	return TOR(ctx);
+	return IP(ctx);
 }
 
 void exec_i(CTX* ctx) { /* ( xt -- ) */
@@ -563,9 +578,12 @@ void exec_i(CTX* ctx) { /* ( xt -- ) */
 			break;
 		case LIST: 
 			if (CAR(TOS(ctx))) {
-				CALL(ctx, CAR(TOS(ctx)));
-				TOS(ctx) = reclaim(ctx, TOS(ctx)); 
-				step(ctx); 
+				CELL t = TOS(ctx);
+				TOS(ctx) = NEXT(TOS(ctx));
+				CALL(ctx, CAR(t));
+				LINK(t, ctx->rstack);
+				ctx->rstack = t;
+				step(ctx);
 			} else {
 				TOS(ctx) = reclaim(ctx, TOS(ctx));
 			}
@@ -576,10 +594,10 @@ void exec_i(CTX* ctx) { /* ( xt -- ) */
 			((FUNC)p)(ctx); 
 			break;
 		case WORD: 
-			p = TOR(ctx); 
-			CALL(ctx, XT(ctx, CAR(TOS(ctx)))); 
-			TOS(ctx) = reclaim(ctx, TOS(ctx)); 
-			while(step(ctx) != p);
+			p = IP(ctx);
+			CALL(ctx, XT(ctx, CAR(TOS(ctx))));
+			TOS(ctx) = reclaim(ctx, TOS(ctx));
+			while (step(ctx) != p);
 			break;
 	}
 }
@@ -837,7 +855,7 @@ CTX* bootstrap(CTX* ctx) {
 	ADD_PRIMITIVE(ctx, "sliteral", (CELL)&sliteral);
 	ADD_PRIMITIVE(ctx, "header", (CELL)&header);
 	ADD_PRIMITIVE(ctx, "reveal", (CELL)&reveal);
-	ADD_PRIMITIVE(ctx, "recurse", (CELL)&recurse);
+	ADD_DUAL_PRIMITIVE(ctx, "recurse", (CELL)&recurse, (CELL)&recurse);
 	ADD_PRIMITIVE(ctx, "immediate", (CELL)&immediate);
 
 	ADD_PRIMITIVE(ctx, "type", (CELL)&type);
@@ -957,7 +975,16 @@ void dump_context(CTX* ctx) {
 	printf("\n");
 	dump_list(ctx, ctx->dstack, 2);
 	printf("‖ ");
-	dump_list(ctx, ctx->rstack, 0);
+	printf("{ ");
+	dump_list(ctx, IP(ctx), 0);
+	printf("} ");
+	CELL p = ctx->rstack;
+	while (p) {
+		printf("{ ");
+		dump_list(ctx, CAR(p), 0);
+		printf("} ");
+		p = NEXT(p);
+	}
 	printf("\n");
 }
 
