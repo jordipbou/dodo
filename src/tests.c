@@ -1042,7 +1042,7 @@ void test_LISTS_stack_to_list_3() {
 	TEST_ASSERT_EQUAL_INT(7, CAR(NEXT(CAR(TOS(ctx)))));
 }
 
-void test_LISTS_carcdr() {
+void test_LISTS_uncons() {
 	CELL size = 512;
 	BYTE block[size];
 	CTX* ctx = init(block, size);
@@ -1054,7 +1054,7 @@ void test_LISTS_carcdr() {
 			cons(ctx, 13, AS(ATOM, 0)))))),
 		AS(LIST, 0));
 
-	carcdr(ctx);
+	uncons(ctx);
 
 	TEST_ASSERT_EQUAL_INT(2, length(TOS(ctx)));
 	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(TOS(ctx)));
@@ -1077,7 +1077,7 @@ void test_LISTS_append() {
 			cons(ctx, 13, AS(ATOM, 0)))))),
 		AS(LIST, 0));
 
-	carcdr(ctx);
+	uncons(ctx);
 	append(ctx);
 
 	TEST_ASSERT_EQUAL_INT(1, length(TOS(ctx)));
@@ -2353,7 +2353,7 @@ int main() {
 	RUN_TEST(test_LISTS_stack_to_list);
 	RUN_TEST(test_LISTS_stack_to_list_2);
 	RUN_TEST(test_LISTS_stack_to_list_3);
-	RUN_TEST(test_LISTS_carcdr);
+	RUN_TEST(test_LISTS_uncons);
 	RUN_TEST(test_LISTS_append);
 
 	// MEMORY

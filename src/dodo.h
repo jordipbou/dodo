@@ -62,7 +62,6 @@ CELL reverse(CELL list, CELL acc) {
 #define RESERVED(ctx)				((CELL)(((BYTE*)ctx->there) - ctx->here))
 
 #define TOS(ctx)						(CAR(ctx->dstack))
-//#define TOR(ctx)						(CAR(ctx->rstack))
 
 CTX* init(BYTE* block, CELL size) {
 	CELL pair;
@@ -75,8 +74,6 @@ CTX* init(BYTE* block, CELL size) {
 	ctx->there = ALIGN(BOTTOM(ctx), 2*sizeof(CELL));
 
 	ctx->dstack = TOP(ctx); CAR(ctx->dstack) = 0; CDR(ctx->dstack) = AS(LIST, 0);
-	//ctx->rstack = ctx->dstack - 2*sizeof(CELL); CAR(ctx->rstack) = 0; CDR(ctx->rstack) = AS(LIST, 0);
-	//ctx->fstack = ctx->rstack - 2*sizeof(CELL);
 	ctx->fstack = ctx->dstack - 2*sizeof(CELL);
 	ctx->rstack = 0;
 	ctx->xstack = 0;
@@ -334,12 +331,36 @@ void stack_to_list(CTX* ctx) { /* ( ... -- { ... } ) */
 	}
 }
 
-void carcdr(CTX* ctx) { /* ( l -- h t ) */
-	CELL head = CAR(TOS(ctx));
-	CELL tail = NEXT(CAR(TOS(ctx)));
-	CAR(TOS(ctx)) = tail;
-	LINK(head, TOS(ctx));
-	TOS(ctx) = head;
+// TODO: Analyze cons
+void _cons(CTX* ctx) { /* ( i1 i2 -- l:(i1 ..i2) */
+	UF2(ctx);
+	if (TYPE(TOS(ctx)) == LIST) {
+		CELL h = NEXT(TOS(ctx));
+		LINK(TOS(ctx), NEXT(NEXT(TOS(ctx))));
+		LINK(h, CAR(TOS(ctx)));
+		CAR(TOS(ctx)) = h;
+	} else {
+		CELL a = TOS(ctx);
+		CELL b = NEXT(TOS(ctx));
+		CELL t = NEXT(NEXT(TOS(ctx)));
+		LINK(b, a);
+		LINK(a, 0);
+		TOS(ctx) = cons(ctx, b, AS(LIST, t));
+	}
+}
+
+void uncons(CTX* ctx) { /* ( l -- h t ) */
+	EL(ctx);
+	if (CAR(TOS(ctx)) == 0) {
+		TOS(ctx) = reclaim(ctx, TOS(ctx));
+	} else {
+		CELL head = CAR(TOS(ctx));
+		CELL tail = NEXT(CAR(TOS(ctx)));
+		CAR(TOS(ctx)) = tail;
+		LINK(head, TOS(ctx));
+		TOS(ctx) = head;
+		DO(ctx, swap);
+	}
 }
 
 void append(CTX* ctx) { /* ( l i -- l:(i ..l) ) */
@@ -441,6 +462,23 @@ void parse_name(CTX* ctx) {
 	TOS(ctx) = cons(ctx, (CELL)((ctx->ibuf + ctx->ipos) - CAR(TOS(ctx))), AS(ATOM, TOS(ctx)));
 }
 
+void parse_name_list(CTX* ctx) {
+	ERR(ctx, ctx->ibuf == 0, ERR_NO_INPUT_SOURCE);
+	while(*(ctx->ibuf + ctx->ipos) && isspace(*(ctx->ibuf + ctx->ipos)) && ctx->ipos < ctx->ilen) {
+		ctx->ipos++;
+	}
+	// TODO: Check stack overflow
+	DO(ctx, empty);
+	while(*(ctx->ibuf + ctx->ipos) && !isspace(*(ctx->ibuf + ctx->ipos)) && ctx->ipos < ctx->ilen) {
+		if (*(ctx->ibuf + ctx->ipos) != 10) {
+			// TODO: Check stack overflow
+			CAR(TOS(ctx)) = cons(ctx, (CELL)*(ctx->ibuf + ctx->ipos), AS(ATOM, CAR(TOS(ctx))));
+		}
+		ctx->ipos++;
+	}
+	CAR(TOS(ctx)) = reverse(CAR(TOS(ctx)), 0);
+}
+
 // DICTIONARY
 
 enum WordSubtypes { NDNN, DNN, NDN, DN };
@@ -486,6 +524,8 @@ CELL XT(CTX* ctx, CELL word) {
 			cons(ctx, (CELL)ifunc, AS(PRIM, 0))))))), \
 		AS(WORD, ctx->latest));
 
+// TODO: Adapt find name to find from a LIST of chars or a SLITERAL string and to words
+// with an SLITERAL NFA or with a LIST based NFA
 void find_name(CTX* ctx) {
 	UF2(ctx);
 	ERR(ctx, CAR(TOS(ctx)) == 0, ERR_ZERO_LENGTH_NAME);
@@ -506,10 +546,14 @@ void find_name(CTX* ctx) {
 	}
 }
 
+void header(CTX* ctx) {
+	OF(ctx, 1);
+	TOS(ctx) = cons(ctx, 0, AS(WORD, TOS(ctx)));
+}
+
 // INNER INTERPRETER
 
 #define IP(ctx)				(ctx->ip)
-//#define IP(x)				(TOR(ctx))
 
 void next(CTX* ctx) {
 	if (IP(ctx)) {
@@ -608,6 +652,8 @@ void exec_x(CTX* ctx) { /* ( xt -- xt ) */
 	exec_i(ctx); 
 }
 
+// CONTROL FLOW
+
 void branch(CTX* ctx) { /* ( b xt_true xt_false -- ) */
 	UF3(ctx); 
 	if (CAR(NEXT(NEXT(TOS(ctx)))) == 0) { 
@@ -617,6 +663,23 @@ void branch(CTX* ctx) { /* ( b xt_true xt_false -- ) */
 	swap(ctx); 
 	drop(ctx); 
 	exec_i(ctx); 
+}
+
+void recurse(CTX* ctx) {
+	OF(ctx, 1);
+	CELL s = ctx->dstack;
+	while (s != 0) {
+		CELL i = CAR(s);
+		while (i && !(TYPE(i) == WORD && CAR(i) == 0)) {
+			i = NEXT(i);
+		}
+		if (i) {
+			TOS(ctx) = cons(ctx, i, AS(WORD, TOS(ctx)));
+			return;
+		}
+		s = NEXT(s);
+	}
+	ctx->err = ERR_HEADER_NOT_FOUND;
 }
 
 // COMPILATION
@@ -700,30 +763,13 @@ void sliteral(CTX* ctx) {
 	TOS(ctx) = cons(ctx, u, AS(ATOM, TOS(ctx)));
 }
 
-void header(CTX* ctx) {
-	DO(ctx, parse_name);
-	DO(ctx, sliteral);
-	DO(ctx, drop);
-	TOS(ctx) = cons(ctx, 0, AS(WORD, TOS(ctx)));
-	DO(ctx, swap);
-}
-
-void recurse(CTX* ctx) {
-	OF(ctx, 1);
-	CELL s = ctx->dstack;
-	while (s != 0) {
-		CELL i = CAR(s);
-		while (i && !(TYPE(i) == WORD && CAR(i) == 0)) {
-			i = NEXT(i);
-		}
-		if (i) {
-			TOS(ctx) = cons(ctx, i, AS(WORD, TOS(ctx)));
-			return;
-		}
-		s = NEXT(s);
-	}
-	ctx->err = ERR_HEADER_NOT_FOUND;
-}
+//void header(CTX* ctx) {
+//	DO(ctx, parse_name);
+//	DO(ctx, sliteral);
+//	DO(ctx, drop);
+//	TOS(ctx) = cons(ctx, 0, AS(WORD, TOS(ctx)));
+//	DO(ctx, swap);
+//}
 
 void reveal(CTX* ctx) {
 	UF1(ctx);
@@ -749,11 +795,21 @@ void immediate(CTX* ctx) {
 }
 
 void type(CTX* ctx) {
-	UF2(ctx);
-	CELL u = CAR(TOS(ctx));
-	BYTE* addr = (BYTE*)CAR(NEXT(TOS(ctx)));
-	TOS(ctx) = reclaim(ctx, reclaim(ctx, TOS(ctx)));
-	printf("%.*s", (int)u, addr);
+	UF1(ctx);
+	if (TYPE(TOS(ctx)) == LIST) {
+		CELL c = CAR(TOS(ctx));
+		while (c) {
+			printf("%c", (BYTE)CAR(c));
+			c = NEXT(c);
+		}
+		TOS(ctx) = reclaim(ctx, TOS(ctx));
+	} else {
+		UF2(ctx);
+		CELL u = CAR(TOS(ctx));
+		BYTE* addr = (BYTE*)CAR(NEXT(TOS(ctx)));
+		TOS(ctx) = reclaim(ctx, reclaim(ctx, TOS(ctx)));
+		printf("%.*s", (int)u, addr);
+	}
 }
 
 // INSPECTION
@@ -824,7 +880,8 @@ CTX* bootstrap(CTX* ctx) {
 	ADD_PRIMITIVE(ctx, "{}", (CELL)&empty);
 	ADD_PRIMITIVE(ctx, "l>s", (CELL)&list_to_stack);
 	ADD_PRIMITIVE(ctx, "s>l", (CELL)&stack_to_list);
-	ADD_PRIMITIVE(ctx, "carcdr", (CELL)&carcdr);
+	ADD_PRIMITIVE(ctx, "uncons", (CELL)&uncons);
+	ADD_PRIMITIVE(ctx, "cons", (CELL)&_cons);
 	ADD_PRIMITIVE(ctx, "append", (CELL)&append);
 
 	ADD_PRIMITIVE(ctx, "@", (CELL)&fetch);
@@ -838,6 +895,7 @@ CTX* bootstrap(CTX* ctx) {
 
 	ADD_PRIMITIVE(ctx, "parse", (CELL)&parse);
 	ADD_PRIMITIVE(ctx, "parse-name", (CELL)&parse_name);
+	ADD_PRIMITIVE(ctx, "parse-name-list", (CELL)&parse_name_list);
 
 	ADD_PRIMITIVE(ctx, "find-name", (CELL)&find_name);
 
@@ -852,7 +910,7 @@ CTX* bootstrap(CTX* ctx) {
 
 	ADD_PRIMITIVE(ctx, "evaluate", (CELL)&evaluate);
 
-	ADD_PRIMITIVE(ctx, "sliteral", (CELL)&sliteral);
+	ADD_DUAL_PRIMITIVE(ctx, "sliteral", (CELL)&sliteral, (CELL)&sliteral);
 	ADD_PRIMITIVE(ctx, "header", (CELL)&header);
 	ADD_PRIMITIVE(ctx, "reveal", (CELL)&reveal);
 	ADD_DUAL_PRIMITIVE(ctx, "recurse", (CELL)&recurse, (CELL)&recurse);
@@ -935,7 +993,7 @@ void dump_cell(CTX* ctx, CELL cell, CELL direction) {
 			//else if (CAR(cell) == (CELL)&postpone) printf("P:postpone ");
 			else if (CAR(cell) == (CELL)&lbracket) printf("P:[ ");
 			else if (CAR(cell) == (CELL)&rbracket) printf("P:] ");
-			else if (CAR(cell) == (CELL)&carcdr) printf("P:carcdr ");
+			else if (CAR(cell) == (CELL)&uncons) printf("P:uncons ");
 			else printf("P:%ld ", CAR(cell));
 			break;
 		case WORD: 
