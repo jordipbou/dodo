@@ -59,7 +59,7 @@ void test_CORE_init_free() {
 	TEST_ASSERT_EQUAL_INT(16, inverse_length(last));
 }
 
-void test_CORE_ncons() {
+void test_CORE_cons() {
 	CELL size = 16*2*sizeof(CELL);
 	BYTE block[size];
 
@@ -69,7 +69,7 @@ void test_CORE_ncons() {
 
 	TEST_ASSERT_EQUAL_PTR(saved_free - 15, last);
 
-	NODE* n1 = cons(&free, 1, 7, (NODE*)11);
+	NODE* n1 = CONS1(&free, 7, (NODE*)11);
 
 	TEST_ASSERT_EQUAL_PTR(saved_free, n1);
 	TEST_ASSERT_EQUAL_PTR(saved_free - 1, free);
@@ -78,24 +78,24 @@ void test_CORE_ncons() {
 	TEST_ASSERT_EQUAL_INT(7, n1->value);
 	TEST_ASSERT_EQUAL_PTR(11, n1->next);
 
-	NODE* n2 = cons(&free, 2, 0, (NODE*)17); 
+	NODE* n2 = CONS2(&free, 0, 0, (NODE*)17);
 
 	TEST_ASSERT_EQUAL_INT(13, length(free));
 	TEST_ASSERT_EQUAL_INT(13, inverse_length(last));
 	TEST_ASSERT_EQUAL_INT(saved_free - 3, free);
 	TEST_ASSERT_EQUAL_INT(saved_free - 2, n2);
-	TEST_ASSERT_EQUAL_INT(2, n2->size);
+	TEST_ASSERT_EQUAL_INT(1, n2->size);
 	TEST_ASSERT_EQUAL_PTR(17, n2->next);
 
-	NODE* n3 = cons(&free, 3, 0, 0);
+	NODE* n3 = CONSn(&free, 3, 0);
 
 	TEST_ASSERT_EQUAL_INT(10, length(free));
 	TEST_ASSERT_EQUAL_INT(10, inverse_length(last));
 	TEST_ASSERT_EQUAL_INT(saved_free - 6, free);
 	TEST_ASSERT_EQUAL_INT(saved_free - 5, n3);
-	TEST_ASSERT_EQUAL_INT(3, n3->size);
+	TEST_ASSERT_EQUAL_INT(2, n3->size);
 
-	NODE* n4 = cons(&free, 9, 0, 0);
+	NODE* n4 = CONSn(&free, 9, 0);
 
 	TEST_ASSERT_EQUAL_INT(1, length(free));
 	TEST_ASSERT_EQUAL_INT(1, inverse_length(last));
@@ -109,7 +109,7 @@ void test_CORE_reclaim() {
 	NODE* saved_free = free;
 	NODE* last = (NODE*)block;
 
-	NODE* n1 = cons(&free, 1, 7, AS(ATOM, 0));
+	NODE* n1 = CONS1(&free, 7, AS(ATOM, 0));
 
 	NODE* t1 = reclaim(&free, n1);
 
@@ -118,7 +118,7 @@ void test_CORE_reclaim() {
 	TEST_ASSERT_EQUAL_PTR(0, t1);
 	TEST_ASSERT_EQUAL_PTR(saved_free, free);
 
-	n1 = cons(&free, 3, 7, AS(CARRAY, 0));
+	n1 = CONSn(&free, 3, AS(ARRAY, 0));
 
 	t1 = reclaim(&free, n1);
 
@@ -127,10 +127,10 @@ void test_CORE_reclaim() {
 	TEST_ASSERT_EQUAL_PTR(0, t1);
 	TEST_ASSERT_EQUAL_PTR(saved_free, free);
 
-	n1 =
-		cons(&free, 1, (CELL)AS(LIST,
-			cons(&free, 1, 7, AS(ATOM,
-			cons(&free, 2, 0, AS(CARRAY, 0))))),
+	n1 = 
+		CONS1(&free, (CELL)AS(LIST,
+			CONS1(&free, 7, AS(ATOM,
+			CONS2(&free, 0, 0, AS(ARRAY, 0))))),
 		AS(COLL, 0));
 
 	t1 = reclaim(&free, n1);
@@ -140,8 +140,253 @@ void test_CORE_reclaim() {
 	TEST_ASSERT_EQUAL_PTR(0, t1);
 }
 
-// TODO: Add complex tests of consing and reclaiming different sizes to check if
-// everything is correctly reclaimed
+void test_CORE_cons_reclaim() {
+	CELL size = 16*2*sizeof(CELL);
+	BYTE block[size];
+
+	NODE* free = init_free(block, size, 0);
+	NODE* saved_free = free;
+	NODE* last = (NODE*)block;
+
+	NODE* n1 = CONS1(&free, 7, AS(ATOM, 0));
+	NODE* n2 = CONS1(&free, 11, AS(ATOM, 0));
+	NODE* n3 = CONS1(&free, 13, AS(ATOM, 0));
+	NODE* n4 = CONS1(&free, 17, AS(ATOM, 0));
+
+	reclaim(&free, n3);
+	reclaim(&free, n2);
+
+	NODE* n5 = CONS2(&free, 19, 23, AS(PLIT, 0));
+
+	TEST_ASSERT_EQUAL_INT(12, length(free));
+	TEST_ASSERT_EQUAL_INT(12, inverse_length(last));
+
+	TEST_ASSERT_EQUAL_PTR(n3, n5);
+}
+
+void test_CORE_cons_reclaim_2() {
+	CELL size = 16*2*sizeof(CELL);
+	BYTE block[size];
+
+	NODE* free = init_free(block, size, 0);
+	NODE* saved_free = free;
+	NODE* last = (NODE*)block;
+
+	NODE* n1 = CONS1(&free, 7, AS(ATOM, 0));
+	NODE* n2 = CONS1(&free, 11, AS(ATOM, 0));
+	NODE* n3 = CONS1(&free, 13, AS(ATOM, 0));
+	NODE* n4 = CONS1(&free, 17, AS(ATOM, 0));
+
+	reclaim(&free, n2);
+	reclaim(&free, n3);
+
+	NODE* n5 = CONS2(&free, 19, 23, AS(PLIT, 0));
+
+	TEST_ASSERT_EQUAL_INT(12, length(free));
+	TEST_ASSERT_EQUAL_INT(12, inverse_length(last));
+
+	TEST_ASSERT_EQUAL_PTR(n2, n5);
+}
+
+void test_CORE_clone_atom() {
+	CELL size = 16*2*sizeof(CELL);
+	BYTE block[size];
+	NODE* free = init_free(block, size, 0);
+
+	NODE* n1 = CONS1(&free, 7, AS(ATOM, 0));
+
+	NODE* n2 = clone(&free, n1);
+
+	TEST_ASSERT_NOT_EQUAL(n1, n2);
+	TEST_ASSERT_EQUAL_INT(TYPE(n1), TYPE(n2));
+	TEST_ASSERT_EQUAL_INT(n1->value, n2->value);
+
+	TEST_ASSERT_EQUAL_INT(14, length(free));
+}
+
+void test_CORE_clone_prim() {
+	CELL size = 16*2*sizeof(CELL);
+	BYTE block[size];
+	NODE* free = init_free(block, size, 0);
+
+	NODE* n1 = CONS1(&free, 7, AS(PRIM, 0));
+
+	NODE* n2 = clone(&free, n1);
+
+	TEST_ASSERT_NOT_EQUAL(n1, n2);
+	TEST_ASSERT_EQUAL_INT(TYPE(n1), TYPE(n2));
+	TEST_ASSERT_EQUAL_INT(n1->value, n2->value);
+
+	TEST_ASSERT_EQUAL_INT(14, length(free));
+}
+
+void test_CORE_clone_plit() {
+	CELL size = 16*2*sizeof(CELL);
+	BYTE block[size];
+	NODE* free = init_free(block, size, 0);
+
+	NODE* n1 = CONS2(&free, 7, 11, AS(PLIT, 0));
+
+	NODE* n2 = clone(&free, n1);
+
+	TEST_ASSERT_NOT_EQUAL(n1, n2);
+	TEST_ASSERT_EQUAL_INT(TYPE(n1), TYPE(n2));
+	TEST_ASSERT_EQUAL_INT(n1->size, n2->size);
+	TEST_ASSERT_EQUAL_INT(n1->data[0], n2->data[0]);
+	TEST_ASSERT_EQUAL_INT(n1->data[1], n2->data[1]);
+
+	TEST_ASSERT_EQUAL_INT(12, length(free));
+}
+
+void test_CORE_clone_string() {
+	CELL size = 16*2*sizeof(CELL);
+	BYTE block[size];
+	NODE* free = init_free(block, size, 0);
+
+	NODE* n1 = CONSn(&free, 2, AS(PLIT, 0));
+	strcpy(BYTES(n1), "test string");
+
+	NODE* n2 = clone(&free, n1);
+
+	TEST_ASSERT_NOT_EQUAL(n1, n2);
+	TEST_ASSERT_EQUAL_INT(TYPE(n1), TYPE(n2));
+	TEST_ASSERT_EQUAL_INT(n1->size, n2->size);
+	TEST_ASSERT_EQUAL_STRING(BYTES(n1), BYTES(n2));
+
+	TEST_ASSERT_EQUAL_INT(12, length(free));
+}
+
+void test_CORE_clone_barray() {
+	CELL size = 16*2*sizeof(CELL);
+	BYTE block[size];
+	NODE* free = init_free(block, size, 0);
+
+	BYTE array[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19};
+
+	NODE* n1 = CONSn(&free, 3, AS(PLIT, 0));
+	memcpy(BYTES(n1), array, 20);
+
+	NODE* n2 = clone(&free, n1);
+
+	TEST_ASSERT_NOT_EQUAL(n1, n2);
+	TEST_ASSERT_EQUAL_INT(TYPE(n1), TYPE(n2));
+	TEST_ASSERT_EQUAL_INT(n1->size, n2->size);
+	TEST_ASSERT_EQUAL_STRING(BYTES(n1), BYTES(n2));
+
+	TEST_ASSERT_EQUAL_INT(10, length(free));
+}
+
+void test_CORE_clone_array() {
+	CELL size = 16*2*sizeof(CELL);
+	BYTE block[size];
+	NODE* free = init_free(block, size, 0);
+
+	CELL array[] = {0, 1, 2, 3};
+
+	NODE* n1 = CONSn(&free, 3, AS(PLIT, 0));
+	memcpy(n1->data, array, 4);
+
+	NODE* n2 = clone(&free, n1);
+
+	TEST_ASSERT_NOT_EQUAL(n1, n2);
+	TEST_ASSERT_EQUAL_INT(TYPE(n1), TYPE(n2));
+	TEST_ASSERT_EQUAL_INT(n1->size, n2->size);
+	TEST_ASSERT_EQUAL_MEMORY(n1->data, n2->data, 4*sizeof(CELL));
+
+	TEST_ASSERT_EQUAL_INT(10, length(free));
+}
+
+void test_CORE_clone_list() {
+	CELL size = 16*2*sizeof(CELL);
+	BYTE block[size];
+	NODE* free = init_free(block, size, 0);
+
+	NODE* n1 = 
+		CONS1(&free, (CELL)AS(LIST,
+			CONS1(&free, 7, AS(ATOM, 
+			CONS1(&free, 11, AS(ATOM, 0))))),
+		AS(COLL, 0));
+
+	TEST_ASSERT_EQUAL_INT(13, length(free));
+
+	NODE* n2 = clone(&free, n1);
+
+	TEST_ASSERT_EQUAL_INT(10, length(free));
+
+	TEST_ASSERT_NOT_EQUAL(n1, n2);
+	TEST_ASSERT_EQUAL_INT(COLL, TYPE(n2));
+	TEST_ASSERT_EQUAL_INT(LIST, SUBTYPE(n2));
+	TEST_ASSERT_NOT_EQUAL(n1->ref, n2->ref);
+	TEST_ASSERT_EQUAL_INT(2, length(REF(n2)));
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(REF(n2)));
+	TEST_ASSERT_EQUAL(7, REF(n2)->value);
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(NEXT(REF(n2))));
+	TEST_ASSERT_EQUAL(11, NEXT(REF(n2))->value);
+}
+
+void test_CORE_clone_word() {
+	CELL size = 16*2*sizeof(CELL);
+	BYTE block[size];
+	NODE* free = init_free(block, size, 0);
+
+	NODE* l = CONS1(&free, 7, AS(ATOM, 0));
+	NODE* n1 = CONS1(&free, (CELL)AS(WORD, l), AS(COLL, 0));
+
+	NODE* n2 = clone(&free, n1);
+
+	TEST_ASSERT_NOT_EQUAL(n1, n2);
+	TEST_ASSERT_EQUAL_INT(TYPE(n1), TYPE(n2));
+	TEST_ASSERT_EQUAL_INT(SUBTYPE(n1), SUBTYPE(n2));
+	TEST_ASSERT_EQUAL_INT(n1->value, n2->value);
+
+	TEST_ASSERT_EQUAL_INT(13, length(free));
+}
+
+void test_CORE_clone_dual() {
+	CELL size = 16*2*sizeof(CELL);
+	BYTE block[size];
+	NODE* free = init_free(block, size, 0);
+
+	NODE* l = CONS1(&free, 7, AS(ATOM, 0));
+	NODE* n1 = CONS1(&free, (CELL)AS(DUAL, l), AS(COLL, 0));
+
+	NODE* n2 = clone(&free, n1);
+
+	TEST_ASSERT_NOT_EQUAL(n1, n2);
+	TEST_ASSERT_EQUAL_INT(TYPE(n1), TYPE(n2));
+	TEST_ASSERT_EQUAL_INT(SUBTYPE(n1), SUBTYPE(n2));
+	TEST_ASSERT_EQUAL_INT(n1->value, n2->value);
+
+	TEST_ASSERT_EQUAL_INT(13, length(free));
+}
+
+void test_CORE_clone_user() {
+	CELL size = 16*2*sizeof(CELL);
+	BYTE block[size];
+	NODE* free = init_free(block, size, 0);
+
+	NODE* n1 = 
+		CONS1(&free, (CELL)AS(USER,
+			CONS1(&free, 7, AS(ATOM, 
+			CONS1(&free, 11, AS(ATOM, 0))))),
+		AS(COLL, 0));
+
+	TEST_ASSERT_EQUAL_INT(13, length(free));
+
+	NODE* n2 = clone(&free, n1);
+
+	TEST_ASSERT_EQUAL_INT(10, length(free));
+
+	TEST_ASSERT_NOT_EQUAL(n1, n2);
+	TEST_ASSERT_EQUAL_INT(COLL, TYPE(n2));
+	TEST_ASSERT_EQUAL_INT(USER, SUBTYPE(n2));
+	TEST_ASSERT_NOT_EQUAL(n1->ref, n2->ref);
+	TEST_ASSERT_EQUAL_INT(2, length(REF(n2)));
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(REF(n2)));
+	TEST_ASSERT_EQUAL(7, REF(n2)->value);
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(NEXT(REF(n2))));
+	TEST_ASSERT_EQUAL(11, NEXT(REF(n2))->value);
+}
 
 int main() {
 	UNITY_BEGIN();
@@ -150,8 +395,21 @@ int main() {
 	RUN_TEST(test_CORE_inverse_length);
 	RUN_TEST(test_CORE_init_free);
 
-	RUN_TEST(test_CORE_ncons);
+	RUN_TEST(test_CORE_cons);
 	RUN_TEST(test_CORE_reclaim);
+	RUN_TEST(test_CORE_cons_reclaim);
+	RUN_TEST(test_CORE_cons_reclaim_2);
+
+	RUN_TEST(test_CORE_clone_atom);
+	RUN_TEST(test_CORE_clone_prim);
+	RUN_TEST(test_CORE_clone_plit);
+	RUN_TEST(test_CORE_clone_string);
+	RUN_TEST(test_CORE_clone_barray);
+	RUN_TEST(test_CORE_clone_array);
+	RUN_TEST(test_CORE_clone_list);
+	RUN_TEST(test_CORE_clone_word);
+	RUN_TEST(test_CORE_clone_dual);
+	RUN_TEST(test_CORE_clone_user);
 
 	return UNITY_END();
 }

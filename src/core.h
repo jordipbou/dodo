@@ -24,7 +24,6 @@ typedef struct T_NODE {
 	CELL data[];
 } NODE;
 
-#define CELLS(node)					(node->data)
 #define BYTES(node)					((BYTE*)node->data)
 
 #define NEXT(node)					((NODE*)(((CELL)node->next) & -8))
@@ -35,10 +34,10 @@ typedef struct T_NODE {
 
 #define AS(type, node)			((NODE*)(((CELL)node) | type))
 
-enum Types { ATOM, PRIM, PARRAY, STRING, BARRAY, CARRAY, COLL };
-enum CollTypes { LIST, WORD, USER };
+enum Types { ATOM, PRIM, PLIT, STRING, BARRAY, ARRAY, COLL };
+enum CollTypes { LIST, WORD, DUAL, USER };
 
-#define IS_ARRAY(node)			(TYPE(node) == PARRAY || TYPE(node) == STRING || TYPE(node) == BARRAY || TYPE(node) == CARRAY)
+#define IS_ARRAY(node)			(TYPE(node) == PLIT || TYPE(node) == STRING || TYPE(node) == BARRAY || TYPE(node) == ARRAY)
 
 CELL length(NODE* list) {
 	CELL count = 0;
@@ -65,7 +64,7 @@ NODE* init_free(BYTE* block, CELL size, CELL start) {
 	return top;
 }
 
-NODE* cons(NODE** free, CELL n, CELL value, NODE* next) {
+NODE* cons(NODE** free, CELL n, NODE* next) {
 	NODE* pred = (NODE*)free;
 	NODE* node = *free;
 	while (node) {
@@ -81,13 +80,15 @@ NODE* cons(NODE** free, CELL n, CELL value, NODE* next) {
 			pred->next = node->next;
 			node->next->ref = pred == (NODE*)free ? 0 : pred;
 			node->next = next;
-			node->value = value;
-			if (n > 1) node->size = n;
 			return node;
 		}
 		node = node->next;
 	}
 }
+
+#define CONS1(f, v, x)			({ NODE* _n_ = cons(f, 1, x); _n_->value = v; _n_; })
+#define CONS2(f, d1, d2, x)	({ NODE* _n_ = cons(f, 2, x); _n_->size = 1; _n_->data[0] = d1; _n_->data[1] = d2; _n_; })
+#define CONSn(f, n, x)			({ NODE* _n_ = cons(f, n, x); _n_->size = n - 1; _n_; })
 
 NODE* reclaim(NODE** free, NODE* node) {
 	CELL nodes = 1;
@@ -100,7 +101,7 @@ NODE* reclaim(NODE** free, NODE* node) {
 	}
 
 	if (IS_ARRAY(node)) {
-		nodes = node->size;
+		nodes = node->size + 1;
 	}
 
 	while (nodes) {
@@ -113,6 +114,24 @@ NODE* reclaim(NODE** free, NODE* node) {
 	}
 
 	return tail;
+}
+
+NODE* clone(NODE** free, NODE* node) {
+	CELL i;
+	if (!node) return 0;
+	if (TYPE(node) == COLL && (SUBTYPE(node) == LIST || SUBTYPE(node) == USER)) {
+		return CONS1(free, (CELL)AS(SUBTYPE(node), clone(free, REF(node))), AS(COLL, clone(free, NEXT(node))));
+	} else {
+		if (IS_ARRAY(node)) {
+			NODE* n = CONSn(free, node->size + 1, AS(TYPE(node), clone(free, NEXT(node))));
+			for (i = 0; i < (2*node->size); i++) {
+				n->data[i] = node->data[i];
+			}
+			return n;
+		} else {
+			return CONS1(free, node->value, AS(TYPE(node), clone(free, NEXT(node))));	
+		}
+	}
 }
 
 #endif
