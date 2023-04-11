@@ -33,6 +33,7 @@ typedef struct T_NODE {
 #define SUBTYPE(node)				(((CELL)node->ref) & 7)
 
 #define AS(type, node)			((NODE*)(((CELL)node) | type))
+#define LINK(node, _next_)	(node->next = AS(TYPE(node), _next_))
 
 enum Types { ATOM, PRIM, PLIT, STRING, BARRAY, ARRAY, COLL };
 enum CollTypes { LIST, WORD, DUAL, USER };
@@ -133,5 +134,82 @@ NODE* clone(NODE** free, NODE* node) {
 		}
 	}
 }
+
+typedef struct {
+	CELL size;
+	HALF err, state;
+	BYTE* here;
+	NODE* there;
+	// TODO: I don't understand if dstack should be like this....
+	NODE* fstack, * mstack, ** dstack, * rstack, * xstack;
+	NODE* ip, * latest;
+} CTX;
+
+typedef CTX* (*FUNC)(CTX*);
+
+#define BOTTOM(ctx)					(((BYTE*)ctx) + sizeof(CTX))
+#define TOP(ctx)						(ALIGN(((BYTE*)ctx) + ctx->size - sizeof(NODE) - 1, sizeof(NODE)))
+#define RESERVED(ctx)				((CELL)(((BYTE*)ctx->there) - ctx->here))
+
+CTX* init(BYTE* block, CELL size) {
+	CTX* ctx = (CTX*)block;	
+
+	ctx->size = size;
+	ctx->here = BOTTOM(ctx);
+	ctx->there = (NODE*)ALIGN(BOTTOM(ctx), sizeof(NODE));
+	ctx->mstack = ctx->rstack = ctx->xstack = 0;
+	ctx->dstack = &ctx->mstack;
+
+	ctx->fstack = init_free(block, size, ((CELL)ctx->there) - ((CELL)ctx));
+
+	ctx->err = ctx->state = 0;
+
+	return ctx;
+}
+
+#define F(ctx)		(ctx->fstack)
+#define S(ctx)		(*ctx->dstack)
+#define R(ctx)		(ctx->rstack)
+
+#define ERR_STACK_OVERFLOW			-1
+#define ERR_STACK_UNDERFLOW			-2
+#define ERR_DIVISION_BY_ZERO		-3
+
+// STACK PRIMITIVES
+
+CTX* duplicate(CTX* ctx) { /* ( n -- n n ) */
+	// TODO: Error management !!
+	if (TYPE(S(ctx)) == COLL && (SUBTYPE(S(ctx)) == LIST || SUBTYPE(S(ctx)) == USER)) {
+		S(ctx) = CONS1(&F(ctx), (CELL)AS(SUBTYPE(S(ctx)), clone(&F(ctx), S(ctx)->ref)), AS(COLL, S(ctx)));
+	} else {
+		S(ctx) = CONS1(&F(ctx), S(ctx)->value, AS(TYPE(S(ctx)), S(ctx)));
+	}
+}
+
+//CTX* swap(CTX* ctx) {	/* ( n2 n1 -- n1 n2 ) */
+//	CELL temp = NEXT(S(ctx));
+//	LINK(TOS(ctx), NEXT(NEXT(TOS(ctx))));
+//	LINK(temp, TOS(ctx));
+//	TOS(ctx) = temp;
+//}
+//
+//CTX* drop(CTX* ctx) { /* ( n -- ) */
+//	TOS(ctx) = reclaim(ctx, TOS(ctx));
+//}
+//
+//CTX* over(CTX* ctx) { /* ( n2 n1 -- n2 n1 n2 ) */
+//	if (TYPE(NEXT(TOS(ctx))) == LIST) {
+//		TOS(ctx) = cons(ctx, clone(ctx, CAR(NEXT(TOS(ctx)))), AS(LIST, TOS(ctx)));
+//	} else {
+//		TOS(ctx) = cons(ctx, CAR(NEXT(TOS(ctx))), AS(TYPE(NEXT(TOS(ctx))), TOS(ctx)));
+//	}
+//}
+//
+//CTX* rot(CTX* ctx) { /* ( n3 n2 n1 -- n1 n3 n2 ) */
+//	CELL temp = NEXT(NEXT(TOS(ctx)));
+//	LINK(NEXT(TOS(ctx)), NEXT(NEXT(NEXT(TOS(ctx)))));
+//	LINK(temp, TOS(ctx));
+//	TOS(ctx) = temp;
+//}
 
 #endif

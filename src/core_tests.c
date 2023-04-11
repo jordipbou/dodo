@@ -388,6 +388,50 @@ void test_CORE_clone_user() {
 	TEST_ASSERT_EQUAL(11, NEXT(REF(n2))->value);
 }
 
+#define f_nodes(ctx)	(((ctx->size - ALIGN(sizeof(CTX), sizeof(NODE))) / (sizeof(NODE))) - 1)
+
+void test_CONTEXT_init() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	TEST_ASSERT_EQUAL_INT(f_nodes(ctx), length(ctx->fstack) - 1);
+}
+
+// STACK PRIMITIVES
+
+void test_STACK_duplicate_atom() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	S(ctx) = CONS1(&F(ctx), 7, AS(ATOM, S(ctx)));
+
+	duplicate(ctx);
+
+	TEST_ASSERT_EQUAL_INT(2, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(f_nodes(ctx) - 1, length(F(ctx)));
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(NEXT(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(7, S(ctx)->value);
+	TEST_ASSERT_EQUAL_INT(7, NEXT(S(ctx))->value);
+
+	S(ctx) = CONS1(&F(ctx), 11, AS(ATOM, S(ctx)));
+
+	duplicate(ctx);
+
+	TEST_ASSERT_EQUAL_INT(4, length(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(f_nodes(ctx) - 3, length(F(ctx)));
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(S(ctx)));
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(NEXT(S(ctx))));
+	TEST_ASSERT_EQUAL_INT(11, S(ctx)->value);
+	TEST_ASSERT_EQUAL_INT(11, NEXT(S(ctx))->value);
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(NEXT(NEXT(S(ctx)))));
+	TEST_ASSERT_EQUAL_INT(ATOM, TYPE(NEXT(NEXT(NEXT(S(ctx))))));
+	TEST_ASSERT_EQUAL_INT(7, NEXT(NEXT(S(ctx)))->value);
+	TEST_ASSERT_EQUAL_INT(7, NEXT(NEXT(NEXT(S(ctx))))->value);
+}
+
 int main() {
 	UNITY_BEGIN();
 
@@ -410,6 +454,10 @@ int main() {
 	RUN_TEST(test_CORE_clone_word);
 	RUN_TEST(test_CORE_clone_dual);
 	RUN_TEST(test_CORE_clone_user);
+
+	RUN_TEST(test_CONTEXT_init);
+
+	RUN_TEST(test_STACK_duplicate_atom);
 
 	return UNITY_END();
 }
