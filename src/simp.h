@@ -23,6 +23,7 @@ typedef struct T_NODE {
 #define LINK(node, link)					(node->next = AS(TYPE(node), link))
 
 enum Types { ATOM, PRIM, LIST, WORD };
+enum RTypes { SAVED, IP, DISPOSABLE, HANDLER };
 
 // HELPERS
 
@@ -217,6 +218,93 @@ void rot(CTX* ctx) { /* ( n3 n2 n1 -- n1 n3 n2 ) */
 	LINK(NEXT(S(ctx)), NEXT(NEXT(NEXT(S(ctx)))));
 	LINK(temp, S(ctx));
 	S(ctx) = temp;
+}
+
+// ARITHMETIC PRIMITIVES
+
+void add(CTX* ctx) {	/* ( n2 n1 -- n:(n2 + n1) ) */
+	UF2(ctx);
+	NEXT(S(ctx))->value = NEXT(S(ctx))->value + S(ctx)->value;
+	S(ctx) = reclaim(&ctx->fstack, S(ctx));
+}
+
+void incr(CTX* ctx) {	/* ( n -- n:(n + 1) ) */
+	UF1(ctx);
+	S(ctx)->value++;
+}
+
+void sub(CTX* ctx) {	/* ( n2 n1 -- n:(n2 - n1) ) */
+	UF2(ctx);
+	NEXT(S(ctx))->value = NEXT(S(ctx))->value - S(ctx)->value;
+	S(ctx) = reclaim(&ctx->fstack, S(ctx));
+}
+
+void decr(CTX* ctx) {	/* ( n -- n:(n - 1) ) */
+	UF1(ctx);
+	S(ctx)->value--;
+}
+
+void mul(CTX* ctx) {	/* ( n2 n1 -- n:(n2 * n1) ) */
+	UF2(ctx);
+	NEXT(S(ctx))->value = NEXT(S(ctx))->value * S(ctx)->value;
+	S(ctx) = reclaim(&ctx->fstack, S(ctx));
+}
+
+void division(CTX* ctx) {	/* ( n2 n1 -- n:(n2 / n1) ) */
+	UF2(ctx); ERR(ctx, S(ctx)->value == 0, ERR_DIVISION_BY_ZERO);
+	NEXT(S(ctx))->value = NEXT(S(ctx))->value / S(ctx)->value;
+	S(ctx) = reclaim(&ctx->fstack, S(ctx));
+}
+
+void mod(CTX* ctx) {	/* ( n2 n1 -- n:(n2 mod n1) ) */
+	UF2(ctx);
+	NEXT(S(ctx))->value = NEXT(S(ctx))->value % S(ctx)->value;
+	S(ctx) = reclaim(&ctx->fstack, S(ctx));
+}
+
+// COMPARISON PRIMITIVES
+
+void gt(CTX* ctx) {	/* ( n2 n1 -- n:(n2 > n1) ) */
+	UF2(ctx);
+	NEXT(S(ctx))->value = NEXT(S(ctx))->value > S(ctx)->value;
+	S(ctx) = reclaim(&ctx->fstack, S(ctx));
+}
+
+void lt(CTX* ctx) { /* ( n2 n1 -- n:(n2 < n1) ) */
+	UF2(ctx);
+	NEXT(S(ctx))->value = NEXT(S(ctx))->value < S(ctx)->value;
+	S(ctx) = reclaim(&ctx->fstack, S(ctx));
+}
+
+void eq(CTX* ctx) { /* ( n2 n1 -- n:(n2 = n1) ) */
+	UF2(ctx);
+	NEXT(S(ctx))->value = NEXT(S(ctx))->value == S(ctx)->value;
+	S(ctx) = reclaim(&ctx->fstack, S(ctx));
+}
+
+void neq(CTX* ctx) { /* ( n2 n1 -- n:(n2 <> n1) ) */
+	UF2(ctx);
+	NEXT(S(ctx))->value = NEXT(S(ctx))->value != S(ctx)->value;
+	S(ctx) = reclaim(&ctx->fstack, S(ctx));
+}
+
+// BIT PRIMITIVES
+
+void and(CTX* ctx) { /* ( n2 n1 -- n:(n2 and n1) ) */
+	UF2(ctx);
+	NEXT(S(ctx))->value = NEXT(S(ctx))->value & S(ctx)->value;
+	S(ctx) = reclaim(&ctx->fstack, S(ctx));
+}
+
+void or(CTX* ctx) { /* ( n2 n1 -- n:(n2 or n1) ) */
+	UF2(ctx);
+	NEXT(S(ctx))->value = NEXT(S(ctx))->value | S(ctx)->value;
+	S(ctx) = reclaim(&ctx->fstack, S(ctx));
+}
+
+void invert(CTX* ctx) { /* ( n -- n:(inverted bits) ) */
+	UF1(ctx);
+	S(ctx)->value = ~(S(ctx)->value);
 }
 
 #endif

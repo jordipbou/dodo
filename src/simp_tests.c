@@ -407,18 +407,279 @@ void test_STACK_rot() {
 	TEST_ASSERT_EQUAL_STRING("{ #13 #7 #11 } ", dump_list(buf, S(ctx)));
 }
 
+// ARITHMETIC PRIMITIVES
+
+void test_ARITHMETIC_add() {
+	BYTE buf[255];
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	S(ctx) = cons(&ctx->fstack, 11, AS(ATOM, cons(&ctx->fstack, 7, AS(ATOM, 0))));
+	add(ctx);
+
+	buf[0] = 0;
+	TEST_ASSERT_EQUAL_STRING("{ #18 } ", dump_list(buf, S(ctx)));
+}
+
+void test_ARITHMETIC_incr() {
+	BYTE buf[255];
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	S(ctx) = cons(&ctx->fstack, 7, AS(ATOM, 0));
+	incr(ctx);
+
+	buf[0] = 0;
+	TEST_ASSERT_EQUAL_STRING("{ #8 } ", dump_list(buf, S(ctx)));
+}
+
+void test_ARITHMETIC_sub() {
+	BYTE buf[255];
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	S(ctx) = cons(&ctx->fstack, 7, AS(ATOM, cons(&ctx->fstack, 11, AS(ATOM, 0))));
+	sub(ctx);
+
+	buf[0] = 0;
+	TEST_ASSERT_EQUAL_STRING("{ #4 } ", dump_list(buf, S(ctx)));
+}
+
+void test_ARITHMETIC_decr() {
+	BYTE buf[255];
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	S(ctx) = cons(&ctx->fstack, 7, AS(ATOM, 0));
+	decr(ctx);
+
+	buf[0] = 0;
+	TEST_ASSERT_EQUAL_STRING("{ #6 } ", dump_list(buf, S(ctx)));
+}
+
+void test_ARITHMETIC_mul() {
+	BYTE buf[255];
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	S(ctx) = cons(&ctx->fstack, 11, AS(ATOM, cons(&ctx->fstack, 7, AS(ATOM, 0))));
+	mul(ctx);
+
+	buf[0] = 0;
+	TEST_ASSERT_EQUAL_STRING("{ #77 } ", dump_list(buf, S(ctx)));
+}
+
+void test_ARITHMETIC_division() {
+	BYTE buf[255];
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	S(ctx) = cons(&ctx->fstack, 11, AS(ATOM, cons(&ctx->fstack, 77, AS(ATOM, 0))));
+	division(ctx);
+
+	buf[0] = 0;
+	TEST_ASSERT_EQUAL_STRING("{ #7 } ", dump_list(buf, S(ctx)));
+}
+
+void test_ARITHMETIC_division_by_zero() {
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	S(ctx) = cons(&ctx->fstack, 0, AS(ATOM, cons(&ctx->fstack, 77, AS(ATOM, 0))));
+	division(ctx);
+
+	TEST_ASSERT_EQUAL_INT(ERR_DIVISION_BY_ZERO, ctx->err);
+}
+
+void test_ARITHMETIC_mod() {
+	BYTE buf[255];
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	S(ctx) = cons(&ctx->fstack, 7, AS(ATOM, cons(&ctx->fstack, 11, AS(ATOM, 0))));
+	mod(ctx);
+
+	buf[0] = 0;
+	TEST_ASSERT_EQUAL_STRING("{ #4 } ", dump_list(buf, S(ctx)));
+}
+
+// COMPARISON PRIMITIVES
+
+void test_COMPARISON_gt() {
+	BYTE buf[255];
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	S(ctx) = cons(&ctx->fstack, 7, AS(ATOM, cons(&ctx->fstack, 13, AS(ATOM, 0))));
+	gt(ctx);
+
+	S(ctx) = cons(&ctx->fstack, 13, AS(ATOM, cons(&ctx->fstack, 7, AS(ATOM, S(ctx)))));
+	gt(ctx);
+
+	S(ctx) = cons(&ctx->fstack, 7, AS(ATOM, cons(&ctx->fstack, 7, AS(ATOM, S(ctx)))));
+	gt(ctx);
+
+	buf[0] = 0;
+	TEST_ASSERT_EQUAL_STRING("{ #0 #0 #1 } ", dump_list(buf, S(ctx)));
+}
+
+void test_COMPARISON_lt() {
+	BYTE buf[255];
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	S(ctx) = cons(&ctx->fstack, 7, AS(ATOM, cons(&ctx->fstack, 13, AS(ATOM, 0))));
+	lt(ctx);
+
+	S(ctx) = cons(&ctx->fstack, 13, AS(ATOM, cons(&ctx->fstack, 7, AS(ATOM, S(ctx)))));
+	lt(ctx);
+
+	S(ctx) = cons(&ctx->fstack, 7, AS(ATOM, cons(&ctx->fstack, 7, AS(ATOM, S(ctx)))));
+	lt(ctx);
+
+	buf[0] = 0;
+	TEST_ASSERT_EQUAL_STRING("{ #0 #1 #0 } ", dump_list(buf, S(ctx)));
+}
+
+void test_COMPARISON_eq() {
+	BYTE buf[255];
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	S(ctx) = cons(&ctx->fstack, 7, AS(ATOM, cons(&ctx->fstack, 13, AS(ATOM, 0))));
+	eq(ctx);
+
+	S(ctx) = cons(&ctx->fstack, 13, AS(ATOM, cons(&ctx->fstack, 7, AS(ATOM, S(ctx)))));
+	eq(ctx);
+
+	S(ctx) = cons(&ctx->fstack, 7, AS(ATOM, cons(&ctx->fstack, 7, AS(ATOM, S(ctx)))));
+	eq(ctx);
+
+	buf[0] = 0;
+	TEST_ASSERT_EQUAL_STRING("{ #1 #0 #0 } ", dump_list(buf, S(ctx)));
+}
+
+void test_COMPARISON_neq() {
+	BYTE buf[255];
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	S(ctx) = cons(&ctx->fstack, 7, AS(ATOM, cons(&ctx->fstack, 13, AS(ATOM, 0))));
+	neq(ctx);
+
+	S(ctx) = cons(&ctx->fstack, 13, AS(ATOM, cons(&ctx->fstack, 7, AS(ATOM, S(ctx)))));
+	neq(ctx);
+
+	S(ctx) = cons(&ctx->fstack, 7, AS(ATOM, cons(&ctx->fstack, 7, AS(ATOM, S(ctx)))));
+	neq(ctx);
+
+	buf[0] = 0;
+	TEST_ASSERT_EQUAL_STRING("{ #0 #1 #1 } ", dump_list(buf, S(ctx)));
+}
+
+// BIT PRIMITIVES
+
+void test_BIT_and() {
+	BYTE buf[255];
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	S(ctx) = cons(&ctx->fstack, 11, AS(ATOM, cons(&ctx->fstack, 7, AS(ATOM, 0))));
+	and(ctx);
+
+	S(ctx) = cons(&ctx->fstack, 0, AS(ATOM, cons(&ctx->fstack, 0, AS(ATOM, S(ctx)))));
+	and(ctx);
+
+	S(ctx) = cons(&ctx->fstack, -1, AS(ATOM, cons(&ctx->fstack, 0, AS(ATOM, S(ctx)))));
+	and(ctx);
+
+	S(ctx) = cons(&ctx->fstack, 0, AS(ATOM, cons(&ctx->fstack, -1, AS(ATOM, S(ctx)))));
+	and(ctx);
+
+	S(ctx) = cons(&ctx->fstack, -1, AS(ATOM, cons(&ctx->fstack, -1, AS(ATOM, S(ctx)))));	
+	and(ctx);
+
+	buf[0] = 0;
+	TEST_ASSERT_EQUAL_STRING("{ #-1 #0 #0 #0 #3 } ", dump_list(buf, S(ctx)));
+}
+
+void test_BIT_or() {
+	BYTE buf[255];
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	S(ctx) = cons(&ctx->fstack, 7, AS(ATOM, cons(&ctx->fstack, 11, AS(ATOM, 0))));
+	or(ctx);
+
+	S(ctx) = cons(&ctx->fstack, 0, AS(ATOM, cons(&ctx->fstack, 0, AS(ATOM, S(ctx)))));
+	or(ctx);
+
+	S(ctx) = cons(&ctx->fstack, -1, AS(ATOM, cons(&ctx->fstack, 0, AS(ATOM, S(ctx)))));
+	or(ctx);
+
+	S(ctx) = cons(&ctx->fstack, 0, AS(ATOM, cons(&ctx->fstack, -1, AS(ATOM, S(ctx)))));
+	or(ctx);
+
+	S(ctx) = cons(&ctx->fstack, -1, AS(ATOM, cons(&ctx->fstack, -1, AS(ATOM, S(ctx)))));
+	or(ctx);
+
+	buf[0] = 0;
+	TEST_ASSERT_EQUAL_STRING("{ #-1 #-1 #-1 #0 #15 } ", dump_list(buf, S(ctx)));
+}
+
+void test_BIT_invert() {
+	BYTE buf[255];
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	S(ctx) = cons(&ctx->fstack, 7, AS(ATOM, 0));
+	invert(ctx);
+
+	S(ctx) = cons(&ctx->fstack, 0, AS(ATOM, S(ctx)));
+	invert(ctx);
+
+	S(ctx) = cons(&ctx->fstack, 1, AS(ATOM, S(ctx)));
+	invert(ctx);
+
+	S(ctx) = cons(&ctx->fstack, -1, AS(ATOM, S(ctx)));
+	invert(ctx);
+
+	buf[0] = 0;
+	TEST_ASSERT_EQUAL_STRING("{ #0 #-2 #-1 #-8 } ", dump_list(buf, S(ctx)));
+}
+
 int main() {
 	UNITY_BEGIN();
 
+	// HELPERS
 	RUN_TEST(test_CORE_length);
+
+	// CORE
 	RUN_TEST(test_CORE_init_free);
 	RUN_TEST(test_CORE_cons);
 	RUN_TEST(test_CORE_reclaim);
 	RUN_TEST(test_CORE_reclaim_list);
 	RUN_TEST(test_CORE_clone);
 
+	// CONTEXT
 	RUN_TEST(test_CONTEXT_data_stack);
 
+	// STACK PRIMITIVES
 	RUN_TEST(test_STACK_duplicate_atom);
 	RUN_TEST(test_STACK_duplicate_list);
 	RUN_TEST(test_STACK_swap_1);
@@ -426,6 +687,27 @@ int main() {
 	RUN_TEST(test_STACK_drop);
 	RUN_TEST(test_STACK_over);
 	RUN_TEST(test_STACK_rot);
+
+	// ARITHMETIC PRIMITIVES
+	RUN_TEST(test_ARITHMETIC_add);
+	RUN_TEST(test_ARITHMETIC_incr);
+	RUN_TEST(test_ARITHMETIC_sub);
+	RUN_TEST(test_ARITHMETIC_decr);
+	RUN_TEST(test_ARITHMETIC_mul);
+	RUN_TEST(test_ARITHMETIC_division);
+	RUN_TEST(test_ARITHMETIC_division_by_zero);
+	RUN_TEST(test_ARITHMETIC_mod);
+
+	// COMPARISON PRIMITIVES
+	RUN_TEST(test_COMPARISON_gt);
+	RUN_TEST(test_COMPARISON_lt);
+	RUN_TEST(test_COMPARISON_eq);
+	RUN_TEST(test_COMPARISON_neq);
+
+	// BIT PRIMITIVES
+	RUN_TEST(test_BIT_and);
+	RUN_TEST(test_BIT_or);
+	RUN_TEST(test_BIT_invert);
 
 	return UNITY_END();
 }
