@@ -34,4 +34,11 @@ add_executable (
 
 target_include_directories (core_tests PRIVATE src deps/Unity/src)
 
+add_executable (
+	simp_tests
+	src/simp_tests.c
+	deps/Unity/src/unity.c)
+
+target_include_directories (simp_tests PRIVATE src deps/Unity/src)
+
 # add_subdirectory(c_examples)
