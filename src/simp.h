@@ -58,6 +58,16 @@ CELL length(NODE* list, CELL dir) {
 	return count;
 }
 
+NODE* reverse(NODE* list, NODE* acc) {
+	if (list) {
+		NODE* tail = NEXT(list);
+		LINK(list, acc);
+		return reverse(tail, list);
+	} else {
+		return acc;
+	}
+}
+
 // CORE
 
 #define ALIGN(addr, bound)				((((CELL)addr) + (bound - 1)) & ~(bound - 1))
@@ -127,6 +137,7 @@ typedef struct {
 	NODE** dstack;
 	BYTE* here;
 	NODE* there;
+	NODE* ip;
 } CTX;
 
 #define S(ctx)										(*(ctx->dstack))
@@ -149,6 +160,8 @@ CTX* init(BYTE* block, CELL size) {
 
 	ctx->err = ctx->compiling = 0;
 
+	ctx->ip = 0;
+
 	return ctx;
 }
 
@@ -157,6 +170,7 @@ CTX* init(BYTE* block, CELL size) {
 #define ERR_STACK_OVERFLOW				-1
 #define ERR_STACK_UNDERFLOW				-2
 #define ERR_DIVISION_BY_ZERO			-3
+#define ERR_EXPECTED_LIST					-4
 
 void error(CTX* ctx) {
 	// TODO: Find in return stack error handlers and call them if same type as error
@@ -305,6 +319,76 @@ void or(CTX* ctx) { /* ( n2 n1 -- n:(n2 or n1) ) */
 void invert(CTX* ctx) { /* ( n -- n:(inverted bits) ) */
 	UF1(ctx);
 	S(ctx)->value = ~(S(ctx)->value);
+}
+
+// LIST PRIMITIVES
+
+void empty(CTX* ctx) { /* ( -- {} ) */
+	OF1(ctx);
+	S(ctx) = cons(&ctx->fstack, 0, AS(LIST, S(ctx)));
+}
+
+void list_to_stack(CTX* ctx) { /* ( { a b c } -- c b a ) */
+	UF1(ctx); ERR(ctx, TYPE(S(ctx)) != LIST, ERR_EXPECTED_LIST);
+	ctx->dstack = &(S(ctx)->ref);
+}
+
+void reverse_list(CTX* ctx) { /* ( { a b c } -- { c b a } ) */
+	UF1(ctx);  ERR(ctx, TYPE(S(ctx)) != LIST, ERR_EXPECTED_LIST);
+	S(ctx)->ref = reverse(S(ctx)->ref, 0);
+}
+
+void main_stack(CTX* ctx) { /* ( -- ) */
+	ctx->dstack = &ctx->mstack;
+}
+
+// INNER INTERPRETER
+
+void incrIP(CTX* ctx) {
+	if (ctx->ip) {
+		ctx->ip = NEXT(ctx->ip);
+	}
+	while (!ctx->ip && ctx->rstack) {
+		if (TYPE(ctx->rstack) == IP) {
+			ctx->ip = NEXT(ctx->rstack->ref);
+		}
+		ctx->rstack = reclaim(&ctx->fstack, ctx->rstack);
+	}
+}
+
+#define CALL(ctx, ip) \
+	({ \
+		if (ctx->ip && NEXT(ctx->ip)) { \
+			ctx->rstack = cons(&ctx->fstack, ctx->ip, AS(IP, ctx->rstack)); \
+		} \
+		ctx->ip = ip; \
+	})
+
+NODE* step(CTX* ctx) {
+	NODE* r;
+	if (ctx->ip) {
+		switch (TYPE(ctx->ip)) {
+			case ATOM:
+				S(ctx) = cons(&ctx->fstack, ctx->ip->value, AS(ATOM, S(ctx)));
+				incrIP(ctx);
+				break;
+			case LIST:
+				S(ctx) = cons(&ctx->fstack, (CELL)clone(&ctx->fstack, ctx->ip->ref), AS(LIST, S(ctx)));
+				incrIP(ctx);
+				break;
+			case PRIM:
+				r = ctx->ip;
+				((FUNC)(ctx->ip->value))(ctx);
+				if (r == ctx->ip) {
+					incrIP(ctx);
+				}
+				break;
+			case WORD:
+				//CALL(ctx, XT(ctx, REF(IP(ctx))));
+				break;
+		}
+	}
+	return ctx->ip;
 }
 
 #endif
