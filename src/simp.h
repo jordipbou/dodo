@@ -16,8 +16,8 @@ typedef struct T_NODE {
 	struct T_NODE* next;
 } NODE;
 
-#define NEXT(node)								((NODE*)(((CELL)(node)->next) & -4))
-#define TYPE(node)								(((CELL)node->next) & 3)
+#define NEXT(node)								((NODE*)(((CELL)(node)->next) & -8))
+#define TYPE(node)								(((CELL)node->next) & 7)
 
 #define AS(type, node)						((NODE*)(((CELL)node) | type))
 #define LINK(node, link)					(node->next = AS(TYPE(node), link))
@@ -356,12 +356,12 @@ void incrIP(CTX* ctx) {
 	}
 }
 
-#define CALL(ctx, ip) \
+#define CALL(ctx, dest) \
 	({ \
 		if (ctx->ip && NEXT(ctx->ip)) { \
-			ctx->rstack = cons(&ctx->fstack, ctx->ip, AS(IP, ctx->rstack)); \
+			ctx->rstack = cons(&ctx->fstack, (CELL)ctx->ip, AS(IP, ctx->rstack)); \
 		} \
-		ctx->ip = ip; \
+		ctx->ip = dest; \
 	})
 
 NODE* step(CTX* ctx) {
@@ -389,6 +389,61 @@ NODE* step(CTX* ctx) {
 		}
 	}
 	return ctx->ip;
+}
+
+void exec_i(CTX* ctx) { /* ( xt -- ) */
+	CELL p;
+	UF1(ctx);
+	switch (TYPE(S(ctx))) {
+		case ATOM: 
+			// This executes the ATOM to be compatible with Forth, is it correct?
+			p = S(ctx)->value; 
+			S(ctx) = reclaim(&ctx->fstack, S(ctx)); 
+			((FUNC)p)(ctx);
+			break;
+		case LIST: 
+			if (S(ctx)->ref) {
+				NODE* t = S(ctx);
+				S(ctx) = NEXT(S(ctx));
+				CALL(ctx, t->ref);
+				LINK(t, ctx->rstack);
+				ctx->rstack = t;
+				step(ctx);
+			} else {
+				S(ctx) = reclaim(&ctx->fstack, S(ctx));
+			}
+			break;
+		case PRIM: 
+			p = S(ctx)->value; 
+			S(ctx) = reclaim(&ctx->fstack, S(ctx)); 
+			((FUNC)p)(ctx); 
+			break;
+		case WORD: 
+			//p = IP(ctx);
+			//CALL(ctx, XT(ctx, CAR(TOS(ctx))));
+			//TOS(ctx) = reclaim(ctx, TOS(ctx));
+			//while (step(ctx) != p);
+			break;
+	}
+}
+
+void exec_x(CTX* ctx) { /* ( xt -- xt ) */
+	UF1(ctx); 
+	duplicate(ctx); 
+	exec_i(ctx); 
+}
+
+// CONTROL FLOW
+
+void branch(CTX* ctx) { /* ( b xt_true xt_false -- ) */
+	UF3(ctx); 
+	if (NEXT(NEXT(S(ctx)))->value == 0) { 
+		swap(ctx); 
+	} 
+	drop(ctx); 
+	swap(ctx); 
+	drop(ctx); 
+	exec_i(ctx); 
 }
 
 #endif

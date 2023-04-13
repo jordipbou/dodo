@@ -892,69 +892,67 @@ void test_EXEC_step_list() {
 	TEST_ASSERT_EQUAL_INT(free - 4, length(ctx->fstack, 0));
 }
 
-//void test_EXEC_step_list_2() {
-//	//TEST_IGNORE();
-//	CELL size = 512;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//
-//	IP(ctx) =
-//		cons(ctx, 
-//			cons(ctx, 7, AS(ATOM, 
-//			cons(ctx, 11, AS(ATOM, 
-//			cons(ctx, 13, AS(ATOM, 0)))))), 
-//		AS(LIST, 
-//		cons(ctx, 17, AS(ATOM, 0))));
-//
-//	CELL free = ctx->free;
-//
-//	while(step(ctx));
-//
-//	TEST_ASSERT_EQUAL_INT(2, length(TOS(ctx)));
-//	TEST_ASSERT_EQUAL_INT(17, CAR(TOS(ctx)));
-//	TEST_ASSERT_EQUAL(LIST, TYPE(NEXT(TOS(ctx))));
-//
-//	TEST_ASSERT_EQUAL_INT(free - 5, ctx->free);
-//}
-//
-//void test_EXEC_step_primitive() {
-//	CELL size = 512;
-//	BYTE block[size];
-//	CTX* ctx = init(block, size);
-//
-//	IP(ctx) =
-//		cons(ctx, 13, AS(ATOM, 
-//		cons(ctx, 7, AS(ATOM, 
-//		cons(ctx, (CELL)&add, AS(PRIM, 
-//		cons(ctx, (CELL)&duplicate, AS(PRIM, 0))))))));
-//
-//	CELL free = ctx->free;
-//
-//	step(ctx);
-//
-//	TEST_ASSERT_EQUAL_INT(1, length(TOS(ctx)));
-//	TEST_ASSERT_EQUAL_INT(13, CAR(TOS(ctx)));
-//
-//	step(ctx);
-//
-//	TEST_ASSERT_EQUAL_INT(2, length(TOS(ctx)));
-//	TEST_ASSERT_EQUAL_INT(7, CAR(TOS(ctx)));
-//	TEST_ASSERT_EQUAL_INT(13, CAR(NEXT(TOS(ctx))));
-//
-//	step(ctx);
-//
-//	TEST_ASSERT_EQUAL_INT(1, length(TOS(ctx)));
-//	TEST_ASSERT_EQUAL_INT(20, CAR(TOS(ctx)));
-//
-//	step(ctx);
-//
-//	TEST_ASSERT_EQUAL_INT(2, length(TOS(ctx)));
-//	TEST_ASSERT_EQUAL_INT(20, CAR(TOS(ctx)));
-//	TEST_ASSERT_EQUAL_INT(20, CAR(NEXT(TOS(ctx))));
-//
-//	TEST_ASSERT_EQUAL_INT(free - 2, ctx->free);
-//}
-//
+void test_EXEC_step_list_2() {
+	BYTE buf[255];
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	ctx->ip = 
+		cons(&ctx->fstack, (CELL)
+			cons(&ctx->fstack, 7, AS(ATOM, 
+			cons(&ctx->fstack, 11, AS(ATOM, 
+			cons(&ctx->fstack, 13, AS(ATOM, 0)))))), 
+		AS(LIST, 
+		cons(&ctx->fstack, 17, AS(ATOM, 0))));
+
+	CELL free = length(ctx->fstack, 0);
+
+	while(step(ctx));
+
+	buf[0] = 0;
+	TEST_ASSERT_EQUAL_STRING("{ #17 { #7 #11 #13 } } ", dump_list(buf, S(ctx)));
+
+	TEST_ASSERT_EQUAL_INT(free - 5, length(ctx->fstack, 0));
+}
+
+void test_EXEC_step_primitive() {
+	BYTE buf[255];
+	CELL size = 512;
+	BYTE block[size];
+	CTX* ctx = init(block, size);
+
+	ctx->ip =
+		cons(&ctx->fstack, 13, AS(ATOM, 
+		cons(&ctx->fstack, 7, AS(ATOM, 
+		cons(&ctx->fstack, (CELL)&add, AS(PRIM, 
+		cons(&ctx->fstack, (CELL)&duplicate, AS(PRIM, 0))))))));
+
+	CELL free = length(ctx->fstack, 0);
+
+	step(ctx);
+
+	buf[0] = 0;
+	TEST_ASSERT_EQUAL_STRING("{ #13 } ", dump_list(buf, S(ctx)));
+
+	step(ctx);
+
+	buf[0] = 0;
+	TEST_ASSERT_EQUAL_STRING("{ #7 #13 } ", dump_list(buf, S(ctx)));
+
+	step(ctx);
+
+	buf[0] = 0;
+	TEST_ASSERT_EQUAL_STRING("{ #20 } ", dump_list(buf, S(ctx)));
+
+	step(ctx);
+
+	buf[0] = 0;
+	TEST_ASSERT_EQUAL_STRING("{ #20 #20 } ", dump_list(buf, S(ctx)));
+
+	TEST_ASSERT_EQUAL_INT(free - 2, length(ctx->fstack, 0));
+}
+
 //void test_EXEC_CALL_word() {
 //	CELL size = 512;
 //	BYTE block[size];
@@ -1038,6 +1036,8 @@ int main() {
 	RUN_TEST(test_EXEC_step_nothing);
 	RUN_TEST(test_EXEC_step_atom);
 	RUN_TEST(test_EXEC_step_list);
+	RUN_TEST(test_EXEC_step_list_2);
+	RUN_TEST(test_EXEC_step_primitive);
 
 	return UNITY_END();
 }

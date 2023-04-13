@@ -1,7 +1,8 @@
 #include<stdlib.h>
 #include<stdio.h>
 #include<ctype.h>
-#include"dodo.h"
+//#include"dodo.h"
+#include "simp.h"
 
 char *strlwr(char *str)
 {
@@ -18,38 +19,42 @@ char *strlwr(char *str)
 // CURRENT: 16s
 // TEST: 6.33s (Before using execution pile of stacks)
 void fib(CTX* ctx) {
-	IP(ctx) =
-		cons(ctx, 36, AS(ATOM,
-		cons(ctx,
-			cons(ctx, (CELL)&swap, AS(PRIM,
-			cons(ctx, (CELL)&duplicate, AS(PRIM,
-			cons(ctx, 1, AS(ATOM,
-			cons(ctx, (CELL)&gt, AS(PRIM,
-			cons(ctx,
-				cons(ctx, 1, AS(ATOM,
-				cons(ctx, (CELL)&sub, AS(PRIM,
-				cons(ctx, (CELL)&duplicate, AS(PRIM,
-				cons(ctx, 1, AS(ATOM,
-				cons(ctx, (CELL)&sub, AS(PRIM,
-				cons(ctx, (CELL)&rot, AS(PRIM,
-				cons(ctx, (CELL)&exec_x, AS(PRIM,
-				cons(ctx, (CELL)&rot, AS(PRIM,
-				cons(ctx, (CELL)&rot, AS(PRIM,
-				cons(ctx, (CELL)&exec_x, AS(PRIM,
-				cons(ctx, (CELL)&rot, AS(PRIM,
-				cons(ctx, (CELL)&add, AS(PRIM, 0)))))))))))))))))))))))),
+	ctx->ip =
+		cons(&ctx->fstack, 36, AS(ATOM,
+		cons(&ctx->fstack, (CELL)
+			cons(&ctx->fstack, (CELL)&swap, AS(PRIM,
+			cons(&ctx->fstack, (CELL)&duplicate, AS(PRIM,
+			cons(&ctx->fstack, 1, AS(ATOM,
+			cons(&ctx->fstack, (CELL)&gt, AS(PRIM,
+			cons(&ctx->fstack, (CELL)
+				cons(&ctx->fstack, 1, AS(ATOM,
+				cons(&ctx->fstack, (CELL)&sub, AS(PRIM,
+				cons(&ctx->fstack, (CELL)&duplicate, AS(PRIM,
+				cons(&ctx->fstack, 1, AS(ATOM,
+				cons(&ctx->fstack, (CELL)&sub, AS(PRIM,
+				cons(&ctx->fstack, (CELL)&rot, AS(PRIM,
+				cons(&ctx->fstack, (CELL)&exec_x, AS(PRIM,
+				cons(&ctx->fstack, (CELL)&rot, AS(PRIM,
+				cons(&ctx->fstack, (CELL)&rot, AS(PRIM,
+				cons(&ctx->fstack, (CELL)&exec_x, AS(PRIM,
+				cons(&ctx->fstack, (CELL)&rot, AS(PRIM,
+				cons(&ctx->fstack, (CELL)&add, AS(PRIM, 0)))))))))))))))))))))))),
 			AS(LIST,
-			cons(ctx, 0, AS(LIST,
-			cons(ctx, (CELL)&branch, AS(PRIM, 0)))))))))))))),
+			cons(&ctx->fstack, 0, AS(LIST,
+			cons(&ctx->fstack, (CELL)&branch, AS(PRIM, 0)))))))))))))),
 		AS (LIST,
-		cons(ctx, (CELL)&exec_x, AS(PRIM,
-		cons(ctx, (CELL)&swap, AS(PRIM,
-		cons(ctx, (CELL)&drop, AS(PRIM, 0))))))))));
+		cons(&ctx->fstack, (CELL)&exec_x, AS(PRIM,
+		cons(&ctx->fstack, (CELL)&swap, AS(PRIM,
+		cons(&ctx->fstack, (CELL)&drop, AS(PRIM, 0))))))))));
 
 	while(step(ctx));
 
 	//printf("<%ld> %ld\n", length(S(ctx)), A(S(ctx)));
-	dump_context(ctx);
+	//dump_context(ctx);
+	BYTE buf[255];
+	buf[0] = 0;
+	dump_list(buf, S(ctx));
+	printf("%s\n", buf);
 }
 
 //// TEST: 0.22s
@@ -80,48 +85,49 @@ void fib(CTX* ctx) {
 void main(int argc, char *argv[]) {
 	CELL sz = 30000;
 	BYTE bk[sz];
-	CTX* ctx = bootstrap(init(bk, sz));
+	CTX* ctx = init(bk, sz);
+	//CTX* ctx = bootstrap(init(bk, sz));
 
 	//dump_context(ctx);
 
-	//fib(ctx);
+	fib(ctx);
 	//fibN(ctx);
 	//S(ctx) = cons(ctx, 36, AS(ATOM, S(ctx)));
 	//fibR(ctx);
 	//printf("%d\n", fibC(36));
 	//printf("%ld\n", A(S(ctx)));
 
-	FILE *fptr;
-	BYTE buf[255];
-	if (argc == 2 || argc == 3) {
-		fptr = fopen(argv[1], "r");
-		while (fgets(buf, 255, fptr)) {
-			TOS(ctx) = cons(ctx, strlen(buf), AS(ATOM, cons(ctx, (CELL)buf, AS(ATOM, TOS(ctx)))));
-			evaluate(ctx);
-			if (ctx->err != 0 && ctx->err != -10) {
-					printf("ERROR: %ld\n", ctx->err);
-					dump_context(ctx);
-					return;
-			}
-			ctx->err = 0;
-			//dump_context(ctx);
-		}
-	}
+	//FILE *fptr;
+	//BYTE buf[255];
+	//if (argc == 2 || argc == 3) {
+	//	fptr = fopen(argv[1], "r");
+	//	while (fgets(buf, 255, fptr)) {
+	//		TOS(ctx) = cons(ctx, strlen(buf), AS(ATOM, cons(ctx, (CELL)buf, AS(ATOM, TOS(ctx)))));
+	//		evaluate(ctx);
+	//		if (ctx->err != 0 && ctx->err != -10) {
+	//				printf("ERROR: %ld\n", ctx->err);
+	//				dump_context(ctx);
+	//				return;
+	//		}
+	//		ctx->err = 0;
+	//		//dump_context(ctx);
+	//	}
+	//}
 
-	if (argc == 1 || argc == 3) {
-		do {
-			fgets(buf, 255, stdin);
-			TOS(ctx) = cons(ctx, strlen(buf), AS(ATOM, cons(ctx, (CELL)buf, AS(ATOM, TOS(ctx)))));
-			evaluate(ctx);
-			if (ctx->err != 0 && ctx->err != -10) {
-					printf("ERROR: %ld\n", ctx->err);
-					dump_context(ctx);
-					return;
-			}
-			ctx->err = 0;
-			//dump_context(ctx);
-		} while(1);
-	}
+	//if (argc == 1 || argc == 3) {
+	//	do {
+	//		fgets(buf, 255, stdin);
+	//		TOS(ctx) = cons(ctx, strlen(buf), AS(ATOM, cons(ctx, (CELL)buf, AS(ATOM, TOS(ctx)))));
+	//		evaluate(ctx);
+	//		if (ctx->err != 0 && ctx->err != -10) {
+	//				printf("ERROR: %ld\n", ctx->err);
+	//				dump_context(ctx);
+	//				return;
+	//		}
+	//		ctx->err = 0;
+	//		//dump_context(ctx);
+	//	} while(1);
+	//}
 
-	dump_context(ctx);
+	//dump_context(ctx);
 }
