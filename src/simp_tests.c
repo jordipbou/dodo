@@ -177,7 +177,7 @@ void test_CORE_clone() {
 		cons(&free, 19, AS(ATOM, 0))))))));
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ #7 P:11 { #13 #17 } #19 } ", dump_list(buf, list));
+	TEST_ASSERT_EQUAL_STRING("#7 P:11 { #13 #17 } #19 ", print(buf, list));
 
 	TEST_ASSERT_EQUAL_INT(10, length(free, 0));
 	TEST_ASSERT_EQUAL_INT(10, length(last, 1));
@@ -185,7 +185,7 @@ void test_CORE_clone() {
 	NODE* cloned = clone(&free, list);
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ #7 P:11 { #13 #17 } #19 } ", dump_list(buf, cloned));
+	TEST_ASSERT_EQUAL_STRING("#7 P:11 { #13 #17 } #19 ", print(buf, cloned));
 
 	TEST_ASSERT_EQUAL_INT(4, length(free, 0));
 	TEST_ASSERT_EQUAL_INT(4, length(last, 1));
@@ -304,14 +304,14 @@ void test_STACK_duplicate_list() {
 		AS(LIST, S(ctx)));
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ { #17 #13 { #11 #7 } } } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("{ #17 #13 { #11 #7 } } ", print(buf, S(ctx)));
 
 	duplicate(ctx);
 
 	buf[0] = 0;
 	TEST_ASSERT_EQUAL_STRING(
-		"{ { #17 #13 { #11 #7 } } { #17 #13 { #11 #7 } } } ",
-		dump_list(buf, S(ctx)));
+		"{ #17 #13 { #11 #7 } } { #17 #13 { #11 #7 } } ",
+		print(buf, S(ctx)));
 
 	TEST_ASSERT_EQUAL_INT(free - 12, length(ctx->fstack, 0));
 	TEST_ASSERT_EQUAL_INT(free - 12, length(ctx->there, 1));
@@ -328,7 +328,7 @@ void test_STACK_swap_1() {
 	swap(ctx);
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ #7 #11 } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("#7 #11 ", print(buf, S(ctx)));
 }
 
 void test_STACK_swap_2() {
@@ -347,7 +347,7 @@ void test_STACK_swap_2() {
 	swap(ctx);
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ { #7 #5 } #11 } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("{ #7 #5 } #11 ", print(buf, S(ctx)));
 }
 
 void test_STACK_drop() {
@@ -391,7 +391,7 @@ void test_STACK_over() {
 	over(ctx);
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ #11 #7 #11 } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("#11 #7 #11 ", print(buf, S(ctx)));
 
 	S(ctx) = 
 		cons(&ctx->fstack, 7, AS(ATOM, 
@@ -403,7 +403,7 @@ void test_STACK_over() {
 	over(ctx);
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ { #11 #13 } #7 { #11 #13 } } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("{ #11 #13 } #7 { #11 #13 } ", print(buf, S(ctx)));
 }
 
 void test_STACK_rot() {
@@ -420,7 +420,7 @@ void test_STACK_rot() {
 	rot(ctx);
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ #13 #7 #11 } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("#13 #7 #11 ", print(buf, S(ctx)));
 }
 
 // ARITHMETIC PRIMITIVES
@@ -435,7 +435,7 @@ void test_ARITHMETIC_add() {
 	add(ctx);
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ #18 } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("#18 ", print(buf, S(ctx)));
 }
 
 void test_ARITHMETIC_incr() {
@@ -448,7 +448,7 @@ void test_ARITHMETIC_incr() {
 	incr(ctx);
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ #8 } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("#8 ", print(buf, S(ctx)));
 }
 
 void test_ARITHMETIC_sub() {
@@ -461,7 +461,7 @@ void test_ARITHMETIC_sub() {
 	sub(ctx);
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ #4 } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("#4 ", print(buf, S(ctx)));
 }
 
 void test_ARITHMETIC_decr() {
@@ -474,7 +474,7 @@ void test_ARITHMETIC_decr() {
 	decr(ctx);
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ #6 } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("#6 ", print(buf, S(ctx)));
 }
 
 void test_ARITHMETIC_mul() {
@@ -487,7 +487,7 @@ void test_ARITHMETIC_mul() {
 	mul(ctx);
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ #77 } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("#77 ", print(buf, S(ctx)));
 }
 
 void test_ARITHMETIC_division() {
@@ -500,7 +500,7 @@ void test_ARITHMETIC_division() {
 	division(ctx);
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ #7 } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("#7 ", print(buf, S(ctx)));
 }
 
 void test_ARITHMETIC_division_by_zero() {
@@ -524,7 +524,7 @@ void test_ARITHMETIC_mod() {
 	mod(ctx);
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ #4 } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("#4 ", print(buf, S(ctx)));
 }
 
 // COMPARISON PRIMITIVES
@@ -545,7 +545,7 @@ void test_COMPARISON_gt() {
 	gt(ctx);
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ #0 #0 #1 } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("#0 #0 #1 ", print(buf, S(ctx)));
 }
 
 void test_COMPARISON_lt() {
@@ -564,7 +564,7 @@ void test_COMPARISON_lt() {
 	lt(ctx);
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ #0 #1 #0 } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("#0 #1 #0 ", print(buf, S(ctx)));
 }
 
 void test_COMPARISON_eq() {
@@ -583,7 +583,7 @@ void test_COMPARISON_eq() {
 	eq(ctx);
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ #1 #0 #0 } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("#1 #0 #0 ", print(buf, S(ctx)));
 }
 
 void test_COMPARISON_neq() {
@@ -602,7 +602,7 @@ void test_COMPARISON_neq() {
 	neq(ctx);
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ #0 #1 #1 } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("#0 #1 #1 ", print(buf, S(ctx)));
 }
 
 // BIT PRIMITIVES
@@ -629,7 +629,7 @@ void test_BIT_and() {
 	and(ctx);
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ #-1 #0 #0 #0 #3 } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("#-1 #0 #0 #0 #3 ", print(buf, S(ctx)));
 }
 
 void test_BIT_or() {
@@ -654,7 +654,7 @@ void test_BIT_or() {
 	or(ctx);
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ #-1 #-1 #-1 #0 #15 } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("#-1 #-1 #-1 #0 #15 ", print(buf, S(ctx)));
 }
 
 void test_BIT_invert() {
@@ -676,7 +676,7 @@ void test_BIT_invert() {
 	invert(ctx);
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ #0 #-2 #-1 #-8 } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("#0 #-2 #-1 #-8 ", print(buf, S(ctx)));
 }
 
 // LISTS
@@ -690,7 +690,7 @@ void test_LISTS_empty() {
 	empty(ctx);
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ { } } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("{ } ", print(buf, S(ctx)));
 }
 
 void test_LISTS_list_to_stack() {
@@ -720,7 +720,7 @@ void test_LISTS_list_to_stack_2() {
 	list_to_stack(ctx);
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("", print(buf, S(ctx)));
 }
 
 void test_LISTS_list_to_stack_3() {
@@ -738,7 +738,7 @@ void test_LISTS_list_to_stack_3() {
 	list_to_stack(ctx);
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ #7 #11 } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("#7 #11 ", print(buf, S(ctx)));
 }
 
 void test_LISTS_reverse_list() {
@@ -757,7 +757,7 @@ void test_LISTS_reverse_list() {
 	reverse_list(ctx);
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ { #13 #11 #7 } } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("{ #13 #11 #7 } ", print(buf, S(ctx)));
 }
 
 void test_LISTS_main_stack() {
@@ -778,7 +778,7 @@ void test_LISTS_main_stack() {
 	main_stack(ctx);
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ { #17 #7 #11 } #13 } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("{ #17 #7 #11 } #13 ", print(buf, S(ctx)));
 }
 
 // INNER INTERPRETER
@@ -887,7 +887,7 @@ void test_EXEC_step_list() {
 	TEST_ASSERT_EQUAL_INT(0, length(ctx->rstack, 0));
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ { #7 #11 #13 } } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("{ #7 #11 #13 } ", print(buf, S(ctx)));
 
 	TEST_ASSERT_EQUAL_INT(free - 4, length(ctx->fstack, 0));
 }
@@ -911,7 +911,7 @@ void test_EXEC_step_list_2() {
 	while(step(ctx));
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ #17 { #7 #11 #13 } } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("#17 { #7 #11 #13 } ", print(buf, S(ctx)));
 
 	TEST_ASSERT_EQUAL_INT(free - 5, length(ctx->fstack, 0));
 }
@@ -933,22 +933,22 @@ void test_EXEC_step_primitive() {
 	step(ctx);
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ #13 } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("#13 ", print(buf, S(ctx)));
 
 	step(ctx);
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ #7 #13 } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("#7 #13 ", print(buf, S(ctx)));
 
 	step(ctx);
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ #20 } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("#20 ", print(buf, S(ctx)));
 
 	step(ctx);
 
 	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ #20 #20 } ", dump_list(buf, S(ctx)));
+	TEST_ASSERT_EQUAL_STRING("#20 #20 ", print(buf, S(ctx)));
 
 	TEST_ASSERT_EQUAL_INT(free - 2, length(ctx->fstack, 0));
 }

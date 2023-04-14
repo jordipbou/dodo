@@ -20,7 +20,7 @@ char *strlwr(char *str)
 // TEST: 6.33s (Before using execution pile of stacks)
 void fib(CTX* ctx) {
 	ctx->ip =
-		cons(&ctx->fstack, 36, AS(ATOM,
+		cons(&ctx->fstack, 30, AS(ATOM,
 		cons(&ctx->fstack, (CELL)
 			cons(&ctx->fstack, (CELL)&swap, AS(PRIM,
 			cons(&ctx->fstack, (CELL)&duplicate, AS(PRIM,
@@ -53,8 +53,42 @@ void fib(CTX* ctx) {
 	//dump_context(ctx);
 	BYTE buf[255];
 	buf[0] = 0;
-	dump_list(buf, S(ctx));
+	print(buf, S(ctx));
 	printf("%s\n", buf);
+}
+
+void fibW(CTX* ctx) {
+	ctx->ip =
+		cons(&ctx->fstack, 30, AS(ATOM,
+		cons(&ctx->fstack, (CELL)
+			cons(&ctx->fstack, (CELL)&swap, AS(PRIM,
+			cons(&ctx->fstack, (CELL)&duplicate, AS(PRIM,
+			cons(&ctx->fstack, 1, AS(ATOM,
+			cons(&ctx->fstack, (CELL)&gt, AS(PRIM,
+			cons(&ctx->fstack, (CELL)&ifelse, AS(PRIM,
+			cons(&ctx->fstack, (CELL)
+				cons(&ctx->fstack, 1, AS(ATOM,
+				cons(&ctx->fstack, (CELL)&sub, AS(PRIM,
+				cons(&ctx->fstack, (CELL)&duplicate, AS(PRIM,
+				cons(&ctx->fstack, 1, AS(ATOM,
+				cons(&ctx->fstack, (CELL)&sub, AS(PRIM,
+				cons(&ctx->fstack, (CELL)&rot, AS(PRIM,
+				cons(&ctx->fstack, (CELL)&exec_x, AS(PRIM,
+				cons(&ctx->fstack, (CELL)&rot, AS(PRIM,
+				cons(&ctx->fstack, (CELL)&rot, AS(PRIM,
+				cons(&ctx->fstack, (CELL)&exec_x, AS(PRIM,
+				cons(&ctx->fstack, (CELL)&rot, AS(PRIM,
+				cons(&ctx->fstack, (CELL)&add, AS(PRIM, 0)))))))))))))))))))))))),
+			AS(LIST, 
+			cons(&ctx->fstack, 0, AS(LIST, 0)))))))))))))),
+		AS (LIST,
+		cons(&ctx->fstack, (CELL)&exec_x, AS(PRIM,
+		cons(&ctx->fstack, (CELL)&swap, AS(PRIM,
+		cons(&ctx->fstack, (CELL)&drop, AS(PRIM, 0))))))))));
+
+	while(step(ctx));
+
+	printf("<%ld> %ld\n", length(S(ctx), 0), S(ctx)->value);
 }
 
 //// TEST: 0.22s
@@ -91,6 +125,7 @@ void main(int argc, char *argv[]) {
 	//dump_context(ctx);
 
 	fib(ctx);
+	//fibW(ctx);
 	//fibN(ctx);
 	//S(ctx) = cons(ctx, 36, AS(ATOM, S(ctx)));
 	//fibR(ctx);

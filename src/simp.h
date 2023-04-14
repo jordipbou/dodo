@@ -27,26 +27,17 @@ enum RTypes { SAVED, IP, DISPOSABLE, HANDLER };
 
 // HELPERS
 
-BYTE* dump_list(BYTE*, NODE*);
+BYTE* print(BYTE* str, NODE* node) {
+	if (!node) return str;
 
-BYTE* dump_cell(BYTE* str, NODE* node) {
 	switch (TYPE(node)) {
 		case ATOM: sprintf(str, "%s#%ld ", str, node->value); break;
 		case PRIM: sprintf(str, "%sP:%ld ", str, node->value); break;
-		case LIST: dump_list(str, node->ref); break;
+		case LIST: sprintf(str, "%s{ ", str); print(str, node->ref); sprintf(str, "%s} ", str); break;
 		case WORD: /* TODO */; break;
 	}
 
-	return str;
-}
-
-BYTE* dump_list(BYTE* str, NODE* list) {
-	sprintf(str, "%s{ ", str);
-	while (list) {
-		dump_cell(str, list);
-		list = NEXT(list);
-	}
-	sprintf(str, "%s} ", str);
+	if (NEXT(node)) print(str, NEXT(node));
 
 	return str;
 }
@@ -56,16 +47,6 @@ CELL length(NODE* list, CELL dir) {
 	if (dir) while (list) { count++; list = list->ref; }
 	else while (list) { count++; list = NEXT(list); }
 	return count;
-}
-
-NODE* reverse(NODE* list, NODE* acc) {
-	if (list) {
-		NODE* tail = NEXT(list);
-		LINK(list, acc);
-		return reverse(tail, list);
-	} else {
-		return acc;
-	}
 }
 
 // CORE
@@ -125,6 +106,16 @@ NODE* clone(NODE** free, NODE* node) {
 		return cons(free, (CELL)clone(free, node->ref), AS(LIST, clone(free, NEXT(node))));
 	} else {
 		return cons(free, node->value, AS(TYPE(node), clone(free, NEXT(node))));
+	}
+}
+
+NODE* reverse(NODE* list, NODE* acc) {
+	if (list) {
+		NODE* tail = NEXT(list);
+		LINK(list, acc);
+		return reverse(tail, list);
+	} else {
+		return acc;
 	}
 }
 
@@ -350,16 +341,16 @@ void incrIP(CTX* ctx) {
 	}
 	while (!ctx->ip && ctx->rstack) {
 		if (TYPE(ctx->rstack) == IP) {
-			ctx->ip = NEXT(ctx->rstack->ref);
+			ctx->ip = ctx->rstack->ref;
 		}
 		ctx->rstack = reclaim(&ctx->fstack, ctx->rstack);
 	}
 }
 
-#define CALL(ctx, dest) \
+#define CALL(ctx, dest, ret) \
 	({ \
-		if (ctx->ip && NEXT(ctx->ip)) { \
-			ctx->rstack = cons(&ctx->fstack, (CELL)ctx->ip, AS(IP, ctx->rstack)); \
+		if (ret) { \
+			ctx->rstack = cons(&ctx->fstack, (CELL)ret, AS(IP, ctx->rstack)); \
 		} \
 		ctx->ip = dest; \
 	})
@@ -379,7 +370,7 @@ NODE* step(CTX* ctx) {
 			case PRIM:
 				r = ctx->ip;
 				((FUNC)(ctx->ip->value))(ctx);
-				if (r == ctx->ip) {
+				if (r == ctx->ip || ctx->ip == 0) {
 					incrIP(ctx);
 				}
 				break;
@@ -405,7 +396,7 @@ void exec_i(CTX* ctx) { /* ( xt -- ) */
 			if (S(ctx)->ref) {
 				NODE* t = S(ctx);
 				S(ctx) = NEXT(S(ctx));
-				CALL(ctx, t->ref);
+				CALL(ctx, t->ref, NEXT(ctx->ip));
 				LINK(t, ctx->rstack);
 				ctx->rstack = t;
 				step(ctx);
@@ -444,6 +435,17 @@ void branch(CTX* ctx) { /* ( b xt_true xt_false -- ) */
 	swap(ctx); 
 	drop(ctx); 
 	exec_i(ctx); 
+}
+
+void ifelse(CTX* ctx) { /* ( b -- ) */
+	UF1(ctx);
+	CELL b = S(ctx)->value;
+	S(ctx) = reclaim(&ctx->fstack, S(ctx));
+	if (b) {
+		CALL(ctx, NEXT(ctx->ip)->ref, NEXT(NEXT(ctx->ip)));
+	} else {
+		ctx->ip = NEXT(NEXT(ctx->ip));
+	}
 }
 
 #endif
