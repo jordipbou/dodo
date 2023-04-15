@@ -1,9 +1,14 @@
+// TODO: l>s main are not opposites!!!!!
+// TODO: I don't like having DUAL as a TYPE, as inner interpreter has to check it when it's
+// just a word as the rest.
+
 #ifndef __DODO__
 #define __DODO__
 
 // DATATYPES
 
 #include <stdint.h>
+#include <string.h>
 
 typedef int8_t BYTE;
 typedef intptr_t CELL;
@@ -22,25 +27,10 @@ typedef struct T_NODE {
 #define AS(type, node)						((NODE*)(((CELL)node) | type))
 #define LINK(node, link)					(node->next = AS(TYPE(node), link))
 
-enum Types { ATOM, PRIM, LIST, WORD };
+enum Types { ATOM, PRIM, LIST, WORD, DUAL };
 enum RTypes { SAVED, IP, DISPOSABLE, HANDLER };
 
-// HELPERS
-
-BYTE* print(BYTE* str, NODE* node) {
-	if (!node) return str;
-
-	switch (TYPE(node)) {
-		case ATOM: sprintf(str, "%s#%ld ", str, node->value); break;
-		case PRIM: sprintf(str, "%sP:%ld ", str, node->value); break;
-		case LIST: sprintf(str, "%s{ ", str); print(str, node->ref); sprintf(str, "%s} ", str); break;
-		case WORD: /* TODO */; break;
-	}
-
-	if (NEXT(node)) print(str, NEXT(node));
-
-	return str;
-}
+// CORE
 
 CELL length(NODE* list, CELL dir) {
 	CELL count = 0;
@@ -48,8 +38,6 @@ CELL length(NODE* list, CELL dir) {
 	else while (list) { count++; list = NEXT(list); }
 	return count;
 }
-
-// CORE
 
 #define ALIGN(addr, bound)				((((CELL)addr) + (bound - 1)) & ~(bound - 1))
 
@@ -122,11 +110,11 @@ NODE* reverse(NODE* list, NODE* acc) {
 // CONTEXT
 
 typedef struct {
-	CELL size, err, compiling;
+	CELL size, err, compiling, ipos;
 	NODE* fstack;
 	NODE* mstack, * rstack, * nstack;
 	NODE** dstack;
-	BYTE* here;
+	BYTE* here, * ibuf;
 	NODE* there;
 	NODE* ip;
 } CTX;
@@ -162,6 +150,10 @@ CTX* init(BYTE* block, CELL size) {
 #define ERR_STACK_UNDERFLOW				-2
 #define ERR_DIVISION_BY_ZERO			-3
 #define ERR_EXPECTED_LIST					-4
+#define ERR_NO_INPUT_SOURCE				-5
+#define ERR_ZERO_LENGTH_NAME			-6
+#define ERR_UNDEFINED_WORD				-7
+#define ERR_END_OF_INPUT_SOURCE		-8
 
 void error(CTX* ctx) {
 	// TODO: Find in return stack error handlers and call them if same type as error
@@ -184,6 +176,8 @@ void error(CTX* ctx) {
 #define UF1(ctx)			ERR(ctx, S(ctx) == 0, ERR_STACK_UNDERFLOW)
 #define UF2(ctx)			ERR(ctx, S(ctx) == 0 || NEXT(S(ctx)) == 0, ERR_STACK_UNDERFLOW)
 #define UF3(ctx)			ERR(ctx, S(ctx) == 0 || NEXT(S(ctx)) == 0 || NEXT(NEXT(S(ctx))) == 0, ERR_STACK_UNDERFLOW)
+
+#define DO(ctx, primitive)		({ primitive(ctx); if (ctx->err < 0) { return; }; })
 
 // STACK PRIMITIVES
 
@@ -324,14 +318,49 @@ void list_to_stack(CTX* ctx) { /* ( { a b c } -- c b a ) */
 	ctx->dstack = &(S(ctx)->ref);
 }
 
-void reverse_list(CTX* ctx) { /* ( { a b c } -- { c b a } ) */
-	UF1(ctx);  ERR(ctx, TYPE(S(ctx)) != LIST, ERR_EXPECTED_LIST);
-	S(ctx)->ref = reverse(S(ctx)->ref, 0);
+void reverse_stack(CTX* ctx) { /* ( a b c -- c b a ) */
+	UF1(ctx);  //ERR(ctx, TYPE(S(ctx)) != LIST, ERR_EXPECTED_LIST);
+	S(ctx) = reverse(S(ctx), 0);
 }
 
 void main_stack(CTX* ctx) { /* ( -- ) */
 	ctx->dstack = &ctx->mstack;
 }
+
+// WORDS
+
+#define NFA(word)		((BYTE*)word->ref->value)
+
+NODE* XT(CTX* ctx, NODE* word) {
+	if (TYPE(word) == DUAL) {
+		if (ctx->compiling) {
+			return NEXT(word->ref)->ref;
+		} else {
+			return NEXT(NEXT(word->ref));
+		}
+	} else {
+		return NEXT(word->ref);
+	}
+}
+
+#define IS_PRIMITIVE(ctx, word)	(length(XT(ctx, word)) == 1 && TYPE(XT(ctx, word)) == PRIM)
+
+#define ADD_PRIMITIVE(ctx, name, func) \
+	ctx->nstack = \
+		cons(&ctx->fstack, (CELL) \
+			cons(&ctx->fstack, (CELL)name, AS(ATOM, \
+			cons(&ctx->fstack, (CELL)func, AS(PRIM, 0)))), \
+		AS(WORD, ctx->nstack));
+
+#define ADD_DUAL_PRIMITIVE(ctx, name, cfunc, ifunc) \
+	ctx->nstack = \
+		cons(&ctx->fstack, (CELL) \
+			cons(&ctx->fstack, (CELL)name, AS(ATOM, \
+			cons(&ctx->fstack, (CELL) \
+				cons(&ctx->fstack, (CELL)cfunc, AS(PRIM, 0)), \
+			AS(LIST, \
+			cons(&ctx->fstack, (CELL)ifunc, AS(PRIM, 0)))))), \
+		AS(DUAL, ctx->nstack));
 
 // INNER INTERPRETER
 
@@ -375,7 +404,8 @@ NODE* step(CTX* ctx) {
 				}
 				break;
 			case WORD:
-				//CALL(ctx, XT(ctx, REF(IP(ctx))));
+			case DUAL:
+				CALL(ctx, XT(ctx, ctx->ip->ref), NEXT(ctx->ip));
 				break;
 		}
 	}
@@ -384,6 +414,7 @@ NODE* step(CTX* ctx) {
 
 void exec_i(CTX* ctx) { /* ( xt -- ) */
 	CELL p;
+	NODE* n;
 	UF1(ctx);
 	switch (TYPE(S(ctx))) {
 		case ATOM: 
@@ -409,11 +440,12 @@ void exec_i(CTX* ctx) { /* ( xt -- ) */
 			S(ctx) = reclaim(&ctx->fstack, S(ctx)); 
 			((FUNC)p)(ctx); 
 			break;
-		case WORD: 
-			//p = IP(ctx);
-			//CALL(ctx, XT(ctx, CAR(TOS(ctx))));
-			//TOS(ctx) = reclaim(ctx, TOS(ctx));
-			//while (step(ctx) != p);
+		case WORD:
+		case DUAL: 
+			n = ctx->ip == 0 ? 0 : NEXT(ctx->ip);
+			CALL(ctx, XT(ctx, S(ctx)->ref), n);
+			S(ctx) = reclaim(&ctx->fstack, S(ctx));
+			while (step(ctx) != n);
 			break;
 	}
 }
@@ -448,4 +480,141 @@ void ifelse(CTX* ctx) { /* ( b -- ) */
 	}
 }
 
+// 
+
+BYTE* print(BYTE* str, NODE* node, CELL follow, CTX* ctx) {
+	if (!node) return str;
+
+	switch (TYPE(node)) {
+		case ATOM: 
+			sprintf(str, "%s#%ld ", str, node->value); 
+			break;
+		case PRIM: 
+			sprintf(str, "%sP:%ld ", str, node->value); 
+			break;
+		case LIST: 
+			sprintf(str, "%s{ ", str); 
+			print(str, node->ref, 1, ctx); 
+			sprintf(str, "%s} ", str); 
+			break;
+		case WORD:
+			sprintf(str, "%sW:%s ", str, NFA(node->ref));
+			break;
+	}
+
+	if (follow && NEXT(node)) print(str, NEXT(node), 1, ctx);
+
+	return str;
+}
+
+void parse_name(CTX* ctx) {
+	ERR(ctx, ctx->ibuf == 0, ERR_NO_INPUT_SOURCE);
+	OF2(ctx);
+	while(*(ctx->ibuf + ctx->ipos) && isspace(*(ctx->ibuf + ctx->ipos))) {
+		ctx->ipos++;
+	}
+	S(ctx) = cons(&ctx->fstack, (CELL)(ctx->ibuf + ctx->ipos), AS(ATOM, S(ctx)));
+	while(*(ctx->ibuf + ctx->ipos) && !isspace(*(ctx->ibuf + ctx->ipos))) {
+		ctx->ipos++;
+	}
+	S(ctx) = cons(&ctx->fstack, (CELL)((ctx->ibuf + ctx->ipos) - S(ctx)->value), AS(ATOM, S(ctx)));
+}
+
+void find_name(CTX* ctx) {
+	UF2(ctx);
+	ERR(ctx, S(ctx)->value == 0, ERR_ZERO_LENGTH_NAME);
+
+	CELL len = S(ctx)->value;
+	BYTE *addr = (BYTE*)(NEXT(S(ctx))->value);
+	S(ctx) = reclaim(&ctx->fstack, reclaim(&ctx->fstack, S(ctx)));
+
+	NODE* word = ctx->nstack;
+	while (word && !(strlen(NFA(word)) == len && !strncmp(NFA(word), addr, len))) {
+		word = NEXT(word);
+	}
+
+	if (word) {
+		if (TYPE(word) == WORD) {
+			S(ctx) = cons(&ctx->fstack, (CELL)word, AS(WORD, S(ctx)));
+		} else if (TYPE(word) == DUAL) {
+			S(ctx) = cons(&ctx->fstack, (CELL)word, AS(DUAL, S(ctx)));
+		}
+	} else {
+		char* endptr;
+		intmax_t n = strtoimax((char*)addr, &endptr, 0);
+		ERR(ctx, n == 0 && endptr == (char*)addr, ERR_UNDEFINED_WORD);
+		S(ctx) = cons(&ctx->fstack, n, AS(ATOM, S(ctx)));
+	}
+}
+
+void lbracket(CTX* ctx) {
+	ctx->compiling = 0;
+}
+
+void rbracket(CTX* ctx) {
+	ctx->compiling = 1;
+}
+
+void postpone(CTX* ctx) {
+	DO(ctx, parse_name);
+	DO(ctx, find_name);
+}
+
+void eval(CTX* ctx, BYTE* str) {
+	ctx->ibuf = str;
+	ctx->ipos = 0;
+	while (!ctx->err) {
+		DO(ctx, parse_name);
+		ERR(ctx, S(ctx)->value == 0, ERR_END_OF_INPUT_SOURCE; drop(ctx); drop(ctx));
+		DO(ctx, find_name);
+		if (TYPE(S(ctx)) == WORD || TYPE(S(ctx)) == DUAL) {
+			if (!ctx->compiling || TYPE(S(ctx)) == DUAL) {
+				exec_i(ctx);
+			}
+		}
+	}
+}
+
+// BOOTSTRAPING
+
+CTX* bootstrap(CTX* ctx) {
+	ADD_PRIMITIVE(ctx, "dup", &duplicate);
+	ADD_PRIMITIVE(ctx, "swap", &swap);
+	ADD_PRIMITIVE(ctx, "drop", &drop);
+	ADD_PRIMITIVE(ctx, "over", &over);
+	ADD_PRIMITIVE(ctx, "rot", &rot);
+
+	ADD_PRIMITIVE(ctx, "+", &add);
+	ADD_PRIMITIVE(ctx, "1+", &incr);
+	ADD_PRIMITIVE(ctx, "-", &sub);
+	ADD_PRIMITIVE(ctx, "1-", &decr);
+	ADD_PRIMITIVE(ctx, "*", &mul);
+	ADD_PRIMITIVE(ctx, "/", &division);
+	ADD_PRIMITIVE(ctx, "%", &mod);
+
+	ADD_PRIMITIVE(ctx, ">", &gt);
+	ADD_PRIMITIVE(ctx, "<", &lt);
+	ADD_PRIMITIVE(ctx, "=", &eq);
+	ADD_PRIMITIVE(ctx, "<>", &neq);
+
+	ADD_PRIMITIVE(ctx, "and", &and);
+	ADD_PRIMITIVE(ctx, "or", &or);
+	ADD_PRIMITIVE(ctx, "invert", &invert);
+
+	ADD_PRIMITIVE(ctx, "{}", &empty);
+	ADD_PRIMITIVE(ctx, "l>s", &list_to_stack);
+	ADD_PRIMITIVE(ctx, "reverse", &reverse_stack);
+	ADD_PRIMITIVE(ctx, "main", &main_stack);
+
+	ADD_PRIMITIVE(ctx, "i", &exec_i);
+	ADD_PRIMITIVE(ctx, "x", &exec_x);
+	ADD_PRIMITIVE(ctx, "branch", &branch);
+	ADD_PRIMITIVE(ctx, "ifelse", &ifelse);
+
+	ADD_PRIMITIVE(ctx, "]", &rbracket);
+	ADD_DUAL_PRIMITIVE(ctx, "[", &lbracket, &lbracket);
+	ADD_PRIMITIVE(ctx, "p\\", &postpone);
+
+	return ctx;
+}
 #endif

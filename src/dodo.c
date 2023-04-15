@@ -53,7 +53,7 @@ void fib(CTX* ctx) {
 	//dump_context(ctx);
 	BYTE buf[255];
 	buf[0] = 0;
-	print(buf, S(ctx));
+	print(buf, S(ctx), 1, ctx);
 	printf("%s\n", buf);
 }
 
@@ -116,15 +116,25 @@ void fibW(CTX* ctx) {
 //	else return n;
 //}
 
+void dump_data_stack(CTX* ctx, NODE* ds) {
+	if (NEXT(ds)) {
+		dump_data_stack(ctx, NEXT(ds));
+	}
+	BYTE buf[255];
+	buf[0] = 0;
+	print(buf, ds, 0, ctx);
+	printf("%s\n", buf);
+}
+
 void main(int argc, char *argv[]) {
 	CELL sz = 30000;
 	BYTE bk[sz];
-	CTX* ctx = init(bk, sz);
-	//CTX* ctx = bootstrap(init(bk, sz));
+	//CTX* ctx = init(bk, sz);
+	CTX* ctx = bootstrap(init(bk, sz));
 
 	//dump_context(ctx);
 
-	fib(ctx);
+	//fib(ctx);
 	//fibW(ctx);
 	//fibN(ctx);
 	//S(ctx) = cons(ctx, 36, AS(ATOM, S(ctx)));
@@ -132,37 +142,41 @@ void main(int argc, char *argv[]) {
 	//printf("%d\n", fibC(36));
 	//printf("%ld\n", A(S(ctx)));
 
-	//FILE *fptr;
-	//BYTE buf[255];
-	//if (argc == 2 || argc == 3) {
-	//	fptr = fopen(argv[1], "r");
-	//	while (fgets(buf, 255, fptr)) {
-	//		TOS(ctx) = cons(ctx, strlen(buf), AS(ATOM, cons(ctx, (CELL)buf, AS(ATOM, TOS(ctx)))));
-	//		evaluate(ctx);
-	//		if (ctx->err != 0 && ctx->err != -10) {
-	//				printf("ERROR: %ld\n", ctx->err);
-	//				dump_context(ctx);
-	//				return;
-	//		}
-	//		ctx->err = 0;
-	//		//dump_context(ctx);
-	//	}
-	//}
+	FILE *fptr;
+	BYTE buf[255];
+	if (argc == 2 || argc == 3) {
+		fptr = fopen(argv[1], "r");
+		while (fgets(buf, 255, fptr)) {
+			eval(ctx, buf);
+			if (ctx->err != 0 && ctx->err != ERR_END_OF_INPUT_SOURCE) {
+					printf("ERROR: %ld\n", ctx->err);
+					//dump_context(ctx);
+					return;
+			}
+			ctx->err = 0;
+			//dump_context(ctx);
+		}
+	}
 
-	//if (argc == 1 || argc == 3) {
-	//	do {
-	//		fgets(buf, 255, stdin);
-	//		TOS(ctx) = cons(ctx, strlen(buf), AS(ATOM, cons(ctx, (CELL)buf, AS(ATOM, TOS(ctx)))));
-	//		evaluate(ctx);
-	//		if (ctx->err != 0 && ctx->err != -10) {
-	//				printf("ERROR: %ld\n", ctx->err);
-	//				dump_context(ctx);
-	//				return;
-	//		}
-	//		ctx->err = 0;
-	//		//dump_context(ctx);
-	//	} while(1);
-	//}
+	if (argc == 1 || argc == 3) {
+		do {
+			printf("IN: ");
+			fgets(buf, 255, stdin);
+			//TOS(ctx) = cons(ctx, strlen(buf), AS(ATOM, cons(ctx, (CELL)buf, AS(ATOM, TOS(ctx)))));
+			eval(ctx, buf);
+			if (ctx->err != 0 && ctx->err != ERR_END_OF_INPUT_SOURCE) {
+					printf("ERROR: %ld\n", ctx->err);
+					//dump_context(ctx);
+					return;
+			}
+			ctx->err = 0;
+			if (length(S(ctx), 0) > 0) {
+				printf("\n--- Data Stack:\n");
+				dump_data_stack(ctx, S(ctx));
+			}
+			//dump_context(ctx);
+		} while(1);
+	}
 
-	//dump_context(ctx);
+	dump_data_stack(ctx, S(ctx));
 }
