@@ -1,6 +1,5 @@
 // TODO: I don't like having DUAL as a TYPE, as inner interpreter has to check it when it's
 // just a word as the rest.
-// TODO: What about using bit fields for nodes next/type?
 
 #ifndef __DODO__
 #define __DODO__
@@ -348,7 +347,7 @@ NODE* XT(CTX* ctx, NODE* word) {
 	}
 }
 
-#define IS_PRIMITIVE(ctx, word)	(length(XT(ctx, word)) == 1 && TYPE(XT(ctx, word)) == PRIM)
+#define IS_PRIMITIVE(ctx, word)	(length(XT(ctx, word), 0) == 1 && TYPE(XT(ctx, word)) == PRIM)
 
 #define ADD_PRIMITIVE(ctx, name, func) \
 	ctx->nstack = \
@@ -476,7 +475,20 @@ void branch(CTX* ctx) { /* ( b xt_true xt_false -- ) */
 
 // 
 
+NODE* find_primitive(CTX* ctx, CELL addr) {
+	NODE* word = ctx->nstack;
+	while (word) {
+		if (length(XT(ctx, word), 0) == 1 && XT(ctx, word)->value == addr) {
+			return word;
+		}
+		word = NEXT(word);
+	}
+	return 0;
+}
+
 BYTE* print(BYTE* str, NODE* node, CELL follow, CTX* ctx) {
+	NODE* word;
+
 	if (!node) return str;
 
 	switch (TYPE(node)) {
@@ -484,6 +496,12 @@ BYTE* print(BYTE* str, NODE* node, CELL follow, CTX* ctx) {
 			sprintf(str, "%s#%ld ", str, node->value); 
 			break;
 		case PRIM: 
+			if (ctx != 0) {
+				if ((word = find_primitive(ctx, node->value)) != 0) {
+					sprintf(str, "%sP:%s ", str, NFA(word));
+					break;
+				}
+			}
 			sprintf(str, "%sP:%ld ", str, node->value); 
 			break;
 		case LIST: 
@@ -554,6 +572,14 @@ void postpone(CTX* ctx) {
 	DO(ctx, find_name);
 }
 
+void compile(CTX* ctx) {
+	if (TYPE(S(ctx)) == WORD && IS_PRIMITIVE(ctx, S(ctx)->ref)) {
+		NODE* word = S(ctx)->ref;
+		S(ctx)->next = AS(PRIM, NEXT(S(ctx)));
+		S(ctx)->value = XT(ctx, word)->value;
+	}
+}
+
 void eval(CTX* ctx, BYTE* str) {
 	ctx->ibuf = str;
 	ctx->ipos = 0;
@@ -564,6 +590,8 @@ void eval(CTX* ctx, BYTE* str) {
 		if (TYPE(S(ctx)) == WORD || TYPE(S(ctx)) == DUAL) {
 			if (!ctx->compiling || TYPE(S(ctx)) == DUAL) {
 				exec_i(ctx);
+			} else {
+				compile(ctx);
 			}
 		}
 	}
