@@ -681,67 +681,49 @@ void test_BIT_invert() {
 
 // LISTS
 
-void test_LISTS_empty() {
-	BYTE buf[255];
-	CELL size = 512;
-	BYTE block[size];
-	CTX* ctx = init(block, size);
-
-	empty(ctx);
-
-	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ } ", print(buf, S(ctx), 1, 0));
-}
-
-void test_LISTS_list_to_stack() {
-	BYTE buf[255];
-	CELL size = 512;
-	BYTE block[size];
-	CTX* ctx = init(block, size);
-
-	list_to_stack(ctx);
-
-	TEST_ASSERT_EQUAL_INT(ERR_STACK_UNDERFLOW, ctx->err);
-
-	ctx->err = 0;
-	S(ctx) = cons(&ctx->fstack, 0, AS(ATOM, 0));
-	list_to_stack(ctx);
-
-	TEST_ASSERT_EQUAL_INT(ERR_EXPECTED_LIST, ctx->err);
-}
-
-void test_LISTS_list_to_stack_2() {
-	BYTE buf[255];
-	CELL size = 512;
-	BYTE block[size];
-	CTX* ctx = init(block, size);
-
-	empty(ctx);
-	list_to_stack(ctx);
-
-	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("", print(buf, S(ctx), 1, 0));
-}
-
-void test_LISTS_list_to_stack_3() {
-	BYTE buf[255];
-	CELL size = 512;
-	BYTE block[size];
-	CTX* ctx = init(block, size);
-
-	S(ctx) = 
-		cons(&ctx->fstack, (CELL)
-			cons(&ctx->fstack, 7, AS(ATOM, 
-			cons(&ctx->fstack, 11, AS(ATOM, 0)))), 
-		AS(LIST, 0));
-
-	list_to_stack(ctx);
-
-	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("#7 #11 ", print(buf, S(ctx), 1, 0));
-}
-
-//void test_LISTS_reverse_list() {
+//void test_LISTS_empty() {
+//	BYTE buf[255];
+//	CELL size = 512;
+//	BYTE block[size];
+//	CTX* ctx = init(block, size);
+//
+//	empty(ctx);
+//
+//	buf[0] = 0;
+//	TEST_ASSERT_EQUAL_STRING("{ } ", print(buf, S(ctx), 1, 0));
+//}
+//
+//void test_LISTS_list_to_stack() {
+//	BYTE buf[255];
+//	CELL size = 512;
+//	BYTE block[size];
+//	CTX* ctx = init(block, size);
+//
+//	list_to_stack(ctx);
+//
+//	TEST_ASSERT_EQUAL_INT(ERR_STACK_UNDERFLOW, ctx->err);
+//
+//	ctx->err = 0;
+//	S(ctx) = cons(&ctx->fstack, 0, AS(ATOM, 0));
+//	list_to_stack(ctx);
+//
+//	TEST_ASSERT_EQUAL_INT(ERR_EXPECTED_LIST, ctx->err);
+//}
+//
+//void test_LISTS_list_to_stack_2() {
+//	BYTE buf[255];
+//	CELL size = 512;
+//	BYTE block[size];
+//	CTX* ctx = init(block, size);
+//
+//	empty(ctx);
+//	list_to_stack(ctx);
+//
+//	buf[0] = 0;
+//	TEST_ASSERT_EQUAL_STRING("", print(buf, S(ctx), 1, 0));
+//}
+//
+//void test_LISTS_list_to_stack_3() {
 //	BYTE buf[255];
 //	CELL size = 512;
 //	BYTE block[size];
@@ -749,37 +731,55 @@ void test_LISTS_list_to_stack_3() {
 //
 //	S(ctx) = 
 //		cons(&ctx->fstack, (CELL)
-//			cons(&ctx->fstack, 7, AS(ATOM,
-//			cons(&ctx->fstack, 11, AS(ATOM,
-//			cons(&ctx->fstack, 13, AS(ATOM, 0)))))),
+//			cons(&ctx->fstack, 7, AS(ATOM, 
+//			cons(&ctx->fstack, 11, AS(ATOM, 0)))), 
 //		AS(LIST, 0));
 //
-//	reverse_list(ctx);
+//	list_to_stack(ctx);
 //
 //	buf[0] = 0;
-//	TEST_ASSERT_EQUAL_STRING("{ #13 #11 #7 } ", print(buf, S(ctx), 1, 0));
+//	TEST_ASSERT_EQUAL_STRING("#7 #11 ", print(buf, S(ctx), 1, 0));
 //}
-
-void test_LISTS_main_stack() {
-	BYTE buf[255];
-	CELL size = 512;
-	BYTE block[size];
-	CTX* ctx = init(block, size);
-
-	S(ctx) =
-		cons(&ctx->fstack, (CELL)
-			cons(&ctx->fstack, 7, AS(ATOM,
-			cons(&ctx->fstack, 11, AS(ATOM, 0)))),
-		AS(LIST,
-		cons(&ctx->fstack, 13, AS(ATOM, 0))));
-
-	list_to_stack(ctx);
-	S(ctx) = cons(&ctx->fstack, 17, AS(ATOM, S(ctx)));
-	main_stack(ctx);
-
-	buf[0] = 0;
-	TEST_ASSERT_EQUAL_STRING("{ #17 #7 #11 } #13 ", print(buf, S(ctx), 1, 0));
-}
+//
+////void test_LISTS_reverse_list() {
+////	BYTE buf[255];
+////	CELL size = 512;
+////	BYTE block[size];
+////	CTX* ctx = init(block, size);
+////
+////	S(ctx) = 
+////		cons(&ctx->fstack, (CELL)
+////			cons(&ctx->fstack, 7, AS(ATOM,
+////			cons(&ctx->fstack, 11, AS(ATOM,
+////			cons(&ctx->fstack, 13, AS(ATOM, 0)))))),
+////		AS(LIST, 0));
+////
+////	reverse_list(ctx);
+////
+////	buf[0] = 0;
+////	TEST_ASSERT_EQUAL_STRING("{ #13 #11 #7 } ", print(buf, S(ctx), 1, 0));
+////}
+//
+//void test_LISTS_main_stack() {
+//	BYTE buf[255];
+//	CELL size = 512;
+//	BYTE block[size];
+//	CTX* ctx = init(block, size);
+//
+//	S(ctx) =
+//		cons(&ctx->fstack, (CELL)
+//			cons(&ctx->fstack, 7, AS(ATOM,
+//			cons(&ctx->fstack, 11, AS(ATOM, 0)))),
+//		AS(LIST,
+//		cons(&ctx->fstack, 13, AS(ATOM, 0))));
+//
+//	list_to_stack(ctx);
+//	S(ctx) = cons(&ctx->fstack, 17, AS(ATOM, S(ctx)));
+//	main_stack(ctx);
+//
+//	buf[0] = 0;
+//	TEST_ASSERT_EQUAL_STRING("{ { #17 #7 #11 } #13 } ", print(buf, S(ctx), 1, 0));
+//}
 
 // INNER INTERPRETER
 
@@ -1023,12 +1023,12 @@ int main() {
 	RUN_TEST(test_BIT_invert);
 
 	// LISTS
-	RUN_TEST(test_LISTS_empty);
-	RUN_TEST(test_LISTS_list_to_stack);
-	RUN_TEST(test_LISTS_list_to_stack_2);
-	RUN_TEST(test_LISTS_list_to_stack_3);
+	//RUN_TEST(test_LISTS_empty);
+	//RUN_TEST(test_LISTS_list_to_stack);
+	//RUN_TEST(test_LISTS_list_to_stack_2);
+	//RUN_TEST(test_LISTS_list_to_stack_3);
 	//RUN_TEST(test_LISTS_reverse_list);
-	RUN_TEST(test_LISTS_main_stack);
+	//RUN_TEST(test_LISTS_main_stack);
 
 	// INNER INTERPRETER
 	RUN_TEST(test_EXEC_incrIP_1);

@@ -1,8 +1,9 @@
 30
-{} l>s ] swap dup 1 > [
-	{} l>s ] 1 - dup 1 - rot x rot rot x rot + [ reverse main l>s
-	{}
+stack 
+	] swap dup 1 > [
+	stack	] 1 - dup 1 - rot x rot rot x rot + [ reverse	unstack
+	stack unstack
 	] branch [
-reverse main
+reverse unstack
 x
 swap drop

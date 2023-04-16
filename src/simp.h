@@ -1,6 +1,6 @@
-// TODO: l>s main are not opposites!!!!!
 // TODO: I don't like having DUAL as a TYPE, as inner interpreter has to check it when it's
 // just a word as the rest.
+// TODO: What about using bit fields for nodes next/type?
 
 #ifndef __DODO__
 #define __DODO__
@@ -131,8 +131,9 @@ CTX* init(BYTE* block, CELL size) {
 	ctx->size = size;
 
 	ctx->fstack = init_free(block, size, sizeof(CTX));
-	ctx->mstack = ctx->rstack = ctx->nstack = 0;
-	ctx->dstack = &ctx->mstack;
+	ctx->mstack = cons(&ctx->fstack, 0, AS(LIST, 0));
+	ctx->rstack = ctx->nstack = 0;
+	ctx->dstack = &ctx->mstack->ref;
 
 	ctx->here = BOTTOM(ctx);
 	ctx->there = (NODE*)ALIGN(ctx->here, sizeof(NODE));
@@ -308,23 +309,27 @@ void invert(CTX* ctx) { /* ( n -- n:(inverted bits) ) */
 
 // LIST PRIMITIVES
 
-void empty(CTX* ctx) { /* ( -- {} ) */
-	OF1(ctx);
-	S(ctx) = cons(&ctx->fstack, 0, AS(LIST, S(ctx)));
-}
-
-void list_to_stack(CTX* ctx) { /* ( { a b c } -- c b a ) */
-	UF1(ctx); ERR(ctx, TYPE(S(ctx)) != LIST, ERR_EXPECTED_LIST);
-	ctx->dstack = &(S(ctx)->ref);
-}
-
 void reverse_stack(CTX* ctx) { /* ( a b c -- c b a ) */
-	UF1(ctx);  //ERR(ctx, TYPE(S(ctx)) != LIST, ERR_EXPECTED_LIST);
+	UF1(ctx);
 	S(ctx) = reverse(S(ctx), 0);
 }
 
-void main_stack(CTX* ctx) { /* ( -- ) */
-	ctx->dstack = &ctx->mstack;
+void stack(CTX* ctx) {
+	ctx->mstack = cons(&ctx->fstack, 0, AS(LIST, ctx->mstack));
+	ctx->dstack = &ctx->mstack->ref;
+}
+
+void unstack(CTX* ctx) {
+	if (length(ctx->mstack, 0) > 1) {
+		NODE* t = ctx->mstack;
+		NODE* s = NEXT(ctx->mstack);
+		LINK(t, s->ref);
+		s->ref = t;
+		ctx->mstack = s;
+		ctx->dstack = &ctx->mstack->ref;
+	} else {
+		S(ctx) = cons(&ctx->fstack, (CELL)S(ctx), AS(LIST, 0));
+	}
 }
 
 // WORDS
@@ -469,17 +474,6 @@ void branch(CTX* ctx) { /* ( b xt_true xt_false -- ) */
 	exec_i(ctx); 
 }
 
-void ifelse(CTX* ctx) { /* ( b -- ) */
-	UF1(ctx);
-	CELL b = S(ctx)->value;
-	S(ctx) = reclaim(&ctx->fstack, S(ctx));
-	if (b) {
-		CALL(ctx, NEXT(ctx->ip)->ref, NEXT(NEXT(ctx->ip)));
-	} else {
-		ctx->ip = NEXT(NEXT(ctx->ip));
-	}
-}
-
 // 
 
 BYTE* print(BYTE* str, NODE* node, CELL follow, CTX* ctx) {
@@ -601,15 +595,13 @@ CTX* bootstrap(CTX* ctx) {
 	ADD_PRIMITIVE(ctx, "or", &or);
 	ADD_PRIMITIVE(ctx, "invert", &invert);
 
-	ADD_PRIMITIVE(ctx, "{}", &empty);
-	ADD_PRIMITIVE(ctx, "l>s", &list_to_stack);
 	ADD_PRIMITIVE(ctx, "reverse", &reverse_stack);
-	ADD_PRIMITIVE(ctx, "main", &main_stack);
+	ADD_PRIMITIVE(ctx, "stack", &stack);
+	ADD_PRIMITIVE(ctx, "unstack", &unstack);
 
 	ADD_PRIMITIVE(ctx, "i", &exec_i);
 	ADD_PRIMITIVE(ctx, "x", &exec_x);
 	ADD_PRIMITIVE(ctx, "branch", &branch);
-	ADD_PRIMITIVE(ctx, "ifelse", &ifelse);
 
 	ADD_PRIMITIVE(ctx, "]", &rbracket);
 	ADD_DUAL_PRIMITIVE(ctx, "[", &lbracket, &lbracket);
@@ -617,4 +609,5 @@ CTX* bootstrap(CTX* ctx) {
 
 	return ctx;
 }
+
 #endif
