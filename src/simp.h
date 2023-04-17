@@ -1,6 +1,3 @@
-// TODO: I don't like having DUAL as a TYPE, as inner interpreter has to check it when it's
-// just a word as the rest.
-
 #ifndef __DODO__
 #define __DODO__
 
@@ -11,23 +8,52 @@
 
 typedef int8_t BYTE;
 typedef intptr_t CELL;
-
-typedef struct T_NODE {
-	union {
-		CELL value;
-		struct T_NODE* ref;
-	};
-	struct T_NODE* next;
-} NODE;
+#if INTPTR_MAX == INT64_MAX
+	typedef struct T_NODE {
+		union {
+			CELL value;
+			struct T_NODE* ref;
+			struct {
+				int16_t type;
+				int16_t size;
+				int32_t length;
+			};
+		};
+		struct T_NODE* next;
+		CELL data[];
+	} NODE;
+#else
+	typedef struct T_NODE {
+		union {
+			CELL value;
+			struct T_NODE* ref;
+			struct {
+				int8_t type;
+				int8_t size;
+				int16_t length;
+			};
+		};
+		struct T_NODE* next;
+		CELL data[];
+	} NODE;
+#endif
 
 #define NEXT(node)								((NODE*)(((CELL)(node)->next) & -8))
 #define TYPE(node)								(((CELL)node->next) & 7)
 
-#define AS(type, node)						((NODE*)(((CELL)node) | type))
-#define LINK(node, link)					(node->next = AS(TYPE(node), link))
+#define REF(node)									((NODE*)(((CELL)(node)->ref) & -8))
+#define SUBTYPE(node)							(((CELL)node->ref) & 7)
 
-enum Types { ATOM, PRIM, LIST, WORD, DUAL };
+#define AS(type, node)						((NODE*)(((CELL)(node)) | type))
+NODE* LINK(NODE* node, NODE* link) { 
+	node->next = AS(TYPE(node), link); 
+	return node; 
+}
+
+enum Types { ATOM, PRIM, LIST, WORD, ARRAY, PARRAY };
 enum RTypes { SAVED, IP, DISPOSABLE, HANDLER };
+enum WTypes { DEF, IMM };
+enum ATypes	{ CARRAY, BARRAY, STRING };
 
 // CORE
 
@@ -54,45 +80,87 @@ NODE* init_free(BYTE* block, CELL size, CELL start) {
 	return top;
 }
 
+NODE* ncons(NODE** free, CELL n, NODE* next) {
+	NODE** pred = free;
+	NODE* node = *free;
+	while (node) {
+		CELL t = n;
+		while (--t) {
+			if (node->ref == (node + 1) || node->ref == 0) {
+				node = node->next;
+			} else {
+				break;
+			}
+		}
+		if (t == 0) {
+			*pred = NEXT(node);
+			(*pred)->ref = 0;
+			node->next = next;
+			node->size = n - 1;
+			node->length = 0;
+			return node;
+		}
+		pred = &node;
+		node = node->next;
+	}
+}
+
 NODE* cons(NODE** free, CELL value, NODE* next) {
 	NODE* node;
 
 	if (*free == 0) return 0;
 
-	node = *free;
-	*free = NEXT(*free);
-	(*free)->ref = 0;
-	node->value = value;
-	node->next = next;
+	node = ncons(free, 1, next);
+	if (node) {
+		node->value = value;
+	}
 
 	return node;
 }
 
 NODE* reclaim(NODE** free, NODE* node) {
-	NODE* tail;
+	CELL nodes = 1;
+	NODE* tail = NEXT(node);
 
-	if (!node) return 0;
 	if (TYPE(node) == LIST) {
 		while (node->ref) {
 			node->ref = reclaim(free, node->ref);
 		}
 	}
 
-	tail = NEXT(node);
-	node->next = *free;
-	node->value = 0;
-	*free = node;
-	NEXT(*free)->ref = *free;
+	if (TYPE(node) == ARRAY || TYPE(node) == PARRAY) {
+		nodes = node->size + 1;
+	}
+
+	while (nodes) {
+		node->next = *free;
+		node->ref = 0;
+		(*free)->ref = node;
+		*free = node;
+		node++;
+		nodes--;
+	}
 
 	return tail;
 }
 
-NODE* clone(NODE** free, NODE* node) {
+NODE* clone(NODE** free, NODE* node, CELL follow) {
+	CELL i;
 	if (!node) return 0;
 	if (TYPE(node) == LIST) {
-		return cons(free, (CELL)clone(free, node->ref), AS(LIST, clone(free, NEXT(node))));
+		return cons(free, (CELL)clone(free, node->ref, 1), AS(LIST, follow ? clone(free, NEXT(node), 1) : 0));
 	} else {
-		return cons(free, node->value, AS(TYPE(node), clone(free, NEXT(node))));
+		if (TYPE(node) == ARRAY || TYPE(node) == PARRAY) {
+			NODE* n = ncons(free, node->size + 1, AS(TYPE(node), follow ? clone(free, NEXT(node), 1) : 0));
+			n->type = node->type;
+			n->length = node->length;
+			for (i = 0; i < (2*node->size); i++) {
+				n->data[i] = node->data[i];
+			}
+			return n;
+		} else {
+			return cons(free, node->value, AS(TYPE(node), follow ? clone(free, NEXT(node), 1) : 0));	
+		}
 	}
 }
 
@@ -183,11 +251,7 @@ void error(CTX* ctx) {
 
 void duplicate(CTX* ctx) { /* ( n -- n n ) */
 	UF1(ctx);
-	if (TYPE(S(ctx)) == LIST) {
-		S(ctx) = cons(&ctx->fstack, (CELL)clone(&ctx->fstack, S(ctx)->ref), AS(LIST, S(ctx)));
-	} else {
-		S(ctx) = cons(&ctx->fstack, S(ctx)->value, AS(TYPE(S(ctx)), S(ctx)));
-	}
+	S(ctx) = LINK(clone(&ctx->fstack, S(ctx), 0), S(ctx));
 }
 
 void swap(CTX* ctx) {	/* ( n2 n1 -- n1 n2 ) */
@@ -204,11 +268,7 @@ void drop(CTX* ctx) { /* ( n -- ) */
 
 void over(CTX* ctx) { /* ( n2 n1 -- n2 n1 n2 ) */
 	UF2(ctx); OF1(ctx);
-	if (TYPE(NEXT(S(ctx))) == LIST) {
-		S(ctx) = cons(&ctx->fstack, (CELL)clone(&ctx->fstack, NEXT(S(ctx))->ref), AS(LIST, S(ctx)));
-	} else {
-		S(ctx) = cons(&ctx->fstack, NEXT(S(ctx))->value, AS(TYPE(NEXT(S(ctx))), S(ctx)));
-	}
+	S(ctx) = LINK(clone(&ctx->fstack, NEXT(S(ctx)), 0), S(ctx));
 }
 
 void rot(CTX* ctx) { /* ( n3 n2 n1 -- n1 n3 n2 ) */
@@ -333,38 +393,18 @@ void unstack(CTX* ctx) {
 
 // WORDS
 
-#define NFA(word)		((BYTE*)word->ref->value)
+#define NFA(word)							((BYTE*)REF(word)->value)
+#define XT(word)							(NEXT(REF(word)))
 
-NODE* XT(CTX* ctx, NODE* word) {
-	if (TYPE(word) == DUAL) {
-		if (ctx->compiling) {
-			return NEXT(word->ref)->ref;
-		} else {
-			return NEXT(NEXT(word->ref));
-		}
-	} else {
-		return NEXT(word->ref);
-	}
-}
+#define IS_PRIMITIVE(word)		(TYPE(word) == WORD && length(XT(word), 0) == 1 && TYPE(XT(word)) == PRIM)
+#define IS_IMMEDIATE(word)		(TYPE(word) == WORD && SUBTYPE(word) == IMM)
 
-#define IS_PRIMITIVE(ctx, word)	(length(XT(ctx, word), 0) == 1 && TYPE(XT(ctx, word)) == PRIM)
-
-#define ADD_PRIMITIVE(ctx, name, func) \
+#define ADD_PRIMITIVE(ctx, name, func, imm) \
 	ctx->nstack = \
-		cons(&ctx->fstack, (CELL) \
+		cons(&ctx->fstack, (CELL)AS(imm, \
 			cons(&ctx->fstack, (CELL)name, AS(ATOM, \
-			cons(&ctx->fstack, (CELL)func, AS(PRIM, 0)))), \
+			cons(&ctx->fstack, (CELL)func, AS(PRIM, 0))))), \
 		AS(WORD, ctx->nstack));
-
-#define ADD_DUAL_PRIMITIVE(ctx, name, cfunc, ifunc) \
-	ctx->nstack = \
-		cons(&ctx->fstack, (CELL) \
-			cons(&ctx->fstack, (CELL)name, AS(ATOM, \
-			cons(&ctx->fstack, (CELL) \
-				cons(&ctx->fstack, (CELL)cfunc, AS(PRIM, 0)), \
-			AS(LIST, \
-			cons(&ctx->fstack, (CELL)ifunc, AS(PRIM, 0)))))), \
-		AS(DUAL, ctx->nstack));
 
 // INNER INTERPRETER
 
@@ -397,7 +437,7 @@ NODE* step(CTX* ctx) {
 				incrIP(ctx);
 				break;
 			case LIST:
-				S(ctx) = cons(&ctx->fstack, (CELL)clone(&ctx->fstack, ctx->ip->ref), AS(LIST, S(ctx)));
+				S(ctx) = LINK(clone(&ctx->fstack, ctx->ip, 0), S(ctx));
 				incrIP(ctx);
 				break;
 			case PRIM:
@@ -408,8 +448,7 @@ NODE* step(CTX* ctx) {
 				}
 				break;
 			case WORD:
-			case DUAL:
-				CALL(ctx, XT(ctx, ctx->ip->ref), NEXT(ctx->ip));
+				CALL(ctx, XT(ctx->ip->ref), NEXT(ctx->ip));
 				break;
 		}
 	}
@@ -445,9 +484,8 @@ void exec_i(CTX* ctx) { /* ( xt -- ) */
 			((FUNC)p)(ctx); 
 			break;
 		case WORD:
-		case DUAL: 
 			n = ctx->ip == 0 ? 0 : NEXT(ctx->ip);
-			CALL(ctx, XT(ctx, S(ctx)->ref), n);
+			CALL(ctx, XT(S(ctx)->ref), n);
 			S(ctx) = reclaim(&ctx->fstack, S(ctx));
 			while (step(ctx) != n);
 			break;
@@ -478,7 +516,7 @@ void branch(CTX* ctx) { /* ( b xt_true xt_false -- ) */
 NODE* find_primitive(CTX* ctx, CELL addr) {
 	NODE* word = ctx->nstack;
 	while (word) {
-		if (length(XT(ctx, word), 0) == 1 && XT(ctx, word)->value == addr) {
+		if (IS_PRIMITIVE(word) && XT(word)->value == addr) {
 			return word;
 		}
 		word = NEXT(word);
@@ -512,6 +550,16 @@ BYTE* print(BYTE* str, NODE* node, CELL follow, CTX* ctx) {
 		case WORD:
 			sprintf(str, "%sW:%s ", str, NFA(node->ref));
 			break;
+		case ARRAY:
+			switch (node->type) {
+				case CARRAY:
+					break;
+				case BARRAY:
+					break;
+				case STRING:
+					sprintf(str, "%s\"%.*s\" ", str, node->length, (BYTE*)(node->data));
+					break;
+			}
 	}
 
 	if (follow && NEXT(node)) print(str, NEXT(node), 1, ctx);
@@ -548,8 +596,6 @@ void find_name(CTX* ctx) {
 	if (word) {
 		if (TYPE(word) == WORD) {
 			S(ctx) = cons(&ctx->fstack, (CELL)word, AS(WORD, S(ctx)));
-		} else if (TYPE(word) == DUAL) {
-			S(ctx) = cons(&ctx->fstack, (CELL)word, AS(DUAL, S(ctx)));
 		}
 	} else {
 		char* endptr;
@@ -573,10 +619,10 @@ void postpone(CTX* ctx) {
 }
 
 void compile(CTX* ctx) {
-	if (TYPE(S(ctx)) == WORD && IS_PRIMITIVE(ctx, S(ctx)->ref)) {
+	if (IS_PRIMITIVE(S(ctx)->ref)) {
 		NODE* word = S(ctx)->ref;
 		S(ctx)->next = AS(PRIM, NEXT(S(ctx)));
-		S(ctx)->value = XT(ctx, word)->value;
+		S(ctx)->value = XT(word)->value;
 	}
 }
 
@@ -587,8 +633,8 @@ void eval(CTX* ctx, BYTE* str) {
 		DO(ctx, parse_name);
 		ERR(ctx, S(ctx)->value == 0, ERR_END_OF_INPUT_SOURCE; drop(ctx); drop(ctx));
 		DO(ctx, find_name);
-		if (TYPE(S(ctx)) == WORD || TYPE(S(ctx)) == DUAL) {
-			if (!ctx->compiling || TYPE(S(ctx)) == DUAL) {
+		if (TYPE(S(ctx)) == WORD) {
+			if (!ctx->compiling || SUBTYPE(S(ctx)->ref) == IMM) {
 				exec_i(ctx);
 			} else {
 				compile(ctx);
@@ -597,43 +643,63 @@ void eval(CTX* ctx, BYTE* str) {
 	}
 }
 
+// STRINGS
+
+void string_literal(CTX* ctx) {
+	CELL len = 0;
+	CELL pos = ++ctx->ipos;
+	while(*(ctx->ibuf + pos) && *(ctx->ibuf + pos) != '"') {
+		len++;
+		pos++;
+	}
+	CELL size = (len / sizeof(NODE)) + ((len % sizeof(NODE)) == 0 ? 0 : 1);
+	S(ctx) = ncons(&ctx->fstack, size + 1, AS(ARRAY, S(ctx)));
+	S(ctx)->type = STRING;
+	S(ctx)->size = size;
+	S(ctx)->length = len;
+	memcpy(S(ctx)->data, ctx->ibuf + ctx->ipos, len);
+	ctx->ipos = pos + 1;
+}
+
 // BOOTSTRAPING
 
 CTX* bootstrap(CTX* ctx) {
-	ADD_PRIMITIVE(ctx, "dup", &duplicate);
-	ADD_PRIMITIVE(ctx, "swap", &swap);
-	ADD_PRIMITIVE(ctx, "drop", &drop);
-	ADD_PRIMITIVE(ctx, "over", &over);
-	ADD_PRIMITIVE(ctx, "rot", &rot);
+	ADD_PRIMITIVE(ctx, "dup", &duplicate, DEF);
+	ADD_PRIMITIVE(ctx, "swap", &swap, DEF);
+	ADD_PRIMITIVE(ctx, "drop", &drop, DEF);
+	ADD_PRIMITIVE(ctx, "over", &over, DEF);
+	ADD_PRIMITIVE(ctx, "rot", &rot, DEF);
 
-	ADD_PRIMITIVE(ctx, "+", &add);
-	ADD_PRIMITIVE(ctx, "1+", &incr);
-	ADD_PRIMITIVE(ctx, "-", &sub);
-	ADD_PRIMITIVE(ctx, "1-", &decr);
-	ADD_PRIMITIVE(ctx, "*", &mul);
-	ADD_PRIMITIVE(ctx, "/", &division);
-	ADD_PRIMITIVE(ctx, "%", &mod);
+	ADD_PRIMITIVE(ctx, "+", &add, DEF);
+	ADD_PRIMITIVE(ctx, "1+", &incr, DEF);
+	ADD_PRIMITIVE(ctx, "-", &sub, DEF);
+	ADD_PRIMITIVE(ctx, "1-", &decr, DEF);
+	ADD_PRIMITIVE(ctx, "*", &mul, DEF);
+	ADD_PRIMITIVE(ctx, "/", &division, DEF);
+	ADD_PRIMITIVE(ctx, "%", &mod, DEF);
 
-	ADD_PRIMITIVE(ctx, ">", &gt);
-	ADD_PRIMITIVE(ctx, "<", &lt);
-	ADD_PRIMITIVE(ctx, "=", &eq);
-	ADD_PRIMITIVE(ctx, "<>", &neq);
+	ADD_PRIMITIVE(ctx, ">", &gt, DEF);
+	ADD_PRIMITIVE(ctx, "<", &lt, DEF);
+	ADD_PRIMITIVE(ctx, "=", &eq, DEF);
+	ADD_PRIMITIVE(ctx, "<>", &neq, DEF);
 
-	ADD_PRIMITIVE(ctx, "and", &and);
-	ADD_PRIMITIVE(ctx, "or", &or);
-	ADD_PRIMITIVE(ctx, "invert", &invert);
+	ADD_PRIMITIVE(ctx, "and", &and, DEF);
+	ADD_PRIMITIVE(ctx, "or", &or, DEF);
+	ADD_PRIMITIVE(ctx, "invert", &invert, DEF);
 
-	ADD_PRIMITIVE(ctx, "reverse", &reverse_stack);
-	ADD_PRIMITIVE(ctx, "stack", &stack);
-	ADD_PRIMITIVE(ctx, "unstack", &unstack);
+	ADD_PRIMITIVE(ctx, "reverse", &reverse_stack, DEF);
+	ADD_PRIMITIVE(ctx, "stack", &stack, DEF);
+	ADD_PRIMITIVE(ctx, "unstack", &unstack, DEF);
 
-	ADD_PRIMITIVE(ctx, "i", &exec_i);
-	ADD_PRIMITIVE(ctx, "x", &exec_x);
-	ADD_PRIMITIVE(ctx, "branch", &branch);
+	ADD_PRIMITIVE(ctx, "i", &exec_i, DEF);
+	ADD_PRIMITIVE(ctx, "x", &exec_x, DEF);
+	ADD_PRIMITIVE(ctx, "branch", &branch, DEF);
 
-	ADD_PRIMITIVE(ctx, "]", &rbracket);
-	ADD_DUAL_PRIMITIVE(ctx, "[", &lbracket, &lbracket);
-	ADD_PRIMITIVE(ctx, "p\\", &postpone);
+	ADD_PRIMITIVE(ctx, "]", &rbracket, DEF);
+	ADD_PRIMITIVE(ctx, "[", &lbracket, IMM);
+	ADD_PRIMITIVE(ctx, "postpone", &postpone, IMM);
+
+	ADD_PRIMITIVE(ctx, "\"", &string_literal, DEF);
 
 	return ctx;
 }

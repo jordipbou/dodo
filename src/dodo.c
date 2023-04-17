@@ -125,7 +125,8 @@ void main(int argc, char *argv[]) {
 
 	if (argc == 1 || argc == 3) {
 		do {
-			printf("IN: ");
+			//printf("IN: ");
+			printf("[%ld] IN: ", length(ctx->fstack, 0));
 			fgets(buf, 255, stdin);
 			//TOS(ctx) = cons(ctx, strlen(buf), AS(ATOM, cons(ctx, (CELL)buf, AS(ATOM, TOS(ctx)))));
 			eval(ctx, buf);
