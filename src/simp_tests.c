@@ -78,7 +78,7 @@ void test_CORE_cons() {
 }
 
 void test_CORE_cons_2() {
-	CELL size = 16*2*sizeof(CELL);
+	CELL size = 16*sizeof(NODE);
 	BYTE block[size];
 
 	NODE* free = init_free(block, size, 0);
@@ -118,6 +118,58 @@ void test_CORE_cons_2() {
 	TEST_ASSERT_EQUAL_INT(1, length(free, 0));
 	TEST_ASSERT_EQUAL_INT(1, length(last, 1));
 }
+
+void test_CORE_cons_3() {
+	CELL size = 10*sizeof(NODE);
+	BYTE block[size];
+
+	NODE* free = init_free(block, size, 0);
+	NODE* saved_free = free;
+	NODE* last = (NODE*)block;
+
+	NODE* n1 = free;
+	NODE* n2 = free - 1;
+	NODE* n3 = free - 2;
+	NODE* n4 = free - 3;
+	NODE* n5 = free - 4;
+	NODE* n6 = free - 5;
+	NODE* n7 = free - 6;
+	NODE* n8 = free - 7;
+	NODE* n9 = free - 8;
+	NODE* n10 = free - 9;
+
+	NODE* n = ncons(&free, 4, 0);
+
+	TEST_ASSERT_EQUAL_INT(3, n->size);
+	TEST_ASSERT_EQUAL_PTR(n4, n);
+	TEST_ASSERT_EQUAL_PTR(n3, &n->data[0]);
+	TEST_ASSERT_EQUAL_INT((((CELL)n3) + sizeof(CELL)), &n->data[1]);
+	TEST_ASSERT_EQUAL_PTR(n2, &n->data[2]);
+	TEST_ASSERT_EQUAL_INT((((CELL)n2) + sizeof(CELL)), &n->data[3]);
+	TEST_ASSERT_EQUAL_PTR(n1, &n->data[4]);
+	TEST_ASSERT_EQUAL_INT((((CELL)n1) + sizeof(CELL)), &n->data[5]);
+
+	CELL a[6] = { 7, 11, 13, 17, 19, 23 };
+	memcpy(n->data, a, 6*sizeof(CELL));
+	TEST_ASSERT_EQUAL_INT(7, n->data[0]);
+	TEST_ASSERT_EQUAL_INT(11, n->data[1]);
+	TEST_ASSERT_EQUAL_INT(13, n->data[2]);
+	TEST_ASSERT_EQUAL_INT(17, n->data[3]);
+	TEST_ASSERT_EQUAL_INT(19, n->data[4]);
+	TEST_ASSERT_EQUAL_INT(23, n->data[5]);
+
+	NODE* m = ncons(&free, 1, 0);
+
+	TEST_ASSERT_EQUAL_PTR(n5, m);
+
+	NODE* l = ncons(&free, 3, 0);
+
+	TEST_ASSERT_EQUAL_PTR(n8, l);
+
+	strcpy((BYTE*)n8->data, "test string");
+
+	TEST_ASSERT_EQUAL_STRING("test string", n8->data);
+}	
 
 void test_CORE_reclaim() {
 	CELL size = 16*sizeof(NODE);
@@ -1123,6 +1175,7 @@ int main() {
 	RUN_TEST(test_CORE_init_free);
 	RUN_TEST(test_CORE_cons);
 	RUN_TEST(test_CORE_cons_2);
+	RUN_TEST(test_CORE_cons_3);
 	RUN_TEST(test_CORE_reclaim);
 	RUN_TEST(test_CORE_reclaim_list);
 	RUN_TEST(test_CORE_cons_reclaim);

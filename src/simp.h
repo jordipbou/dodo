@@ -10,6 +10,7 @@ typedef int8_t BYTE;
 typedef intptr_t CELL;
 #if INTPTR_MAX == INT64_MAX
 	typedef struct T_NODE {
+		struct T_NODE* next;
 		union {
 			CELL value;
 			struct T_NODE* ref;
@@ -19,11 +20,11 @@ typedef intptr_t CELL;
 				int32_t length;
 			};
 		};
-		struct T_NODE* next;
 		CELL data[];
 	} NODE;
 #else
 	typedef struct T_NODE {
+		struct T_NODE* next;
 		union {
 			CELL value;
 			struct T_NODE* ref;
@@ -33,7 +34,6 @@ typedef intptr_t CELL;
 				int16_t length;
 			};
 		};
-		struct T_NODE* next;
 		CELL data[];
 	} NODE;
 #endif
@@ -55,13 +55,21 @@ enum RTypes { SAVED, IP, DISPOSABLE, HANDLER };
 enum WTypes { DEF, IMM };
 enum ATypes	{ CARRAY, BARRAY, STRING };
 
-// CORE
-
 CELL length(NODE* list, CELL dir) {
 	CELL count = 0;
 	if (dir) while (list) { count++; list = list->ref; }
 	else while (list) { count++; list = NEXT(list); }
 	return count;
+}
+
+NODE* reverse(NODE* list, NODE* acc) {
+	if (list) {
+		NODE* tail = NEXT(list);
+		LINK(list, acc);
+		return reverse(tail, list);
+	} else {
+		return acc;
+	}
 }
 
 #define ALIGN(addr, bound)				((((CELL)addr) + (bound - 1)) & ~(bound - 1))
@@ -161,16 +169,6 @@ NODE* clone(NODE** free, NODE* node, CELL follow) {
 		} else {
 			return cons(free, node->value, AS(TYPE(node), follow ? clone(free, NEXT(node), 1) : 0));	
 		}
-	}
-}
-
-NODE* reverse(NODE* list, NODE* acc) {
-	if (list) {
-		NODE* tail = NEXT(list);
-		LINK(list, acc);
-		return reverse(tail, list);
-	} else {
-		return acc;
 	}
 }
 
@@ -580,6 +578,22 @@ void parse_name(CTX* ctx) {
 	S(ctx) = cons(&ctx->fstack, (CELL)((ctx->ibuf + ctx->ipos) - S(ctx)->value), AS(ATOM, S(ctx)));
 }
 
+void to_str(CTX* ctx) {
+	UF2(ctx);
+
+	CELL len = S(ctx)->value;
+	BYTE* addr = (BYTE*)NEXT(S(ctx))->ref;
+	S(ctx) = reclaim(&ctx->fstack, reclaim(&ctx->fstack, S(ctx)));
+
+	CELL size = ((len + 1) / sizeof(NODE)) + (((len + 1) % sizeof(NODE)) == 0 ? 0 : 1);
+	S(ctx) = ncons(&ctx->fstack, size + 1, AS(ARRAY, S(ctx)));
+	S(ctx)->type = STRING;
+	S(ctx)->size = size;
+	S(ctx)->length = len;
+	memcpy((BYTE*)S(ctx)->data, addr, len);
+	((BYTE*)S(ctx)->data)[len] = 0;
+}
+
 void find_name(CTX* ctx) {
 	UF2(ctx);
 	ERR(ctx, S(ctx)->value == 0, ERR_ZERO_LENGTH_NAME);
@@ -589,7 +603,9 @@ void find_name(CTX* ctx) {
 	S(ctx) = reclaim(&ctx->fstack, reclaim(&ctx->fstack, S(ctx)));
 
 	NODE* word = ctx->nstack;
-	while (word && !(strlen(NFA(word)) == len && !strncmp(NFA(word), addr, len))) {
+	while (word 
+	&& !(strlen(NFA(word)) == len 
+	&& !strncmp(NFA(word), addr, len))) {
 		word = NEXT(word);
 	}
 
@@ -661,6 +677,15 @@ void string_literal(CTX* ctx) {
 	ctx->ipos = pos + 1;
 }
 
+void words(CTX* ctx) {
+	NODE* w = ctx->nstack;
+	while (w) {
+		printf("%s ", NFA(w));
+		w = NEXT(w);
+	}
+	printf("\n");
+}
+
 // BOOTSTRAPING
 
 CTX* bootstrap(CTX* ctx) {
@@ -699,7 +724,11 @@ CTX* bootstrap(CTX* ctx) {
 	ADD_PRIMITIVE(ctx, "[", &lbracket, IMM);
 	ADD_PRIMITIVE(ctx, "postpone", &postpone, IMM);
 
+	ADD_PRIMITIVE(ctx, "parse-name", &parse_name, DEF);
+	ADD_PRIMITIVE(ctx, ">str", &to_str, DEF);
 	ADD_PRIMITIVE(ctx, "\"", &string_literal, DEF);
+
+	ADD_PRIMITIVE(ctx, "words", &words, DEF);
 
 	return ctx;
 }
