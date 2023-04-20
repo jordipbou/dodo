@@ -41,19 +41,16 @@ typedef intptr_t CELL;
 #define NEXT(node)								((NODE*)(((CELL)(node)->next) & -8))
 #define TYPE(node)								(((CELL)node->next) & 7)
 
-#define REF(node)									((NODE*)(((CELL)(node)->ref) & -8))
-#define SUBTYPE(node)							(((CELL)node->ref) & 7)
-
 #define AS(type, node)						((NODE*)(((CELL)(node)) | type))
 NODE* LINK(NODE* node, NODE* link) { 
 	node->next = AS(TYPE(node), link); 
 	return node; 
 }
 
-enum Types { ATOM, PRIM, LIST, WORD, ARRAY, PARRAY };
-enum RTypes { SAVED, IP, DISPOSABLE, HANDLER };
-enum WTypes { DEF, IMM };
-enum ATypes	{ CARRAY, BARRAY, STRING };
+enum Types { ATOM, ARRAY, LIST, PRIM, FLOW, WORD, IWORD, CUSTOM };
+enum ATypes	{ CELLS, BYTES, STRING };
+
+#define IS_WORD(word)					(TYPE(word) == WORD || TYPE(word) == IWORD)
 
 CELL length(NODE* list, CELL dir) {
 	CELL count = 0;
@@ -136,7 +133,7 @@ NODE* reclaim(NODE** free, NODE* node) {
 		}
 	}
 
-	if (TYPE(node) == ARRAY || TYPE(node) == PARRAY) {
+	if (TYPE(node) == ARRAY || TYPE(node) == FLOW) {
 		nodes = node->size + 1;
 	}
 
@@ -158,7 +155,7 @@ NODE* clone(NODE** free, NODE* node, CELL follow) {
 	if (TYPE(node) == LIST) {
 		return cons(free, (CELL)clone(free, node->ref, 1), AS(LIST, follow ? clone(free, NEXT(node), 1) : 0));
 	} else {
-		if (TYPE(node) == ARRAY || TYPE(node) == PARRAY) {
+		if (TYPE(node) == ARRAY || TYPE(node) == FLOW) {
 			NODE* n = ncons(free, node->size + 1, AS(TYPE(node), follow ? clone(free, NEXT(node), 1) : 0));
 			n->type = node->type;
 			n->length = node->length;
@@ -391,18 +388,27 @@ void unstack(CTX* ctx) {
 
 // WORDS
 
-#define NFA(word)							((BYTE*)REF(word)->value)
-#define XT(word)							(NEXT(REF(word)))
+BYTE* NFA(NODE* word) {
+	if (!word) return 0;
+	else {
+		if (TYPE(word->ref) == ATOM) return (BYTE*)(word->ref->value);
+		else if (TYPE(word->ref) == ARRAY) return (BYTE*)(word->ref->data);
+	}
+}
 
+//#define NFA(word)							((BYTE*)REF(word)->value)
+#define XT(word)							(NEXT(word->ref))
+
+#define IS_HEADER(word)				(TYPE(word) == WORD && XT(word) == 0)
 #define IS_PRIMITIVE(word)		(TYPE(word) == WORD && length(XT(word), 0) == 1 && TYPE(XT(word)) == PRIM)
-#define IS_IMMEDIATE(word)		(TYPE(word) == WORD && SUBTYPE(word) == IMM)
+#define IS_IMMEDIATE(word)		(TYPE(word) == IWORD)
 
-#define ADD_PRIMITIVE(ctx, name, func, imm) \
+#define ADD_PRIMITIVE(ctx, name, func, type) \
 	ctx->nstack = \
-		cons(&ctx->fstack, (CELL)AS(imm, \
+		cons(&ctx->fstack, (CELL) \
 			cons(&ctx->fstack, (CELL)name, AS(ATOM, \
-			cons(&ctx->fstack, (CELL)func, AS(PRIM, 0))))), \
-		AS(WORD, ctx->nstack));
+			cons(&ctx->fstack, (CELL)func, AS(PRIM, 0)))), \
+		AS(type, ctx->nstack));
 
 // INNER INTERPRETER
 
@@ -411,7 +417,7 @@ void incrIP(CTX* ctx) {
 		ctx->ip = NEXT(ctx->ip);
 	}
 	while (!ctx->ip && ctx->rstack) {
-		if (TYPE(ctx->rstack) == IP) {
+		if (TYPE(ctx->rstack) == PRIM) {
 			ctx->ip = ctx->rstack->ref;
 		}
 		ctx->rstack = reclaim(&ctx->fstack, ctx->rstack);
@@ -421,7 +427,7 @@ void incrIP(CTX* ctx) {
 #define CALL(ctx, dest, ret) \
 	({ \
 		if (ret) { \
-			ctx->rstack = cons(&ctx->fstack, (CELL)ret, AS(IP, ctx->rstack)); \
+			ctx->rstack = cons(&ctx->fstack, (CELL)ret, AS(PRIM, ctx->rstack)); \
 		} \
 		ctx->ip = dest; \
 	})
@@ -446,6 +452,7 @@ NODE* step(CTX* ctx) {
 				}
 				break;
 			case WORD:
+			case IWORD:
 				CALL(ctx, XT(ctx->ip->ref), NEXT(ctx->ip));
 				break;
 		}
@@ -482,6 +489,7 @@ void exec_i(CTX* ctx) { /* ( xt -- ) */
 			((FUNC)p)(ctx); 
 			break;
 		case WORD:
+		case IWORD:
 			n = ctx->ip == 0 ? 0 : NEXT(ctx->ip);
 			CALL(ctx, XT(S(ctx)->ref), n);
 			S(ctx) = reclaim(&ctx->fstack, S(ctx));
@@ -550,9 +558,9 @@ BYTE* print(BYTE* str, NODE* node, CELL follow, CTX* ctx) {
 			break;
 		case ARRAY:
 			switch (node->type) {
-				case CARRAY:
+				case CELLS:
 					break;
-				case BARRAY:
+				case BYTES:
 					break;
 				case STRING:
 					sprintf(str, "%s\"%.*s\" ", str, node->length, (BYTE*)(node->data));
@@ -595,12 +603,34 @@ void to_str(CTX* ctx) {
 }
 
 void find_name(CTX* ctx) {
-	UF2(ctx);
-	ERR(ctx, S(ctx)->value == 0, ERR_ZERO_LENGTH_NAME);
+	CELL len;
+	BYTE* addr;
 
-	CELL len = S(ctx)->value;
-	BYTE *addr = (BYTE*)(NEXT(S(ctx))->value);
-	S(ctx) = reclaim(&ctx->fstack, reclaim(&ctx->fstack, S(ctx)));
+	UF1(ctx);
+	//ERR(ctx, S(ctx)->value == 0, ERR_ZERO_LENGTH_NAME);
+
+	if (TYPE(S(ctx)) == ATOM) {
+		UF2(ctx);
+		len = S(ctx)->value;
+		addr = (BYTE*)(NEXT(S(ctx))->ref);
+		S(ctx) = reclaim(&ctx->fstack, S(ctx));
+	} else if (TYPE(S(ctx)) == ARRAY) {
+		addr = (BYTE*)(S(ctx)->data);
+		len = strlen(addr);
+		//S(ctx) = reclaim(&ctx->fstack, S(ctx));
+		printf("Finding word: %.*s\n", len, addr);
+	}
+
+	NODE* t = S(ctx);
+	S(ctx) = NEXT(S(ctx));
+	LINK(t, 0);
+
+	ERR(ctx, len == 0, ERR_ZERO_LENGTH_NAME);
+	//CELL len = S(ctx)->value;
+	//BYTE *addr = (BYTE*)(NEXT(S(ctx))->value);
+	//S(ctx) = reclaim(&ctx->fstack, reclaim(&ctx->fstack, S(ctx)));
+
+	printf("ctx->nstack: %ld\n", ctx->nstack);
 
 	NODE* word = ctx->nstack;
 	while (word 
@@ -610,15 +640,15 @@ void find_name(CTX* ctx) {
 	}
 
 	if (word) {
-		if (TYPE(word) == WORD) {
-			S(ctx) = cons(&ctx->fstack, (CELL)word, AS(WORD, S(ctx)));
-		}
+		S(ctx) = cons(&ctx->fstack, (CELL)word, AS(TYPE(word), S(ctx)));
 	} else {
 		char* endptr;
 		intmax_t n = strtoimax((char*)addr, &endptr, 0);
 		ERR(ctx, n == 0 && endptr == (char*)addr, ERR_UNDEFINED_WORD);
 		S(ctx) = cons(&ctx->fstack, n, AS(ATOM, S(ctx)));
 	}
+
+	reclaim(&ctx->fstack, t);
 }
 
 void lbracket(CTX* ctx) {
@@ -648,9 +678,10 @@ void eval(CTX* ctx, BYTE* str) {
 	while (!ctx->err) {
 		DO(ctx, parse_name);
 		ERR(ctx, S(ctx)->value == 0, ERR_END_OF_INPUT_SOURCE; drop(ctx); drop(ctx));
+		DO(ctx, to_str);
 		DO(ctx, find_name);
-		if (TYPE(S(ctx)) == WORD) {
-			if (!ctx->compiling || SUBTYPE(S(ctx)->ref) == IMM) {
+		if (IS_WORD(S(ctx))) {
+			if (!ctx->compiling || TYPE(S(ctx)) == IWORD) {
 				exec_i(ctx);
 			} else {
 				compile(ctx);
@@ -689,46 +720,46 @@ void words(CTX* ctx) {
 // BOOTSTRAPING
 
 CTX* bootstrap(CTX* ctx) {
-	ADD_PRIMITIVE(ctx, "dup", &duplicate, DEF);
-	ADD_PRIMITIVE(ctx, "swap", &swap, DEF);
-	ADD_PRIMITIVE(ctx, "drop", &drop, DEF);
-	ADD_PRIMITIVE(ctx, "over", &over, DEF);
-	ADD_PRIMITIVE(ctx, "rot", &rot, DEF);
+	ADD_PRIMITIVE(ctx, "dup", &duplicate, WORD);
+	ADD_PRIMITIVE(ctx, "swap", &swap, WORD);
+	ADD_PRIMITIVE(ctx, "drop", &drop, WORD);
+	ADD_PRIMITIVE(ctx, "over", &over, WORD);
+	ADD_PRIMITIVE(ctx, "rot", &rot, WORD);
 
-	ADD_PRIMITIVE(ctx, "+", &add, DEF);
-	ADD_PRIMITIVE(ctx, "1+", &incr, DEF);
-	ADD_PRIMITIVE(ctx, "-", &sub, DEF);
-	ADD_PRIMITIVE(ctx, "1-", &decr, DEF);
-	ADD_PRIMITIVE(ctx, "*", &mul, DEF);
-	ADD_PRIMITIVE(ctx, "/", &division, DEF);
-	ADD_PRIMITIVE(ctx, "%", &mod, DEF);
+	ADD_PRIMITIVE(ctx, "+", &add, WORD);
+	ADD_PRIMITIVE(ctx, "1+", &incr, WORD);
+	ADD_PRIMITIVE(ctx, "-", &sub, WORD);
+	ADD_PRIMITIVE(ctx, "1-", &decr, WORD);
+	ADD_PRIMITIVE(ctx, "*", &mul, WORD);
+	ADD_PRIMITIVE(ctx, "/", &division, WORD);
+	ADD_PRIMITIVE(ctx, "%", &mod, WORD);
 
-	ADD_PRIMITIVE(ctx, ">", &gt, DEF);
-	ADD_PRIMITIVE(ctx, "<", &lt, DEF);
-	ADD_PRIMITIVE(ctx, "=", &eq, DEF);
-	ADD_PRIMITIVE(ctx, "<>", &neq, DEF);
+	ADD_PRIMITIVE(ctx, ">", &gt, WORD);
+	ADD_PRIMITIVE(ctx, "<", &lt, WORD);
+	ADD_PRIMITIVE(ctx, "=", &eq, WORD);
+	ADD_PRIMITIVE(ctx, "<>", &neq, WORD);
 
-	ADD_PRIMITIVE(ctx, "and", &and, DEF);
-	ADD_PRIMITIVE(ctx, "or", &or, DEF);
-	ADD_PRIMITIVE(ctx, "invert", &invert, DEF);
+	ADD_PRIMITIVE(ctx, "and", &and, WORD);
+	ADD_PRIMITIVE(ctx, "or", &or, WORD);
+	ADD_PRIMITIVE(ctx, "invert", &invert, WORD);
 
-	ADD_PRIMITIVE(ctx, "reverse", &reverse_stack, DEF);
-	ADD_PRIMITIVE(ctx, "stack", &stack, DEF);
-	ADD_PRIMITIVE(ctx, "unstack", &unstack, DEF);
+	ADD_PRIMITIVE(ctx, "reverse", &reverse_stack, WORD);
+	ADD_PRIMITIVE(ctx, "stack", &stack, WORD);
+	ADD_PRIMITIVE(ctx, "unstack", &unstack, WORD);
 
-	ADD_PRIMITIVE(ctx, "i", &exec_i, DEF);
-	ADD_PRIMITIVE(ctx, "x", &exec_x, DEF);
-	ADD_PRIMITIVE(ctx, "branch", &branch, DEF);
+	ADD_PRIMITIVE(ctx, "i", &exec_i, WORD);
+	ADD_PRIMITIVE(ctx, "x", &exec_x, WORD);
+	ADD_PRIMITIVE(ctx, "branch", &branch, WORD);
 
-	ADD_PRIMITIVE(ctx, "]", &rbracket, DEF);
-	ADD_PRIMITIVE(ctx, "[", &lbracket, IMM);
-	ADD_PRIMITIVE(ctx, "postpone", &postpone, IMM);
+	ADD_PRIMITIVE(ctx, "]", &rbracket, WORD);
+	ADD_PRIMITIVE(ctx, "[", &lbracket, IWORD);
+	ADD_PRIMITIVE(ctx, "postpone", &postpone, IWORD);
 
-	ADD_PRIMITIVE(ctx, "parse-name", &parse_name, DEF);
-	ADD_PRIMITIVE(ctx, ">str", &to_str, DEF);
-	ADD_PRIMITIVE(ctx, "\"", &string_literal, DEF);
+	ADD_PRIMITIVE(ctx, "parse-name", &parse_name, WORD);
+	ADD_PRIMITIVE(ctx, ">str", &to_str, WORD);
+	ADD_PRIMITIVE(ctx, "\"", &string_literal, WORD);
 
-	ADD_PRIMITIVE(ctx, "words", &words, DEF);
+	ADD_PRIMITIVE(ctx, "words", &words, WORD);
 
 	return ctx;
 }

@@ -93,7 +93,7 @@ void dump_data_stack(CTX* ctx, NODE* ds) {
 }
 
 void main(int argc, char *argv[]) {
-	CELL sz = 30000;
+	CELL sz = 120000;
 	BYTE bk[sz];
 	//CTX* ctx = init(bk, sz);
 	CTX* ctx = bootstrap(init(bk, sz));

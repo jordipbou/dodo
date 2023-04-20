@@ -269,7 +269,7 @@ void test_CORE_cons_reclaim() {
 	reclaim(&free, n3);
 	reclaim(&free, n2);
 
-	NODE* n5 = ncons(&free, 2, AS(PARRAY, 0));
+	NODE* n5 = ncons(&free, 2, AS(FLOW, 0));
 
 	TEST_ASSERT_NOT_EQUAL_INT(0, n5);
 	TEST_ASSERT_EQUAL_INT(12, length(free, 0));
@@ -294,7 +294,7 @@ void test_CORE_cons_reclaim_2() {
 	reclaim(&free, n2);
 	reclaim(&free, n3);
 
-	NODE* n5 = ncons(&free, 2, AS(PARRAY, 0));
+	NODE* n5 = ncons(&free, 2, AS(FLOW, 0));
 
 	TEST_ASSERT_EQUAL_INT(12, length(free, 0));
 	TEST_ASSERT_EQUAL_INT(12, length(last, 1));
@@ -374,7 +374,7 @@ void test_CORE_clone_array() {
 
 	CELL array[] = {0, 1, 2, 3};
 
-	NODE* n1 = ncons(&free, 3, AS(PARRAY, 0));
+	NODE* n1 = ncons(&free, 3, AS(FLOW, 0));
 	memcpy(n1->data, array, 4);
 
 	NODE* n2 = clone(&free, n1, 1);
