@@ -35,6 +35,12 @@ void fib(CTX* x) {
 	printf("%ld\n", S(x)->value);
 }
 
+char* dump_stack(CTX* x, char* str, NODE* n) {
+	if (N(n)) dump_stack(x, str, N(n));
+	sprintf(str, "%s\n", print(str, n, 0, x));
+	return str;		
+}
+
 int main(int argc, char *argv[]) {
 	CELL sz = 120000;
 	BYTE bk[sz];
@@ -59,13 +65,17 @@ int main(int argc, char *argv[]) {
 
 	if (argc == 1 || argc == 3) {
 		do {
+			printf("%c [%ld] ", x->compiling ? 'C' : 'I', FREE(x));
 			fgets(buf, 255, stdin);
 			eval(x, (BYTE*)buf);
-			str[0] = 0;
-			printf("%s\n", print(str, S(x), 1, x));
 			if (x->err != 0 && x->err != -2) {
 					printf("ERROR: %ld\n", x->err);
 					return;
+			}
+			if (S(x)) {
+				str[0] = 0;
+				printf("\n--- Data Stack\n");
+				printf("%s", dump_stack(x, str, S(x)));
 			}
 			x->err = 0;
 		} while(1);

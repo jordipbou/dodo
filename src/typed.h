@@ -20,6 +20,7 @@ CELL AS(TYPE t, NODE* n) { return (((CELL)(n)) | (t)); }
 NODE* N(NODE* n) { return ((NODE*)(n->next & -8)); }
 TYPE T(NODE* n) { return ((TYPE)(n->next & 7)); }
 NODE* L(NODE* n, NODE* m) { n->next = AS(T(n), m); return n; }
+NODE* V(NODE* n, CELL v) { n->value = v; return n; }
 
 CELL length(NODE* n) { CELL a = 0; while (n) { a++; n = N(n); } return a; }
 NODE* reverse(NODE* n, NODE* acc) { NODE* t; return n ? (t = N(n), reverse(t, L(n, acc))) : acc; }
@@ -49,7 +50,7 @@ typedef struct {
 typedef void (*FUNC)(CTX*);
 
 #define ALIGN(addr, bound)				((((CELL)addr) + (bound - 1)) & ~(bound - 1))
-#define FREE(block)								(length(block->free) - 1)
+#define FREE(x)									(length(x->free) - 1)
 
 NODE* cons(CTX* x, CELL v, CELL n) {
 	NODE* node;
@@ -247,12 +248,20 @@ void string_literal(CTX* x) {
 	x->ipos = p + 1;
 }
 
+void header(CTX* x) { S(x) = cons(x, 0, AS(WORD, S(x))); }
+void to_word(CTX* x) { 
+	NODE* h = V(S(x), N(S(x))->value); 
+	S(x) = reclaim(x, V(N(S(x)), 0)); 
+	x->nstack = L(h, x->nstack);
+}
+
 BYTE* NFA(NODE* w) { return (BYTE*)(((NODE*)w->value)->value); }
 NODE* XT(NODE* w) { return N((NODE*)(w->value)); }
 
 CELL IS_WORD(NODE* w) { return T(w) == WORD || T(w) == MACRO; }
-CELL IS_HEADER(NODE* w) { return IS_WORD(w) && XT(w) == 0; }
 CELL IS_PRIMITIVE(NODE* w) { return T(w) == PRIM || (IS_WORD(w) && length(XT(w)) == 1 && T(XT(w)) == PRIM); }
+
+CELL IS_HEADER(NODE* w) { return IS_WORD(w) && w->value == 0; }
 
 #define ADD_PRIMITIVE(x, name, func, t) \
 	x->nstack = \
@@ -357,13 +366,10 @@ void find_token(CTX* x) {
 	}
 }
 
-void dump_context(CTX* x);
-
 void eval(CTX* x, BYTE* str) {
 	x->ibuf = str;
 	x->ipos = 0;
 	while (1) {
-		dump_context(x);
 		find_token(x);
 		if (x->err != 0) return;
 		if (IS_WORD(S(x))) {
@@ -386,16 +392,6 @@ NODE* find_primitive(CTX* x, CELL p) {
 		w = N(w);
 	}
 	return 0;
-}
-
-char* print(char* str, NODE* n, CELL f, CTX* x);
-
-void dump_context(CTX* x) {
-	char buf[255];
-	buf[0] = 0;
-	if (x->compiling) printf("C ");
-	else printf("I ");
-	printf("[%ld] %s\n", FREE(x), print(buf, S(x), 0, x));
 }
 
 char* print(char* str, NODE* n, CELL f, CTX* x) {
@@ -431,7 +427,11 @@ char* print(char* str, NODE* n, CELL f, CTX* x) {
 		sprintf(str, "%sP:%ld ", str, n->value); 
 		break;
 	case WORD: 
-		sprintf(str, "%sW:%s ", str, NFA((NODE*)n->value)); 
+		if (n->value) {
+			sprintf(str, "%sW:%s ", str, NFA((NODE*)n->value)); 
+		} else {
+			sprintf(str, "%sHEADER ", str);
+		}
 		break;
 	case MACRO: 
 		sprintf(str, "%sM:%s ", str, NFA((NODE*)n->value)); 
@@ -471,6 +471,8 @@ CTX* bootstrap(CTX* x) {
 	ADD_PRIMITIVE(x, "l>s", &list_to_stack, WORD);
 	ADD_PRIMITIVE(x, "s>l", &stack_to_list, WORD);
 	ADD_PRIMITIVE(x, "reverse", &reverse_stack, WORD);
+	ADD_PRIMITIVE(x, "header", &header, WORD);
+	ADD_PRIMITIVE(x, ">word", &to_word, WORD);
 
 	ADD_PRIMITIVE(x, "]", &rbracket, WORD);
 	ADD_PRIMITIVE(x, "[", &lbracket, MACRO);
