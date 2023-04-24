@@ -5,13 +5,10 @@
 #include<stdint.h>
 #include<string.h>
 
-typedef int8_t BYTE;
+typedef char BYTE;
 typedef intptr_t CELL;
 
-typedef struct NODE_T {
-	CELL next;
-	CELL value;
-} NODE;
+typedef struct NODE_T { CELL next, value; } NODE;
 
 typedef enum { FREE = 0, ATOM = 0, LIST, PRIM, WORD, MACRO, REF, CODE, IP } TYPE;
 typedef enum { ARRAY, BARRAY, STRING } REF_TYPE;
@@ -25,12 +22,7 @@ NODE* V(NODE* n, CELL v) { n->value = v; return n; }
 CELL length(NODE* n) { CELL a = 0; while (n) { a++; n = N(n); } return a; }
 NODE* reverse(NODE* n, NODE* acc) { NODE* t; return n ? (t = N(n), reverse(t, L(n, acc))) : acc; }
 
-typedef struct {
-	CELL type;
-	CELL size;
-	CELL length;
-	CELL data[1];
-} DATA;
+typedef struct { CELL type, size, length, data[1]; } DATA;
 
 #define REF_DATA(ref)							((DATA*)((CELL)(ref) - sizeof(DATA) + sizeof(CELL)))
 
@@ -106,7 +98,7 @@ DATA* array(CTX* x, CELL s) {
 BYTE* string(CTX* x, BYTE* s, CELL l) {
 	DATA* d = array(x, l + 1);
 	BYTE* t = (BYTE*)d->data;
-	strncpy((char*)t, (char*)s, l);
+	strncpy(t, s, l);
 	t[l] = 0;
 	d->length = l;
 	d->type = STRING;
@@ -154,7 +146,7 @@ NODE* clone(CTX* x, NODE* n, CELL f) {
 	if (T(n) == LIST) {
 		return cons(x, (CELL)clone(x, (NODE*)n->value, 1), AS(LIST, f ? clone(x, N(n), 1) : 0));
 	} else if (T(n) == REF) {
-		d = REF_DATA(S(x)->value);
+		d = REF_DATA(n->value);
 		e = array(x, d->size - sizeof(DATA) + sizeof(CELL));
 		e->type = d->type;
 		e->length = d->length;
@@ -349,15 +341,15 @@ void find_token(CTX* x) {
 	}
 
 	w = x->nstack;
-	while (w && !(strlen((char*)NFA(w)) == length && !strncmp((char*)NFA(w), (char*)token, length))) {
+	while (w && !(strlen(NFA(w)) == length && !strncmp(NFA(w), token, length))) {
 		w = N(w);
 	}
 
 	if (w) {
 		S(x) = cons(x, (CELL)w, AS(T(w), S(x)));
 	} else {
-		num = strtoimax((char*)token, &endptr, 0);
-		if (num == 0 && endptr == (char*)token) {
+		num = strtoimax(token, &endptr, 0);
+		if (num == 0 && endptr == token) {
 			x->err = -1;
 			return;
 		} else {
@@ -394,7 +386,7 @@ NODE* find_primitive(CTX* x, CELL p) {
 	return 0;
 }
 
-char* print(char* str, NODE* n, CELL f, CTX* x) {
+BYTE* print(BYTE* str, NODE* n, CELL f, CTX* x) {
 	NODE* w;
 
 	if (!n) return str;
