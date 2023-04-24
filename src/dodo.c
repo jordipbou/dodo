@@ -32,7 +32,7 @@ void fib(CTX* x) {
 
 	while(step(x));
 
-	printf("%ld\n", S(x)->value);
+	printf("%ld\n", S(x)->val);
 }
 
 char* dump_stack(CTX* x, char* str, NODE* n) {
@@ -81,7 +81,7 @@ int main(int argc, char *argv[]) {
 		} while(1);
 	}
 
-	printf("%ld\n", S(x)->value);
+	printf("%ld\n", S(x)->val);
 
 	return 0;
 }

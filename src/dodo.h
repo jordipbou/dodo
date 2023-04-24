@@ -8,7 +8,7 @@
 typedef char BYTE;
 typedef intptr_t CELL;
 
-typedef struct NODE_T { CELL next, value; } NODE;
+typedef struct NODE_T { CELL next, val; } NODE;
 
 typedef enum { FREE = 0, ATOM = 0, LIST, PRIM, WORD, MACRO, REF, CODE, IP } TYPE;
 typedef enum { ARRAY, BARRAY, STRING } REF_TYPE;
@@ -17,7 +17,8 @@ CELL AS(TYPE t, NODE* n) { return (((CELL)(n)) | (t)); }
 NODE* N(NODE* n) { return ((NODE*)(n->next & -8)); }
 TYPE T(NODE* n) { return ((TYPE)(n->next & 7)); }
 NODE* L(NODE* n, NODE* m) { n->next = AS(T(n), m); return n; }
-NODE* V(NODE* n, CELL v) { n->value = v; return n; }
+NODE* V(NODE* n, CELL v) { n->val = v; return n; }
+NODE* X(NODE* n, CELL x) { n->next = x; return n; }
 
 CELL length(NODE* n) { CELL a = 0; while (n) { a++; n = N(n); } return a; }
 NODE* reverse(NODE* n, NODE* acc) { NODE* t; return n ? (t = N(n), reverse(t, L(n, acc))) : acc; }
@@ -27,40 +28,32 @@ typedef struct { CELL type, size, length, data[1]; } DATA;
 #define REF_DATA(ref)							((DATA*)((CELL)(ref) - sizeof(DATA) + sizeof(CELL)))
 
 typedef struct {
-	CELL size, err, compiling, ipos;
-	BYTE* here, * ibuf;
-	NODE* there, * free;
-	NODE* mstack, * rstack, * nstack;
-	NODE** dstack;
-	NODE* ip;
-	BYTE bottom[1];
+	CELL size, err, compiling;
+	BYTE* here;			/* Pointer to free area of contiguous memory */
+	NODE* there;		/* End of free doubly linked list and start of contiguous memory */
+	NODE* f;				/* Free doubly linked list */
+	NODE* m;				/* Main stack */
+	NODE* r;				/* Return stack */
+	NODE* n;				/* Name stack */
+	NODE** d;				/* Data stack */
+	NODE* ip;				/* Instruction pointer */
+	BYTE* ibuf;			/* Input buffer */
+	CELL ipos;			/* Parsing position on input buffer */
+	BYTE bottom[1];	/* Start of memory block for this context */
 } CTX;
 
-#define S(x)											(*x->dstack)
-#define R(x)											(x->rstack)
+#define S(x)											(*x->d)
 
 typedef void (*FUNC)(CTX*);
 
 #define ALIGN(addr, bound)				((((CELL)addr) + (bound - 1)) & ~(bound - 1))
-#define FREE(x)									(length(x->free) - 1)
+#define FREE(x)										(length(x->f) - 1)
 
-NODE* cons(CTX* x, CELL v, CELL n) {
-	NODE* node;
-
-	if (x->free == x->there) return 0;
-
-	node = x->free;
-	x->free = N(x->free);
-	node->next = n;
-	node->value = v;
-	x->free->value = 0;
-
-	return node;
-}
+NODE* cons(CTX* x, CELL v, CELL n) { /* Not checking if it's full !!!! */ NODE* a = x->f; x->f = V(N(x->f), 0); return X(V(a, v), n); }
 
 DATA* array(CTX* x, CELL s) {
-	NODE** p = &x->free;
-	NODE* n = x->free;
+	NODE** p = &x->f;
+	NODE* n = x->f;
 	CELL sz, t;
 	DATA* a;
 
@@ -70,7 +63,7 @@ DATA* array(CTX* x, CELL s) {
 	while (n && n != x->there) {
 		t = sz;
 		while (--t && n && n != x->there) {
-			if ((((NODE*)n->value) == (n + 1) || n->value == 0)) {
+			if ((((NODE*)n->val) == (n + 1) || n->val == 0)) {
 				n = N(n);
 			} else {
 				break;
@@ -79,7 +72,7 @@ DATA* array(CTX* x, CELL s) {
 
 		if (t == 0) {
 			*p = N(n);
-			N(n)->value = (CELL)((*p == x->free) ? 0 : *p);
+			N(n)->val = (CELL)((*p == x->f) ? 0 : *p);
 
 			a = (DATA*)n;	
 			a->type = ARRAY;
@@ -112,10 +105,10 @@ void recl_data(CTX* x, DATA* d) {
 	ns = d->size / sizeof(NODE);
 	while (ns) {
 		n = ((NODE*)d) + --ns;	
-		n->next = (CELL)x->free;
-		n->value = 0;
-		x->free->value = (CELL)n;
-		x->free = n;
+		n->next = (CELL)x->f;
+		n->val = 0;
+		x->f->val = (CELL)n;
+		x->f = n;
 	}
 }
 
@@ -123,19 +116,19 @@ NODE* reclaim(CTX* x, NODE* n) {
 	NODE* tail = N(n);
 
 	if (T(n) == LIST) {
-		while (n->value) {
-			n->value = (CELL)reclaim(x, (NODE*)n->value);
+		while (n->val) {
+			n->val = (CELL)reclaim(x, (NODE*)n->val);
 		}
 	}
 
 	if (T(n) == REF || T(n) == CODE) {
-		recl_data(x, REF_DATA(n->value));
+		recl_data(x, REF_DATA(n->val));
 	}
 
-	n->next = (CELL)x->free;
-	n->value = 0;
-	x->free->value = (CELL)n;
-	x->free = n;
+	n->next = (CELL)x->f;
+	n->val = 0;
+	x->f->val = (CELL)n;
+	x->f = n;
 
 	return tail;
 }
@@ -144,16 +137,16 @@ NODE* clone(CTX* x, NODE* n, CELL f) {
 	DATA* d, * e;
 	if (!n) return 0;
 	if (T(n) == LIST) {
-		return cons(x, (CELL)clone(x, (NODE*)n->value, 1), AS(LIST, f ? clone(x, N(n), 1) : 0));
+		return cons(x, (CELL)clone(x, (NODE*)n->val, 1), AS(LIST, f ? clone(x, N(n), 1) : 0));
 	} else if (T(n) == REF) {
-		d = REF_DATA(n->value);
+		d = REF_DATA(n->val);
 		e = array(x, d->size - sizeof(DATA) + sizeof(CELL));
 		e->type = d->type;
 		e->length = d->length;
 		memcpy(e->data, d->data, d->size - sizeof(DATA) + sizeof(CELL));
 		return cons(x, (CELL)e->data, AS(REF, f ? clone(x, N(n), 1) : 0));
 	} else {
-		return cons(x, n->value, AS(T(n), f ? clone(x, N(n), 1) : 0));
+		return cons(x, n->val, AS(T(n), f ? clone(x, N(n), 1) : 0));
 	}
 }
 
@@ -164,16 +157,16 @@ CTX* init(BYTE* b, CELL sz) {
 	x->size = sz;
 	x->here = ((BYTE*)x) + offsetof(CTX, bottom);
 	x->there = (NODE*)ALIGN(x->here, sizeof(NODE));
-	x->free = (NODE*)ALIGN(x + sz - sizeof(NODE) - 1, sizeof(NODE));
+	x->f = (NODE*)ALIGN(x + sz - sizeof(NODE) - 1, sizeof(NODE));
 
-	for (node = x->there; node <= x->free; node++) {
+	for (node = x->there; node <= x->f; node++) {
 		node->next = AS(FREE, node == x->there ? 0 : node - 1);
-		node->value = (CELL)(node == x->free ? 0 : node + 1);
+		node->val = (CELL)(node == x->f ? 0 : node + 1);
 	}
 
-	x->mstack = cons(x, 0, AS(LIST, 0));
-	x->dstack = (NODE**)&x->mstack->value;
-	x->rstack = x->nstack = 0;
+	x->m = cons(x, 0, AS(LIST, 0));
+	x->d = (NODE**)&x->m->val;
+	x->r = x->n = 0;
 
 	x->err = x->compiling = x->ipos = 0;
 	x->ibuf = 0;
@@ -188,38 +181,33 @@ void drop(CTX* x) { S(x) = reclaim(x, S(x)); }
 void over(CTX* x) { S(x) = L(clone(x, N(S(x)), 0), S(x)); }
 void rot(CTX* x) { NODE* t = N(N(S(x))); L(N(S(x)), N(N(N(S(x))))); L(t, S(x)); S(x) = t; }
 
-void add(CTX* x) { N(S(x))->value = N(S(x))->value + S(x)->value; S(x) = reclaim(x, S(x)); }
-void incr(CTX* x) {	S(x)->value++; }
-void sub(CTX* x) { N(S(x))->value = N(S(x))->value - S(x)->value; S(x) = reclaim(x, S(x)); }
-void decr(CTX* x) { S(x)->value--; }
-void mul(CTX* x) { N(S(x))->value = N(S(x))->value * S(x)->value; S(x) = reclaim(x, S(x)); }
-void division(CTX* x) { N(S(x))->value = N(S(x))->value / S(x)->value; S(x) = reclaim(x, S(x)); }
-void mod(CTX* x) { N(S(x))->value = N(S(x))->value % S(x)->value; S(x) = reclaim(x, S(x)); }
+void add(CTX* x) { N(S(x))->val = N(S(x))->val + S(x)->val; S(x) = reclaim(x, S(x)); }
+void incr(CTX* x) {	S(x)->val++; }
+void sub(CTX* x) { N(S(x))->val = N(S(x))->val - S(x)->val; S(x) = reclaim(x, S(x)); }
+void decr(CTX* x) { S(x)->val--; }
+void mul(CTX* x) { N(S(x))->val = N(S(x))->val * S(x)->val; S(x) = reclaim(x, S(x)); }
+void division(CTX* x) { N(S(x))->val = N(S(x))->val / S(x)->val; S(x) = reclaim(x, S(x)); }
+void mod(CTX* x) { N(S(x))->val = N(S(x))->val % S(x)->val; S(x) = reclaim(x, S(x)); }
 
-void gt(CTX* x) { N(S(x))->value = N(S(x))->value > S(x)->value; S(x) = reclaim(x, S(x)); }
-void lt(CTX* x) { N(S(x))->value = N(S(x))->value < S(x)->value; S(x) = reclaim(x, S(x)); }
-void eq(CTX* x) { N(S(x))->value = N(S(x))->value == S(x)->value; S(x) = reclaim(x, S(x)); }
-void neq(CTX* x) { N(S(x))->value = N(S(x))->value != S(x)->value; S(x) = reclaim(x, S(x)); }
+void gt(CTX* x) { N(S(x))->val = N(S(x))->val > S(x)->val; S(x) = reclaim(x, S(x)); }
+void lt(CTX* x) { N(S(x))->val = N(S(x))->val < S(x)->val; S(x) = reclaim(x, S(x)); }
+void eq(CTX* x) { N(S(x))->val = N(S(x))->val == S(x)->val; S(x) = reclaim(x, S(x)); }
+void neq(CTX* x) { N(S(x))->val = N(S(x))->val != S(x)->val; S(x) = reclaim(x, S(x)); }
 
-void and(CTX* x) { N(S(x))->value = N(S(x))->value & S(x)->value; S(x) = reclaim(x, S(x)); }
-void or(CTX* x) { N(S(x))->value = N(S(x))->value | S(x)->value; S(x) = reclaim(x, S(x)); }
-void invert(CTX* x) { S(x)->value = ~(S(x)->value); }
+void and(CTX* x) { N(S(x))->val = N(S(x))->val & S(x)->val; S(x) = reclaim(x, S(x)); }
+void or(CTX* x) { N(S(x))->val = N(S(x))->val | S(x)->val; S(x) = reclaim(x, S(x)); }
+void invert(CTX* x) { S(x)->val = ~(S(x)->val); }
 
 void empty(CTX* x) { S(x) = cons(x, 0, AS(LIST, S(x))); }
-void list_to_stack(CTX* x) { 
-	NODE* a = S(x); 
-	S(x) = N(S(x)); 
-	x->mstack = L(a, x->mstack); 
-	x->dstack = (NODE**)&x->mstack->value;
-}	
+void list_to_stack(CTX* x) { NODE* a = S(x); S(x) = N(S(x)); x->d = (NODE**)&(x->m = L(a, x->m))->val; }
 void stack_to_list(CTX* x) {
-	if (N(x->mstack)) {
-		NODE* t = x->mstack;
-		NODE* s = N(x->mstack);
-		L(t, (NODE*)s->value);
-		s->value = (CELL)t;
-		x->mstack = s;
-		x->dstack = (NODE**)&x->mstack->value;
+	if (N(x->m)) {
+		NODE* t = x->m;
+		NODE* s = N(x->m);
+		L(t, (NODE*)s->val);
+		s->val = (CELL)t;
+		x->m = s;
+		x->d = (NODE**)&x->m->val;
 	} else {
 		S(x) = cons(x, (CELL)S(x), AS(LIST, 0));
 	}
@@ -241,45 +229,41 @@ void string_literal(CTX* x) {
 }
 
 void header(CTX* x) { S(x) = cons(x, 0, AS(WORD, S(x))); }
-void to_word(CTX* x) { 
-	NODE* h = V(S(x), N(S(x))->value); 
-	S(x) = reclaim(x, V(N(S(x)), 0)); 
-	x->nstack = L(h, x->nstack);
-}
+void to_word(CTX* x) { NODE* h = V(S(x), N(S(x))->val); S(x) = reclaim(x, V(N(S(x)), 0)); x->n = L(h, x->n); }
 
-BYTE* NFA(NODE* w) { return (BYTE*)(((NODE*)w->value)->value); }
-NODE* XT(NODE* w) { return N((NODE*)(w->value)); }
+BYTE* NFA(NODE* w) { return (BYTE*)(((NODE*)w->val)->val); }
+NODE* XT(NODE* w) { return N((NODE*)(w->val)); }
 
 CELL IS_WORD(NODE* w) { return T(w) == WORD || T(w) == MACRO; }
 CELL IS_PRIMITIVE(NODE* w) { return T(w) == PRIM || (IS_WORD(w) && length(XT(w)) == 1 && T(XT(w)) == PRIM); }
 
-CELL IS_HEADER(NODE* w) { return IS_WORD(w) && w->value == 0; }
+CELL IS_HEADER(NODE* w) { return IS_WORD(w) && w->val == 0; }
 
 #define ADD_PRIMITIVE(x, name, func, t) \
-	x->nstack = \
+	x->n = \
 		cons(x, (CELL) \
 			cons(x, (CELL)name, AS(ATOM, \
 			cons(x, (CELL)func, AS(PRIM, 0)))), \
-		AS(t, x->nstack));
+		AS(t, x->n));
 
 void incrIP(CTX* x) {
 	if (x->ip) { x->ip = N(x->ip); }
-	while (!x->ip && R(x)) {
-		if (T(R(x)) == IP) { x->ip = (NODE*)R(x)->value; }
-		R(x) = reclaim(x, R(x));
+	while (!x->ip && x->r) {
+		if (T(x->r) == IP) { x->ip = (NODE*)x->r->val; }
+		x->r = reclaim(x, x->r);
 	}
 }
 
-void call(CTX* x, NODE* n, NODE* r) { if (r) R(x) = cons(x, (CELL)r, AS(IP, R(x))); x->ip = n; }
+void call(CTX* x, NODE* n, NODE* r) { if (r) x->r = cons(x, (CELL)r, AS(IP, x->r)); x->ip = n; }
 
 NODE* step(CTX* x) {
 	NODE* r;
 	if (x->ip) {
 		switch (T(x->ip)) {
-			case ATOM: S(x) = cons(x, x->ip->value, AS(ATOM, S(x))); incrIP(x); break;
+			case ATOM: S(x) = cons(x, x->ip->val, AS(ATOM, S(x))); incrIP(x); break;
 			case LIST: S(x) = L(clone(x, x->ip, 0), S(x)); incrIP(x); break;
-			case PRIM: r = x->ip; ((FUNC)(x->ip->value))(x); if (r == x->ip || x->ip == 0) incrIP(x); break;
-			case WORD: case MACRO: call(x, XT((NODE*)x->ip->value), N(x->ip)); break;
+			case PRIM: r = x->ip; ((FUNC)(x->ip->val))(x); if (r == x->ip || x->ip == 0) incrIP(x); break;
+			case WORD: case MACRO: call(x, XT((NODE*)x->ip->val), N(x->ip)); break;
 		}
 	}
 	return x->ip;
@@ -289,23 +273,23 @@ void exec_i(CTX* x) {
 	CELL p;
 	NODE* n, * t;
 	switch (T(S(x))) {
-		case ATOM: p = S(x)->value; S(x) = reclaim(x, S(x)); ((FUNC)p)(x); break;
+		case ATOM: p = S(x)->val; S(x) = reclaim(x, S(x)); ((FUNC)p)(x); break;
 		case LIST: 
-			if (S(x)->value) {
+			if (S(x)->val) {
 				t = S(x);
 				S(x) = N(S(x));
-				call(x, (NODE*)t->value, N(x->ip));
-				L(t, R(x));
-				R(x) = t;
+				call(x, (NODE*)t->val, N(x->ip));
+				L(t, x->r);
+				x->r = t;
 				step(x);
 			} else {
 				S(x) = reclaim(x, S(x));
 			}
 			break;
-		case PRIM: p = S(x)->value; S(x) = reclaim(x, S(x)); ((FUNC)p)(x); break;
+		case PRIM: p = S(x)->val; S(x) = reclaim(x, S(x)); ((FUNC)p)(x); break;
 		case WORD: case MACRO:
 			n = x->ip == 0 ? 0 : N(x->ip);
-			call(x, XT((NODE*)S(x)->value), n);
+			call(x, XT((NODE*)S(x)->val), n);
 			S(x) = reclaim(x, S(x));
 			while (step(x) != n);
 			break;
@@ -314,7 +298,7 @@ void exec_i(CTX* x) {
 
 void exec_x(CTX* x) { duplicate(x); exec_i(x); }
 void branch(CTX* x) {
-	if (N(N(S(x)))->value == 0) { 
+	if (N(N(S(x)))->val == 0) { 
 		swap(x); 
 	} 
 	drop(x); 
@@ -340,7 +324,7 @@ void find_token(CTX* x) {
 		return;
 	}
 
-	w = x->nstack;
+	w = x->n;
 	while (w && !(strlen(NFA(w)) == length && !strncmp(NFA(w), token, length))) {
 		w = N(w);
 	}
@@ -367,8 +351,8 @@ void eval(CTX* x, BYTE* str) {
 		if (IS_WORD(S(x))) {
 			if (!x->compiling || T(S(x)) == MACRO) {
 				exec_i(x);
-			} else if (x->compiling && IS_PRIMITIVE((NODE*)(S(x)->value))) {
-				S(x)->value = XT((NODE*)S(x)->value)->value;
+			} else if (x->compiling && IS_PRIMITIVE((NODE*)(S(x)->val))) {
+				S(x)->val = XT((NODE*)S(x)->val)->val;
 				S(x)->next = AS(PRIM, N(S(x)));
 			}
 		}
@@ -376,9 +360,9 @@ void eval(CTX* x, BYTE* str) {
 }
 
 NODE* find_primitive(CTX* x, CELL p) {
-	NODE* w = x->nstack;
+	NODE* w = x->n;
 	while (w) {
-		if (IS_PRIMITIVE(w) && XT(w)->value == p) {
+		if (IS_PRIMITIVE(w) && XT(w)->val == p) {
 			return w;
 		}
 		w = N(w);
@@ -393,40 +377,40 @@ BYTE* print(BYTE* str, NODE* n, CELL f, CTX* x) {
 
 	switch (T(n)) {
 	case ATOM: 
-		sprintf(str, "%s#%ld ", str, n->value); 
+		sprintf(str, "%s#%ld ", str, n->val); 
 		break;
 	case REF:
-		switch (REF_DATA(n->value)->type) {
+		switch (REF_DATA(n->val)->type) {
 		case ARRAY: break;
 		case BARRAY: break;
 		case STRING: 
-			sprintf(str, "%s\"%.*s\" ", str, (int)REF_DATA(n->value)->length, (BYTE*)(n->value)); 
+			sprintf(str, "%s\"%.*s\" ", str, (int)REF_DATA(n->val)->length, (BYTE*)(n->val)); 
 			break;
 		}
 		break;
 	case LIST: 
 		sprintf(str, "%s{ ", str); 
-		print(str, (NODE*)n->value, 1, x); 
+		print(str, (NODE*)n->val, 1, x); 
 		sprintf(str, "%s} ", str); 
 		break;
 	case PRIM: 
 		if (x != 0) {
-			if ((w = find_primitive(x, n->value)) != 0) {
+			if ((w = find_primitive(x, n->val)) != 0) {
 				sprintf(str, "%sP:%s ", str, NFA(w));
 				break;
 			}
 		}
-		sprintf(str, "%sP:%ld ", str, n->value); 
+		sprintf(str, "%sP:%ld ", str, n->val); 
 		break;
 	case WORD: 
-		if (n->value) {
-			sprintf(str, "%sW:%s ", str, NFA((NODE*)n->value)); 
+		if (n->val) {
+			sprintf(str, "%sW:%s ", str, NFA((NODE*)n->val)); 
 		} else {
 			sprintf(str, "%sHEADER ", str);
 		}
 		break;
 	case MACRO: 
-		sprintf(str, "%sM:%s ", str, NFA((NODE*)n->value)); 
+		sprintf(str, "%sM:%s ", str, NFA((NODE*)n->val)); 
 		break;
 	}
 
