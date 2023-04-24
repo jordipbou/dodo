@@ -9,7 +9,6 @@ void setUp() {}
 void tearDown() {}
 
 CELL ilength(NODE* n) { CELL a = 0; while (n) { a++; n = (NODE*)n->val; } return a; }
-#define FREE(x)			(length(x->free) - 1)
 #define iFREE(x)		(ilength(x->there) - 1)
 
 void test_CORE_reverse() {
