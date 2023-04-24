@@ -13,7 +13,8 @@ typedef struct NODE_T {
 	CELL value;
 } NODE;
 
-typedef enum { FREE = 0, ATOM = 0, LIST, PRIM, WORD, MACRO, ARRAY, CODE, IP } TYPE;
+typedef enum { FREE = 0, ATOM = 0, LIST, PRIM, WORD, MACRO, REF, CODE, IP } TYPE;
+typedef enum { ARRAY, BARRAY, STRING } REF_TYPE;
 
 CELL AS(TYPE t, NODE* n) { return (((CELL)(n)) | (t)); }
 NODE* N(NODE* n) { return ((NODE*)(n->next & -8)); }
@@ -22,6 +23,15 @@ NODE* L(NODE* n, NODE* m) { n->next = AS(T(n), m); return n; }
 
 CELL length(NODE* n) { CELL a = 0; while (n) { a++; n = N(n); } return a; }
 NODE* reverse(NODE* n, NODE* acc) { NODE* t; return n ? (t = N(n), reverse(t, L(n, acc))) : acc; }
+
+typedef struct {
+	CELL type;
+	CELL size;
+	CELL length;
+	CELL data[1];
+} DATA;
+
+#define REF_DATA(ref)							((DATA*)((CELL)(ref) - sizeof(DATA) + sizeof(CELL)))
 
 typedef struct {
 	CELL size, err, compiling, ipos;
@@ -55,6 +65,67 @@ NODE* cons(CTX* x, CELL v, CELL n) {
 	return node;
 }
 
+DATA* array(CTX* x, CELL s) {
+	NODE** p = &x->free;
+	NODE* n = x->free;
+	CELL sz, t;
+	DATA* a;
+
+	s += sizeof(DATA) - sizeof(CELL);
+	sz = s / sizeof(NODE) + ((s % sizeof(NODE)) == 0 ? 0 : 1);
+
+	while (n && n != x->there) {
+		t = sz;
+		while (--t && n && n != x->there) {
+			if ((((NODE*)n->value) == (n + 1) || n->value == 0)) {
+				n = N(n);
+			} else {
+				break;
+			}
+		}
+
+		if (t == 0) {
+			*p = N(n);
+			N(n)->value = (CELL)((*p == x->free) ? 0 : *p);
+
+			a = (DATA*)n;	
+			a->type = ARRAY;
+			a->size = sz * sizeof(NODE);
+
+			return a;
+		}
+
+		p = (NODE**)(&(n->next));
+		n = N(n);
+	}
+
+	return 0;
+}
+
+BYTE* string(CTX* x, BYTE* s, CELL l) {
+	DATA* d = array(x, l + 1);
+	BYTE* t = (BYTE*)d->data;
+	strncpy((char*)t, (char*)s, l);
+	t[l] = 0;
+	d->length = l;
+	d->type = STRING;
+	return (BYTE*)d->data;
+}
+
+void recl_data(CTX* x, DATA* d) {
+	NODE* n;
+	CELL ns;
+	if (!d) return;
+	ns = d->size / sizeof(NODE);
+	while (ns) {
+		n = ((NODE*)d) + --ns;	
+		n->next = (CELL)x->free;
+		n->value = 0;
+		x->free->value = (CELL)n;
+		x->free = n;
+	}
+}
+
 NODE* reclaim(CTX* x, NODE* n) {
 	NODE* tail = N(n);
 
@@ -62,6 +133,10 @@ NODE* reclaim(CTX* x, NODE* n) {
 		while (n->value) {
 			n->value = (CELL)reclaim(x, (NODE*)n->value);
 		}
+	}
+
+	if (T(n) == REF || T(n) == CODE) {
+		recl_data(x, REF_DATA(n->value));
 	}
 
 	n->next = (CELL)x->free;
@@ -73,9 +148,17 @@ NODE* reclaim(CTX* x, NODE* n) {
 }
 
 NODE* clone(CTX* x, NODE* n, CELL f) {
+	DATA* d, * e;
 	if (!n) return 0;
 	if (T(n) == LIST) {
 		return cons(x, (CELL)clone(x, (NODE*)n->value, 1), AS(LIST, f ? clone(x, N(n), 1) : 0));
+	} else if (T(n) == REF) {
+		d = REF_DATA(S(x)->value);
+		e = array(x, d->size - sizeof(DATA) + sizeof(CELL));
+		e->type = d->type;
+		e->length = d->length;
+		memcpy(e->data, d->data, d->size - sizeof(DATA) + sizeof(CELL));
+		return cons(x, (CELL)e->data, AS(REF, f ? clone(x, N(n), 1) : 0));
 	} else {
 		return cons(x, n->value, AS(T(n), f ? clone(x, N(n), 1) : 0));
 	}
@@ -152,6 +235,17 @@ void reverse_stack(CTX* x) { S(x) = reverse(S(x), 0); }
 
 void rbracket(CTX* x) { x->compiling = 1; }
 void lbracket(CTX* x) { x->compiling = 0; }
+
+void string_literal(CTX* x) {
+	CELL l = 0;
+	CELL p = ++x->ipos;
+	while(*(x->ibuf + p) && *(x->ibuf + p) != '"') {
+		l++;
+		p++;
+	}
+	S(x) = cons(x, (CELL)string(x, x->ibuf + x->ipos, l), AS(REF, S(x)));
+	x->ipos = p + 1;
+}
 
 BYTE* NFA(NODE* w) { return (BYTE*)(((NODE*)w->value)->value); }
 NODE* XT(NODE* w) { return N((NODE*)(w->value)); }
@@ -269,6 +363,7 @@ void eval(CTX* x, BYTE* str) {
 	x->ibuf = str;
 	x->ipos = 0;
 	while (1) {
+		dump_context(x);
 		find_token(x);
 		if (x->err != 0) return;
 		if (IS_WORD(S(x))) {
@@ -298,8 +393,8 @@ char* print(char* str, NODE* n, CELL f, CTX* x);
 void dump_context(CTX* x) {
 	char buf[255];
 	buf[0] = 0;
-	if (x->compiling) printf("COMPILING ");
-	else printf("INTERPRETING ");
+	if (x->compiling) printf("C ");
+	else printf("I ");
 	printf("[%ld] %s\n", FREE(x), print(buf, S(x), 0, x));
 }
 
@@ -312,17 +407,15 @@ char* print(char* str, NODE* n, CELL f, CTX* x) {
 	case ATOM: 
 		sprintf(str, "%s#%ld ", str, n->value); 
 		break;
-	/*
 	case REF:
-		switch (REF_DATA(node->ref)->type) {
+		switch (REF_DATA(n->value)->type) {
 		case ARRAY: break;
 		case BARRAY: break;
 		case STRING: 
-			sprintf(str, "%s\"%.*s\" ", str, (int)REF_DATA(node->ref)->length, (BYTE*)node->bytes); 
+			sprintf(str, "%s\"%.*s\" ", str, (int)REF_DATA(n->value)->length, (BYTE*)(n->value)); 
 			break;
 		}
 		break;
-	*/
 	case LIST: 
 		sprintf(str, "%s{ ", str); 
 		print(str, (NODE*)n->value, 1, x); 
@@ -382,9 +475,12 @@ CTX* bootstrap(CTX* x) {
 	ADD_PRIMITIVE(x, "]", &rbracket, WORD);
 	ADD_PRIMITIVE(x, "[", &lbracket, MACRO);
 
+	ADD_PRIMITIVE(x, "\"", &string_literal, WORD);
+
 	ADD_PRIMITIVE(x, "i", &exec_i, WORD);
 	ADD_PRIMITIVE(x, "x", &exec_x, WORD);
 	ADD_PRIMITIVE(x, "branch", &branch, WORD);
+
 
 	return x;
 }
