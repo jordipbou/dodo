@@ -21,4 +21,14 @@ add_executable (
 
 target_include_directories (tests PRIVATE src deps/Unity/src)
 
+add_executable (
+	arr
+	src/arr.c)
+
+add_executable (
+	arr2
+	src/arr2.c)
+
+target_include_directories (arr PRIVATE src)
+
 # add_subdirectory(c_examples)

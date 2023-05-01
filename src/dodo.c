@@ -83,5 +83,8 @@ int main(int argc, char *argv[]) {
 
 	printf("%ld\n", S(x)->val);
 
+	printf("MAX S: %ld\n", x->maxS);
+	printf("MAX R: %ld\n", x->maxR);
+
 	return 0;
 }

@@ -39,6 +39,7 @@ typedef struct {
 	NODE* ip;				/* Instruction pointer */
 	BYTE* ibuf;			/* Input buffer */
 	CELL ipos;			/* Parsing position on input buffer */
+	CELL maxS, maxR;
 	BYTE bottom[1];	/* Start of memory block for this context */
 } CTX;
 
@@ -172,6 +173,9 @@ CTX* init(BYTE* b, CELL sz) {
 	x->ibuf = 0;
 	x->ip = 0;
 
+	x->maxR = 0;
+	x->maxS = 0;
+
 	return x;
 }
 
@@ -258,6 +262,7 @@ void call(CTX* x, NODE* n, NODE* r) { if (r) x->r = cons(x, (CELL)r, AS(IP, x->r
 
 NODE* step(CTX* x) {
 	NODE* r;
+	CELL ls, lr;
 	if (x->ip) {
 		switch (T(x->ip)) {
 			case ATOM: S(x) = cons(x, x->ip->val, AS(ATOM, S(x))); incrIP(x); break;
@@ -266,6 +271,8 @@ NODE* step(CTX* x) {
 			case WORD: case MACRO: call(x, XT((NODE*)x->ip->val), N(x->ip)); break;
 		}
 	}
+	ls = length(S(x)); if (ls > x->maxS) x->maxS = ls;
+	lr = length(x->r); if (lr > x->maxR) x->maxR = lr;
 	return x->ip;
 }
 
