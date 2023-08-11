@@ -1,4 +1,4 @@
-#include "arr.h"
+#include "sloth.h"
 #include<stdio.h>
 
 int fib(CONTEXT* x) {
@@ -20,30 +20,22 @@ int fib(CONTEXT* x) {
 
 int main() {
 	CONTEXT* x = init();
-	BYTE* i;
-	CELL n;
-	/*BYTE* c = ":d1>?1-d1-cs`+();";*/
-	BYTE c[19] = { ':', 'd', '1', '>', 'z', 12, '1', '-', 'd', '1', '-', 'c', -11, 's', 'c', -14, '+', ';', 0 };
+	x->code->data[0] = (CELL)&dup;
+	x->code->data[1] = (CELL)&one;
+	x->code->data[2] = (CELL)&gt;
+	x->code->data[3] = (CELL)&when;
+	x->code->data[4] = (CELL)&one;
+	x->code->data[5] = (CELL)&sub;
+	x->code->data[6] = (CELL)&dup;
+	x->code->data[7] = (CELL)&one;
+	x->code->data[8] = (CELL)&sub;
+	x->code->data[9] = (CELL)&recurse;
+	x->code->data[10] = (CELL)&swap;
+	x->code->data[11] = (CELL)&recurse;
+	x->code->data[12] = (CELL)&add;
+	x->code->data[13] = (CELL)&ret;
 
-/*
-	PUSH(x, 36);
-	fib(x);
-	dump_stack(x);
-*/
+	while (stepI(x) != 0) {}
 
-	PUSH(x, 36);
-	/*PUSH(x, 8);*/
-	x->ip = c;
-	while (x->ip != 0) { 
-		/*
-		for (n = 0; n < S(x)->length; n++) printf("%ld ", S(x)->data[n]);
-		printf("||");
-		for (i = x->ip; i < (c + 18); i++) { if (*i > 32) { printf("%c", *(i)); } else { printf("%d", *i); } }
-		*/
-		stepI(x);
-		/*
-		getchar();
-		*/
-	}
 	dump_stack(x);
 }
