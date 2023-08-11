@@ -1,3 +1,0 @@
-: ." 34 parse type ;
-: cr 10 emit ;
-." Hello world!" cr

@@ -1,7 +1,0 @@
-: ." 34 parse type ;
-: cr 10 emit ;
-." Hello, what's your name?" cr
-: begin ; immediate
-: until ; immediate
-: accept begin key dup emit dup 13 = until drop ;
-accept	

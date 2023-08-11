@@ -1,7 +1,0 @@
-{} l>s header fib ] dup 1 > [ 
-	{} l>s ] 1- dup 1- [ recurse ] swap [ recurse ] + [ s>l 
-	{} 
-	] branch [ 
-s>l reveal
-36 fib
-.c

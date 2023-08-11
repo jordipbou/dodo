@@ -1,7 +1,0 @@
-{} l>s header parse-name : sliteral drop ] header parse-name postpone sliteral drop ] [ s>l reveal
-: ; postpone [ s>l reveal [ s>l reveal immediate
-
-: \ 13 parse drop drop ; \ Now we can add comments
-
-: { {} l>s ; immediate
-: } s>l ; immediate
