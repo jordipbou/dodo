@@ -1,0 +1,3 @@
+[submodule "platforms/c/sloth"]
+	path = platforms/c/sloth
+	url = https://github.com/jordipbou/sloth.git
