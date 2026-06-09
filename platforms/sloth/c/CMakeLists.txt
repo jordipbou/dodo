@@ -3,8 +3,9 @@ project(dodo LANGUAGES C)
 
 set(SLOTH_ROOT_PATH "${PROJECT_BINARY_DIR}/../../sloth/")
 
-add_subdirectory(sloth/platforms/c)
+add_subdirectory(sloth/platforms/c EXCLUDE_FROM_ALL)
 
+set(SDL_STATIC ON)
 add_subdirectory(SDL EXCLUDE_FROM_ALL)
 
 add_executable(dodo dodo.c)
