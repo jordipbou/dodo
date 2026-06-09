@@ -1,3 +1,6 @@
-[submodule "platforms/c/sloth"]
-	path = platforms/c/sloth
+[submodule "platforms/sloth/c/sloth"]
+	path = platforms/sloth/c/sloth
 	url = https://github.com/jordipbou/sloth.git
+[submodule "platforms/sloth/c/SDL"]
+	path = platforms/sloth/c/SDL
+	url = https://github.com/libsdl-org/SDL.git
