@@ -1,5 +1,6 @@
 #include <sloth.h>
 #include <cpnbi.h>
+#include <sloth_sdl3.h>
 
 #define SDL_MAIN_USE_CALLBACKS
 #include <SDL3/SDL.h>
@@ -11,11 +12,9 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
 	X* x = sloth_new();
 
 	sloth_bootstrap(x);
-
-	sloth_include(x, ROOT_PATH "4th/ans.4th");
-
-	/* Set ROOT PATH */
 	sloth_set_root_path(x, ROOT_PATH "4th/");
+	sloth_include(x, "ans.4th");
+	sloth_bootstrap_SDL3(x);
 
 	sloth_repl(x);
 

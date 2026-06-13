@@ -1,20 +1,36 @@
 cmake_minimum_required(VERSION 3.16)
 project(SLOTH-SDL3 LANGUAGES C)
 
-set(SDL_STATIC ON)
-add_subdirectory(SDL EXCLUDE_FROM_ALL)
+include(FetchContent)
 
-set(SLOTH_FLOATING_POINT ON)
-add_subdirectory(../sloth/platforms/c ${CMAKE_CURRENT_BINARY_DIR}/sloth EXCLUDE_FROM_ALL)
+FetchContent_Declare(
+	sloth
+	GIT_REPOSITORY	https://github.com/jordipbou/sloth.git
+	GIT_TAG 02d74b9c53b073896d455038f9897d35087b0907
+	EXCLUDE_FROM_ALL
+)
+
+FetchContent_Declare(
+	SDL3
+  GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+	GIT_TAG 72771ac0b41812065acda4b5c782000293d77ef5
+	EXCLUDE_FROM_ALL
+)
+
+# Ensure SDL builds as a static library 
+set(SDL_STATIC ON CACHE BOOL "" FORCE)
+
+# Fetches all declared deps in one call
+FetchContent_MakeAvailable(sloth SDL3)
 
 # sloth_sdl3 library
 
-add_library(sloth_sdl3 STATIC sloth_sdl3.c)
+add_library(sloth_sdl3_lib STATIC sloth_sdl3.c)
 
 find_package(Threads REQUIRED)
-target_link_libraries(sloth_sdl3 PUBLIC sloth_lib SDL3-static Threads::Threads)
+target_link_libraries(sloth_sdl3_lib PUBLIC sloth_lib SDL3-static Threads::Threads)
 
-target_include_directories(sloth_sdl3
+target_include_directories(sloth_sdl3_lib
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/>
 				$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/SDL/include>
@@ -24,4 +40,4 @@ target_include_directories(sloth_sdl3
 # clear example
 
 add_executable(clear clear.c)
-target_link_libraries(clear sloth_sdl3)
+target_link_libraries(clear sloth_sdl3_lib)

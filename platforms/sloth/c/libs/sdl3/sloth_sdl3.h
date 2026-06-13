@@ -1,3 +1,6 @@
+#ifndef SLOTH_SDL3
+#define SLOTH_SDL3
+
 #include <sloth.h>
 #include <SDL3/SDL_init.h>
 #include <SDL3/SDL_error.h>
@@ -107,3 +110,5 @@ void sloth2SDL3_fabsf_(X* x);
 void sloth2SDL3_sin_(X* x);
 
 void sloth_bootstrap_SDL3(X* x);
+
+#endif

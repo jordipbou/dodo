@@ -1,28 +1,18 @@
 cmake_minimum_required(VERSION 3.16)
 project(dodo LANGUAGES C)
 
-#include(cmake/dependencies.cmake)
 include(FetchContent)
 
 FetchContent_Declare(
 	sloth
 	GIT_REPOSITORY	https://github.com/jordipbou/sloth.git
-	GIT_TAG 89635760920cf54d77762d44af38aaa3fd73493d 
+	GIT_TAG 02d74b9c53b073896d455038f9897d35087b0907
 	EXCLUDE_FROM_ALL
 )
 
-FetchContent_Declare(
-	SDL3
-  GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
-	GIT_TAG 72771ac0b41812065acda4b5c782000293d77ef5
-	EXCLUDE_FROM_ALL
-)
+FetchContent_MakeAvailable(sloth)
 
-# Ensure SDL builds as a static library 
-set(SDL_STATIC ON CACHE BOOL "" FORCE)
-
-# Fetches all declared deps in one call
-FetchContent_MakeAvailable(sloth SDL3)
+add_subdirectory(libs/sdl3)
 
 # Copy 4th files to build directory
 file(COPY ${sloth_SOURCE_DIR}/4th/
@@ -35,7 +25,7 @@ add_executable(dodo dodo_sample.c)
 target_link_libraries(dodo 
 	sloth_lib 
 	cpnbi_lib 
-	SDL3::SDL3)
+	sloth_sdl3_lib)
 # Set ROOT_PATH to build directory where
 # 4th/ scripts can be found
 target_compile_definitions(dodo PRIVATE

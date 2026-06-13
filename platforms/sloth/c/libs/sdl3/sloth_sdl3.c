@@ -646,17 +646,17 @@ void sloth2SDL3_rand_(X* x) {
 }
 
 void sloth2SDL3_randf_(X* x) {
-	sloth_fpush(x, SDL_randf());
+	sloth_f_push(x, SDL_randf());
 }
 
 void sloth2SDL3_fabsf_(X* x) {
 	float mag = (float)sloth_f_pop(x);
-	sloth_fpush(x, SDL_fabsf(mag));
+	sloth_f_push(x, SDL_fabsf(mag));
 }
 
 void sloth2SDL3_sin_(X* x) {
 	FCELL rad = sloth_f_pop(x);
-	sloth_fpush(x, SDL_sin(rad));
+	sloth_f_push(x, SDL_sin(rad));
 }
 
 /* ----------------------------------------------------- */
@@ -672,10 +672,10 @@ void sloth_constant(X* x, CELL v, char* n) {
 	sloth_evaluate(x, s);
 }
 
-void sloth_fconstant(X* x, FCELL v, char* n) {
+void sloth_f_constant(X* x, FCELL v, char* n) {
 	char s[] = "FCONSTANT ..........::::::::::..........::::::::::";
 	int i;
-	sloth_fpush(x, v);
+	sloth_f_push(x, v);
 	for (i = 0; i < strlen(n); i++) {
 		s[10+i] = n[i];
 	}
@@ -893,7 +893,7 @@ void sloth_bootstrap_SDL3(X* x) {
 	SLOTH2SDL3_CODE("SDL-CloseJoystick", CloseJoystick);
 
 	/* SDL_audio.h */
-	sloth_evaluate(x,
+	sloth_evaluate(x, 
 		"BEGIN-STRUCTURE SDL-AudioSpec "
 		"  INTFIELD: SDL-AudioSpec.format "
 		"  INTFIELD: SDL-AudioSpec.channels "
@@ -970,7 +970,7 @@ void sloth_bootstrap_SDL3(X* x) {
 		"END-STRUCTURE");
 
 	sloth_constant(x, SDL_ALPHA_OPAQUE, "SDL-ALPHA-OPAQUE");
-	sloth_fconstant(x, SDL_ALPHA_OPAQUE_FLOAT, "SDL-ALPHA-OPAQUE-FLOAT");
+	sloth_f_constant(x, SDL_ALPHA_OPAQUE_FLOAT, "SDL-ALPHA-OPAQUE-FLOAT");
 
 	/* SDL_tray.h */
 	sloth_constant(x, SDL_TRAYENTRY_BUTTON, "SDL-TRAYENTRY-BUTTON");
@@ -1011,7 +1011,7 @@ void sloth_bootstrap_SDL3(X* x) {
 		"END-STRUCTURE");
 
 	/* SDL_stdinc.h */
-	sloth_fconstant(x, SDL_PI_D, "SDL-PI-D");
+	sloth_f_constant(x, SDL_PI_D, "SDL-PI-D");
 
 	SLOTH2SDL3_CODE("SDL-malloc", malloc);
 	SLOTH2SDL3_CODE("SDL-free", free);
