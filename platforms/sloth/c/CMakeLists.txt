@@ -20,7 +20,7 @@ file(COPY ${sloth_SOURCE_DIR}/4th/
 
 # Dodo example executable
 
-add_executable(dodo dodo_sample.c)
+add_executable(dodo dodo.c)
 
 target_link_libraries(dodo 
 	sloth_lib 
