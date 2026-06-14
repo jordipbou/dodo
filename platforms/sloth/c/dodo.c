@@ -1,4 +1,6 @@
 #include <sloth.h>
+#include <file.h>
+#include <memory.h>
 #include <cpnbi.h>
 #include <sloth_sdl3.h>
 
@@ -71,6 +73,8 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
 	ctx = sloth_new();
 
 	sloth_bootstrap(ctx);
+	sloth_bootstrap_file_word_set(ctx);
+	sloth_bootstrap_memory_word_set(ctx);
 
 	sloth_user_variable(ctx, "(APP-INIT)", SLOTH_APP_INIT, 0);
 	sloth_user_variable(ctx, "(APP-EVENT)", SLOTH_APP_EVENT, 0);
@@ -135,8 +139,7 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event)
 
 	sloth_push(ctx, (CELL)event);
 
-	sloth_catch(ctx, sloth_user_get(ctx, SLOTH_APP_EVENT));
-	err = sloth_pop(ctx);
+	err = sloth_catch(ctx, sloth_user_get(ctx, SLOTH_APP_EVENT));
 	if (err != 0) {
 		return SDL_APP_FAILURE;
 	}
@@ -150,8 +153,7 @@ SDL_AppResult SDL_AppIterate(void *appstate)
 {
 	CELL err;
 
-	sloth_catch(ctx, sloth_user_get(ctx, SLOTH_APP_ITERATE));
-	err = sloth_pop(ctx);
+	err = sloth_catch(ctx, sloth_user_get(ctx, SLOTH_APP_ITERATE));
 	if (err != 0) {
 		return SDL_APP_FAILURE;
 	}
@@ -165,8 +167,7 @@ void SDL_AppQuit(void *appstate, SDL_AppResult result)
 	/* SDL will clean up the window/renderer for us. */
 	CELL err;
 
-	sloth_catch(ctx, sloth_user_get(ctx, SLOTH_APP_QUIT));
-	err = sloth_pop(ctx);
+	err = sloth_catch(ctx, sloth_user_get(ctx, SLOTH_APP_QUIT));
 	if (err != 0) {
 		/* TODO Manage the exception in some good way !!! */
 	}
