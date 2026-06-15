@@ -1,12 +1,18 @@
 cmake_minimum_required(VERSION 3.16)
 project(dodo LANGUAGES C)
 
+if (WIN32)
+	add_compile_definitions(	
+		_CRT_SECURE_NO_WARNINGS 
+		_CRT_NONSTDC_NO_DEPRECATE)
+endif()
+
 include(FetchContent)
 
 FetchContent_Declare(
 	sloth
 	GIT_REPOSITORY	https://github.com/jordipbou/sloth.git
-	GIT_TAG f1c97cfe9bae39453dd81d33ef9b2c45f07ccce4 
+	GIT_TAG 0c0d380320f87a3cfe0a1911655fa0e8c6e46ad4
 	EXCLUDE_FROM_ALL
 )
 
