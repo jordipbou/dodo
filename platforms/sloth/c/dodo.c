@@ -3,6 +3,7 @@
 #include <memory.h>
 #include <cpnbi.h>
 #include <sloth_sdl3.h>
+#include <sloth_geninput.h>
 
 #define SLOTH_APP_INIT			SLOTH_LAST_USER_VAR+sCELL
 #define SLOTH_APP_EVENT			SLOTH_APP_INIT+sCELL
@@ -88,6 +89,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
 	sloth_include(ctx, "ans.4th");
 
 	sloth_bootstrap_SDL3(ctx);
+	sloth_bootstrap_geninput(ctx);
 
 	if (argc == 1) {
 		err = sloth_include(ctx, "main.4th");
