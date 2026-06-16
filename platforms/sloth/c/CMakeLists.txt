@@ -19,6 +19,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(sloth)
 
 add_subdirectory(libs/sdl3)
+add_subdirectory(libs/geninput)
 
 # Copy 4th files to build directory
 file(COPY ${sloth_SOURCE_DIR}/4th/
@@ -31,7 +32,8 @@ add_executable(dodo dodo.c)
 target_link_libraries(dodo 
 	sloth_lib 
 	cpnbi_lib 
-	sloth_sdl3_lib)
+	sloth_sdl3_lib
+	sloth_geninput_lib)
 # Set ROOT_PATH to build directory where
 # 4th/ scripts can be found
 target_compile_definitions(dodo PRIVATE
