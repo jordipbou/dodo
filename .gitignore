@@ -1,3 +1,5 @@
+build*
+
 # Prerequisites
 *.d
 
@@ -191,3 +193,4 @@ js/.yarn/unplugged
 js/.yarn/build-state.yml
 js/.yarn/install-state.gz
 js/.pnp.*
+.aider*
