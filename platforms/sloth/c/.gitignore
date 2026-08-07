@@ -1,3 +1,6 @@
+build
+build/*
+
 # Prerequisites
 *.d
 
@@ -50,9 +53,6 @@ modules.order
 Module.symvers
 Mkfile.old
 dkms.conf
-
-build
-build/*
 
 .ccls-cache
 .ccls-cache/*

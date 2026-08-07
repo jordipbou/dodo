@@ -8,11 +8,17 @@ include(FetchContent)
 FetchContent_Declare(
 	sloth
 	GIT_REPOSITORY https://github.com/jordipbou/sloth
-	GIT_TAG dc802f0e1af8b6eb7c434cb9b83b6b6cc1886727
+	GIT_TAG 69e09632fde47ab8bb59e1f4977e341a1290d500
 	SOURCE_SUBDIR platforms/c
 	EXCLUDE_FROM_ALL
 )
-FetchContent_MakeAvailable(sloth)   # → sloth_lib, cpnbi_lib
+FetchContent_Declare(
+	cpnbi
+	GIT_REPOSITORY https://github.com/jordipbou/cpnbi
+	GIT_TAG 2d232dfb5a18214e091e4f740604a19c696c9efe
+	EXCLUDE_FROM_ALL
+)
+FetchContent_MakeAvailable(sloth cpnbi)   # → sloth_lib, cpnbi_lib
 
 add_subdirectory(libs/sdl3)         # → sloth_sdl3_lib (sistema o vendido)
 add_subdirectory(libs/geninput)     # → sloth_geninput_lib

@@ -1,0 +1,18 @@
+{
+	"version": 3,
+	"configurePresets": [
+		{
+			"name": "release",
+			"generator": "Unix Makefiles",
+			"binaryDir": "${sourceDir}/build-release"
+		},
+		{
+			"name": "dev",
+			"inherits": "release",
+			"binaryDir": "${sourceDir}/build",
+			"cacheVariables": {
+				"FETCHCONTENT_SOURCE_DIR_SLOTH": "$env{SLOTH_DIR}"
+			}
+		}
+	]
+}
