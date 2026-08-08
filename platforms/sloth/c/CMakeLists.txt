@@ -8,7 +8,7 @@ include(FetchContent)
 FetchContent_Declare(
 	sloth
 	GIT_REPOSITORY https://github.com/jordipbou/sloth
-	GIT_TAG 69e09632fde47ab8bb59e1f4977e341a1290d500
+	GIT_TAG da4c86c561d52cccc0d8f0570c8c3e4356cee23b 
 	SOURCE_SUBDIR platforms/c
 	EXCLUDE_FROM_ALL
 )
