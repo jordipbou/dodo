@@ -27,7 +27,7 @@ FetchContent_MakeAvailable(sloth cpnbi)   # → sloth_lib, cpnbi_lib
 add_subdirectory(libs/sdl3)         # → sloth_sdl3_lib (sistema o vendido)
 add_subdirectory(libs/geninput)     # → sloth_geninput_lib
 
-file(COPY ${sloth_SOURCE_DIR}/4th/ DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/4th)
+# file(COPY ${sloth_SOURCE_DIR}/4th/ DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/4th)
 
 add_executable(dodo dodo.c)
 target_link_libraries(dodo
@@ -36,4 +36,10 @@ target_link_libraries(dodo
 	sloth_sdl3_lib
 	sloth_geninput_lib
 )
-target_compile_definitions(dodo PRIVATE ROOT_PATH="${PROJECT_BINARY_DIR}/")
+target_compile_definitions(dodo PRIVATE ROOT_PATH="")
+add_custom_command(TARGET dodo POST_BUILD
+	COMMAND ${CMAKE_COMMAND} -E copy_directory
+	  ${sloth_SOURCE_DIR}/4th
+		$<TARGET_FILE_DIR:dodo>/4th
+	COMMENT "Copying 4th/ next to the dodo executable"
+)
