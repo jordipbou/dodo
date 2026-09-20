@@ -85,7 +85,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
 	sloth_user_variable(ctx, "(WINDOW)", SLOTH_WINDOW, 0);
 	sloth_user_variable(ctx, "(RENDERER)", SLOTH_RENDERER, 0);
 
-	sloth_set_root_path(ctx, ROOT_PATH "4th/");
+	sloth_set_root_path(ctx, ROOT_PATH);
 	sloth_include(ctx, "ans.4th");
 
 	sloth_bootstrap_SDL3(ctx);
