@@ -56,7 +56,7 @@ On constrained hosts that only offer a high-level engine (a smartwatch with a Ja
 ## Build
 
 ```sh
-cmake --preset dev
+cmake -B build -G "Ninja Multi-Config" -S platforms/sloth/c
 cmake --build build
 ```
 
