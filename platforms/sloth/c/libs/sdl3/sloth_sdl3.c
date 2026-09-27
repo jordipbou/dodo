@@ -1,4 +1,5 @@
 #include "sloth_sdl3.h"
+#include <dodo_common.h>
 
 #define SLOTH2SDL3_CODE(w, f) sloth_code(x, w, sloth_primitive(x, &sloth2SDL3_##f##_));
 
@@ -684,6 +685,8 @@ void sloth_f_constant(X* x, FCELL v, char* n) {
 }
 
 void sloth_bootstrap_SDL3(X* x) {
+	dodo_bootstrap_common(x);
+
 	/* SDL_init.h */
 	sloth_constant(x, SDL_APP_CONTINUE, "SDL-APP-CONTINUE");
 	sloth_constant(x, SDL_APP_FAILURE, "SDL-APP-FAILURE");

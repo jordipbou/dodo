@@ -12,7 +12,7 @@ include(FetchContent)
 FetchContent_Declare(
 	sloth
 	GIT_REPOSITORY https://github.com/jordipbou/sloth
-	GIT_TAG 9a766fb2c7f91eaed5cbd7f58f583c80a11e749a
+	GIT_TAG daf5bf3de724ffd5728b7c436e1ad0a72fc79140
 	SOURCE_SUBDIR platforms/c
 	EXCLUDE_FROM_ALL
 )
@@ -23,6 +23,10 @@ FetchContent_Declare(
 	EXCLUDE_FROM_ALL
 )
 FetchContent_MakeAvailable(sloth cpnbi)   # → sloth_lib, cpnbi_lib
+
+# Header-only shared base for DODO libraries (dodo_common.h).
+add_library(dodo_common INTERFACE)
+target_include_directories(dodo_common INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_subdirectory(libs/sdl3)         # → sloth_sdl3_lib (sistema o vendido)
 add_subdirectory(libs/geninput)     # → sloth_geninput_lib

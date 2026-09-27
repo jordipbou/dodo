@@ -18,6 +18,10 @@ The primary target platform is [[https://github.com/jordipbou/sloth][SLOTH]] (bo
 
 On constrained hosts that only offer a high-level engine (a smartwatch with a JavaScript engine, for example) there is no Forth VM. There the DODO cross-platform layer and the application are compiled to native JavaScript by the Sloth word-to-native compiler, and the per-platform interface is implemented in JavaScript; the API is unchanged, so the same DODO code is reused without losing performance.
 
+## Built on ANS Forth
+
+DODO sits on top of ANS Forth and must never be loaded without it. Every DODO library is initialized only after the ANS Forth system (Sloth `ans.4th`) is up: its bootstrap functions rely on ANS words (for example `+FIELD`). This is a hard contract for all DODO libraries, not a convention.
+
 ## Core Principles
 
 1. **The Path of Least Effort.** Interfaces use whatever approach minimizes total concepts: expose raw buffers when memory access is simplest; provide clean abstractions (e.g. `CIRCLE`, `TONE`) when raw math creates boilerplate.
@@ -44,7 +48,8 @@ On constrained hosts that only offer a high-level engine (a smartwatch with a Ja
 
 ## Layout
 
-- `platforms/sloth/c/` — Sloth C platform (`dodo.c`, `CMakeLists.txt`, `CMakePresets.json`).
+- `platforms/sloth/c/` — Sloth C platform (`dodo.c`, `CMakeLists.txt`).
+  - `dodo_common.h` — header-only base shared by the libraries: exposes the host C `int` type (`INTS`, `INT@`, `INT!`, `INTALIGNED`, `INTFIELD:`). Not a linkable library.
   - `libs/sdl3/` — SDL3-backed video, audio and input.
   - `libs/geninput/` — input generation from code (keyboard)
 - `4th/dodo/` — cross-platform Forth layer (`media.4th`, `sqlite.4th`, `media_examples/`, `sdl3_examples/`).
