@@ -17,6 +17,30 @@ The primary target platform is [[https://github.com/jordipbou/sloth][SLOTH]] (bo
 
 On constrained hosts that only offer a high-level engine (a smartwatch with a JavaScript engine, for example) there is no Forth VM. There the DODO cross-platform layer and the application are compiled to native JavaScript by the Sloth word-to-native compiler, and the per-platform interface is implemented in JavaScript; the API is unchanged, so the same DODO code is reused without losing performance.
 
+## Core Principles
+
+1. **The Path of Least Effort.** Interfaces use whatever approach minimizes total concepts: expose raw buffers when memory access is simplest; provide clean abstractions (e.g. `CIRCLE`, `TONE`) when raw math creates boilerplate.
+
+2. **Single Canonical Path.** Every operation has exactly one way to be performed. Alternate modes, helper variants and duplicate paths are explicitly omitted.
+
+3. **The Three-Line Rule.** All operations must initialize, execute and present results in three lines of code or fewer:
+
+   ```forth
+   \ Multimedia example
+   440 FREQ TONE       \ Line 1: play an audio tone
+   100 100 50 CIRCLE   \ Line 2: draw visual output
+   SYNC                \ Line 3: present the frame
+   ```
+
+   ```forth
+   \ IPC example
+   Z" PAYLOAD"         \ Line 1: define the message
+   CHAN-OUT POST       \ Line 2: transmit data
+   FLUSH               \ Line 3: flush the stream
+   ```
+
+4. **Zero Unnecessary Moving Parts.** Interfaces eliminate setup ceremony, handles, context creation and non-essential configuration flags.
+
 ## Layout
 
 - `platforms/sloth/c/` — Sloth C platform (`dodo.c`, `CMakeLists.txt`, `CMakePresets.json`).
