@@ -12,7 +12,7 @@ include(FetchContent)
 FetchContent_Declare(
 	sloth
 	GIT_REPOSITORY https://github.com/jordipbou/sloth
-	GIT_TAG 0de56a9871ee02bf5bdcf451ffb90ab8236e66e0
+	GIT_TAG 9a766fb2c7f91eaed5cbd7f58f583c80a11e749a
 	SOURCE_SUBDIR platforms/c
 	EXCLUDE_FROM_ALL
 )
@@ -40,6 +40,9 @@ target_compile_definitions(dodo PRIVATE ROOT_PATH="")
 add_custom_command(TARGET dodo POST_BUILD
 	COMMAND ${CMAKE_COMMAND} -E copy_directory
 	  ${sloth_SOURCE_DIR}/4th
+		$<TARGET_FILE_DIR:dodo>/4th
+	COMMAND ${CMAKE_COMMAND} -E copy_directory
+	  ${CMAKE_CURRENT_SOURCE_DIR}/../../../4th
 		$<TARGET_FILE_DIR:dodo>/4th
 	COMMENT "Copying 4th/ next to the dodo executable"
 )

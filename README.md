@@ -1,6 +1,6 @@
 # DODO
 
-DODO offers functionality for working with video, audio, input, inter-process communication in top of ANS Forth.
+DODO offers functionality for working with video, audio, input, database, inter-process communication in top of ANS Forth.
 
 DODO is built in two layers, a set of words that acts as the interface to the underlying system and has to be implemented separately for each Forth platform and a cross-platform layer built on top of it that works the same across all platforms.
 
@@ -9,6 +9,7 @@ DODO is built in two layers, a set of words that acts as the interface to the un
 * Audio
 * Video
 * Input (keyboard, mouse, touch, game controllers)
+* Database (SQLite)
 * CSP, actors and reactive programming
 
 ## Target Forths
@@ -46,6 +47,7 @@ On constrained hosts that only offer a high-level engine (a smartwatch with a Ja
 - `platforms/sloth/c/` — Sloth C platform (`dodo.c`, `CMakeLists.txt`, `CMakePresets.json`).
   - `libs/sdl3/` — SDL3-backed video, audio and input.
   - `libs/geninput/` — input generation from code (keyboard)
+- `4th/dodo/` — cross-platform Forth layer (`media.4th`, `sqlite.4th`, `media_examples/`, `sdl3_examples/`).
 
 ## Dependencies
 
