@@ -1,16 +1,18 @@
 # DODO
 
-DODO offers functionality for working with video, audio, input, database, inter-process communication in top of ANS Forth.
+DODO offers functionality for working with video, audio, midi, files, input, database, inter-process communication in top of ANS Forth.
 
 DODO is built in two layers, a set of words that acts as the interface to the underlying system and has to be implemented separately for each Forth platform and a cross-platform layer built on top of it that works the same across all platforms.
 
 ## Scope
 
+* System (shell, file access)
 * Audio
 * Video
+* MIDI
 * Input (keyboard, mouse, touch, game controllers)
+* Concurrency and communication (CSP, actors and reactive programming)
 * Database (SQLite)
-* CSP, actors and reactive programming
 
 ## Target Forths
 
@@ -52,7 +54,44 @@ DODO sits on top of ANS Forth and must never be loaded without it. Every DODO li
   - `dodo_common.h` — header-only base shared by the libraries: exposes the host C `int` type (`INTS`, `INT@`, `INT!`, `INTALIGNED`, `INTFIELD:`). Not a linkable library.
   - `libs/sdl3/` — SDL3-backed video, audio and input.
   - `libs/geninput/` — input generation from code (keyboard)
+  - `libs/system/` — host shell and directory access.
 - `4th/dodo/` — cross-platform Forth layer (`media.4th`, `sqlite.4th`, `media_examples/`, `sdl3_examples/`).
+
+### System (v1)
+
+Registered by `dodo_bootstrap_system`, called from `dodo.c` after ANS Forth
+is loaded. There are no `4th/dodo/system.4th` helpers: the four words below
+are primitives.
+
+- `SYSTEM ( c-addr u -- n )` — runs the command through the host shell
+  (`/bin/sh -c` on POSIX, `cmd /C` on Windows) and returns its exit status
+  `n`; `-1` means the command could not be spawned. Not ANS (ANS `SYSTEM`
+  returns nothing), so it lives in DODO, not Sloth.
+- `OPEN-DIR ( c-addr u -- dirid ior )`,
+  `READ-DIR ( c-addr u1 dirid -- u2 flag ior )`,
+  `CLOSE-DIR ( dirid -- ior )` — directory counterparts of the ANS file
+  words. They never throw: `ior` is `0` or `-37` (file/directory I/O error).
+  `READ-DIR` uses `READ-LINE` semantics: `flag` is true when an entry was
+  delivered even if it was longer than `u1` and the remainder was discarded;
+  at end of directory `u2 = 0`, `flag = false`, `ior = 0`.
+
+`dirid` is the address of a heap iterator struct cast to `CELL`, the same
+opaque-pointer convention the ANS file words use for their `FILE*` fileid
+(`file.c`). Nothing in the API exposes the layout, so a formal opaque handle
+type can be introduced later without breaking code that treats a dirid as an
+opaque cell.
+
+There is no fixed path, command or entry buffer. Counted strings are copied
+into a heap buffer of exactly `len + 1` bytes, and the directory listing is
+allocated by SDL3, so long names are neither truncated nor able to overflow
+(as Sloth's `char buf[512]` can). `READ-DIR` writes at most `u1` bytes into
+the caller's buffer and discards any remainder.
+
+On constrained hosts with no shell or filesystem (a JavaScript-engine
+smartwatch, for example) the per-platform implementation of these words is
+responsible for reporting the missing capability: return `-1` from `SYSTEM`
+and `-37` from the directory words. Verified for now; a capability query is
+a follow-up.
 
 ## Dependencies
 

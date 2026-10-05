@@ -4,6 +4,7 @@
 #include <cpnbi.h>
 #include <sloth_sdl3.h>
 #include <sloth_geninput.h>
+#include <sloth_system.h>
 
 #define SLOTH_APP_INIT			SLOTH_LAST_USER_VAR+sCELL
 #define SLOTH_APP_EVENT			SLOTH_APP_INIT+sCELL
@@ -90,6 +91,7 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
 
 	sloth_bootstrap_SDL3(ctx);
 	sloth_bootstrap_geninput(ctx);
+	dodo_bootstrap_system(ctx);
 
 	if (argc == 1) {
 		err = sloth_include(ctx, "main.4th");

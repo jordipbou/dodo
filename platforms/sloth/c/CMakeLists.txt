@@ -30,6 +30,7 @@ target_include_directories(dodo_common INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_subdirectory(libs/sdl3)         # → sloth_sdl3_lib (sistema o vendido)
 add_subdirectory(libs/geninput)     # → sloth_geninput_lib
+add_subdirectory(libs/system)       # → sloth_system_lib
 
 # file(COPY ${sloth_SOURCE_DIR}/4th/ DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/4th)
 
@@ -39,6 +40,7 @@ target_link_libraries(dodo
 	cpnbi_lib
 	sloth_sdl3_lib
 	sloth_geninput_lib
+	sloth_system_lib
 )
 target_compile_definitions(dodo PRIVATE ROOT_PATH="")
 add_custom_command(TARGET dodo POST_BUILD
