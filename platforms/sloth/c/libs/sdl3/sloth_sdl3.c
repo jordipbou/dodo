@@ -8,9 +8,12 @@
 /* SDL_init.h */
 void sloth2SDL3_Init_(X* x) {
 	CELL init_flags = sloth_pop(x);
-	sloth_push(x, 
-		SDL_Init(init_flags) 
-		? 0 : -256);
+	if (SDL_Init(init_flags)) {
+		sloth_push(x, 0);
+	} else {
+		sloth_push(x, -256);
+		printf("%s\n", SDL_GetError()); /* Debugging */
+	}
 }
 
 void sloth2SDL3_WasInit_(X* x) {
@@ -337,6 +340,7 @@ void sloth2SDL3_CreateWindowAndRenderer_(X* x) {
 		sloth_push(x, 0);
 	} else {
 		sloth_push(x, -256);
+		printf("%s\n", SDL_GetError()); /* Debugging */
 	}
 }
 
